@@ -39,53 +39,54 @@ def check_for_updates():
         log(f"[!] Update check failed: {e}", (255, 100, 100))
     return False, None, None
 
-def perform_silent_update(zip_url, new_version):
-    """Download and apply update silently."""
+def stage_silent_update(zip_url, new_version):
+    \"\"\"Download and stage an update to be applied on next manual restart or user confirmation.\"\"\"
     try:
-        log(f"[*] Downloading Update v{new_version}...", (100, 255, 100))
-        r = requests.get(zip_url, timeout=30)
+        log(f\"[*] Update v{new_version} found! Downloading in background...\", (100, 255, 100))
+        r = requests.get(zip_url, timeout=60)
         if r.status_code != 200:
             return False
 
         # Use a temporary directory for extraction
-        temp_dir = "update_tmp"
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), \"..\", \"..\", \"update_staged\")
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir)
 
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(temp_dir)
+        
+        log(f\"[+] Update v{new_version} downloaded and ready for next restart!\", (100, 255, 100))
+        return True
+    except Exception as e:
+        log(f\"[!] Background update failed: {e}\", (255, 100, 100))
+        return False
 
+def apply_staged_update():
+    \"\"\"If a staged update exists, create a batch script to apply it and restart.\"\"\"
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    temp_dir = os.path.join(base_dir, \"update_staged\")
+    
+    if not os.path.exists(temp_dir):
+        return False
+        
+    try:
         # ZIPs from GitHub usually have a root folder like 'repo-name-hash'
         root_folder = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         
-        # 1. Update the local version.json content before moving
-        with open(os.path.join(root_folder, VERSION_FILE), "w") as f:
-            json.dump({"version": new_version, "github_repo": "4anti/Roblox-Fastflag-Manager"}, f, indent=4)
+        updater_bat = os.path.join(base_dir, \"finish_update.bat\")
+        with open(updater_bat, \"w\") as f:
+            f.write(f\"@echo off\\n\")
+            f.write(f\"timeout /t 2 /nobreak > nul\\n\") # Wait for app to close
+            f.write(f\"xcopy /s /y /e \\\"{root_folder}\\\\*\\\" \\\"{base_dir}\\\\\\\"\\n\")
+            f.write(f\"rd /s /q \\\"{temp_dir}\\\"\\n\")
+            f.write(f\"start \\\"\\\" \\\"{sys.executable}\\\" \\\"{os.path.join(base_dir, 'main.pyw')}\\\"\\n\")
+            f.write(f\"del \\\"%~f0\\\"\\n\") # Self delete
 
-        # 2. Preserve user settings if they exist
-        if os.path.exists("settings.json"):
-            shutil.copy("settings.json", os.path.join(root_folder, "settings.json"))
-
-        # 3. Create a simple batch script to replace files and restart
-        # This is the cleanest way to update a running python app on Windows
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        updater_bat = os.path.join(base_dir, "finish_update.bat")
-        
-        with open(updater_bat, "w") as f:
-            f.write(f"@echo off\n")
-            f.write(f"timeout /t 2 /nobreak > nul\n") # Wait for app to close
-            f.write(f"xcopy /s /y /e \"{root_folder}\\*\" \"{base_dir}\\\"\n")
-            f.write(f"rd /s /q \"{temp_dir}\"\n")
-            f.write(f"start \"\" \"{sys.executable}\" \"{os.path.join(base_dir, 'main.pyw')}\"\n")
-            f.write(f"del \"%~f0\"\n") # Self delete
-
-        subprocess.Popen(["cmd", "/c", updater_bat], shell=True)
-        log(f"[+] Update staged. Restarting...", (100, 255, 100))
-        sys.exit(0)
+        subprocess.Popen([\"cmd\", \"/c\", updater_bat], shell=True)
         return True
     except Exception as e:
-        log(f"[!] Update application failed: {e}", (255, 100, 100))
+        log(f\"[!] Error applying staged update: {e}\", (255, 100, 100))
         return False
 
 def update_fflags():
