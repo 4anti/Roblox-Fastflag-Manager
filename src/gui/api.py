@@ -5,7 +5,7 @@ import threading
 import ctypes
 from ctypes import wintypes
 import webview
-from src.utils.updater import check_for_updates, stage_silent_update
+from src.utils.updater import check_for_updates, perform_silent_update, get_current_version, apply_staged_update
 from src.utils.logger import log, get_logs
 from src.utils.config import Config
 from src.utils.helpers import infer_type, infer_type_from_name, clean_flag_name, get_flag_prefix, get_default_value
@@ -26,6 +26,7 @@ class Api:
         self._last_apply_time = 0
         self._init_error = None
         self.processed_pids = set()
+        self.update_ready = False
 
         # Initialize subsystems with error recovery — UI must always load
         try:
@@ -69,18 +70,19 @@ class Api:
         threading.Thread(target=self._update_loop, daemon=True).start()
 
     def _update_loop(self):
-        \"\"\"Background thread: Check for updates every 5 minutes and stage them silently.\"\"\"
+        """Background thread: Check for updates every 10 minutes and stage them silently."""
         while True:
             try:
                 has_update, zip_url, remote_version = check_for_updates()
                 if has_update and zip_url:
                     # Found update! Stage it silently
-                    stage_silent_update(zip_url, remote_version)
+                    if perform_silent_update(zip_url, remote_version):
+                        self.update_ready = True
             except Exception as e:
-                log(f\"[!] Background update loop error: {e}\", (255, 100, 100))
+                log(f"[!] Background update loop error: {e}", (255, 100, 100))
             
-            # Sleep for 5 minutes (300 seconds)
-            time.sleep(300)
+            # Sleep for 10 minutes (600 seconds)
+            time.sleep(600)
 
     def _init_offsets(self):
         """Background thread: load flag offsets without blocking UI."""
@@ -100,6 +102,8 @@ class Api:
             'loading': self.flag_manager.offsets_loading,
             'count': len(self.flag_manager.preset_flags_list),
             'error': self._init_error,
+            'update_ready': getattr(self, 'update_ready', False),
+            'version': get_current_version(),
         }
 
     # ─── Settings ───
@@ -745,6 +749,88 @@ class Api:
         except Exception as e:
             log(f"[-] Export error: {e}", (255, 85, 85))
         return False
+
+    def export_preset_base64(self, name):
+        if not self.preset_manager: return None
+        for p in self.preset_manager.get_presets():
+            if p.get('name') == name:
+                import base64
+                import zlib
+                j = json.dumps(p)
+                return base64.b64encode(zlib.compress(j.encode('utf-8'))).decode('utf-8')
+        return None
+
+    def export_preset_json(self, name):
+        if not self.preset_manager: return None
+        for p in self.preset_manager.get_presets():
+            if p.get('name') == name:
+                return json.dumps(p, indent=4)
+        return None
+
+    def import_preset_clipboard(self, raw_string):
+        if not self.preset_manager: return False, "Manager not ready"
+        try:
+            data = None
+            if raw_string.strip().startswith('{') or raw_string.strip().startswith('['):
+                try:
+                    data = json.loads(raw_string)
+                except Exception:
+                    pass
+            
+            if not data:
+                try:
+                    import base64
+                    import zlib
+                    j = zlib.decompress(base64.b64decode(raw_string.strip())).decode('utf-8')
+                    data = json.loads(j)
+                except Exception:
+                    return False, "Invalid Base64 or JSON format"
+
+            if not data:
+                return False, "Could not parse data"
+
+            flags = []
+            if isinstance(data, list):
+                flags = data
+                name = 'Imported Preset'
+            elif isinstance(data, dict):
+                if 'name' in data and 'flags' in data:
+                    name = data['name'] + ' (Imported)'
+                    flags = data['flags']
+                else:
+                    flags = [{'name': k, 'value': str(v), 'type': 'string'} for k, v in data.items()]
+                    name = 'Imported Preset'
+
+            if flags:
+                new_preset = self.preset_manager.import_preset_from_file_data(name, flags)
+                log(f"[+] Imported preset '{name}' from clipboard with {len(flags)} flags")
+                return True, new_preset
+            return False, "No valid flags found"
+        except Exception as e:
+            return False, str(e)
+
+    def trigger_updater_restart(self):
+        try:
+            apply_staged_update()
+            if self._window: self._window.destroy()
+            import sys
+            sys.exit(0)
+        except Exception as e:
+            log(f"[-] Restart failed: {e}", (255, 100, 100))
+
+    def panic_revert(self):
+        if not self.flag_manager: return False
+        try:
+            log("[!] PANIC REVERT INITIATED! Disabling all custom flags.", (255, 50, 50))
+            with self.flag_manager._lock:
+                for f in self.flag_manager.user_flags:
+                    f['enabled'] = False
+            self.flag_manager.save_user_flags()
+            self.flag_manager.apply_flags_hybrid(self.roblox_manager)
+            return True
+        except Exception as e:
+            log(f"[-] Panic revert failed: {e}", (255, 50, 50))
+            return False
 
     # ─── Presets ───
 
