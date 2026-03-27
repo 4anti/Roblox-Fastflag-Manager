@@ -1,0 +1,5100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FFlag Manager</title>
+    <style>
+      /* === Reset & Variables === */
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      :root {
+        --bg-base: #040406;
+        --bg-sidebar: rgba(8, 8, 12, 0.55);
+        --bg-panel: rgba(15, 15, 22, 0.65);
+        --bg-card: rgba(22, 22, 32, 0.8);
+        --bg-elevated: rgba(30, 30, 42, 0.85);
+        --bg-hover: rgba(50, 50, 70, 0.3);
+        --bg-input: rgba(8, 8, 12, 0.8);
+        --bg-selected: rgba(0, 212, 170, 0.15);
+        --border: rgba(255, 255, 255, 0.05);
+        --border-light: rgba(255, 255, 255, 0.08);
+        --text: #e2e2ec;
+        --text-dim: #8888a0;
+        --text-dark: #4a4a60;
+        --accent: #00d4aa;
+        --accent-hover: #00edc2;
+        --accent-dim: #009878;
+        --accent-glow: rgba(0, 212, 170, 0.3);
+        --purple: #7c5cfc;
+        --purple-hover: #9478ff;
+        --success: #4ade80;
+        --error: #f87171;
+        --warning: #fbbf24;
+        --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --transition: 200ms cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      /* === Light Theme === */
+      .light-theme {
+        --bg-base: #f5f5f8;
+        --bg-sidebar: #eaeaef;
+        --bg-panel: #ffffff;
+        --bg-card: #f0f0f5;
+        --bg-elevated: #e8e8ed;
+        --bg-hover: #e0e0e8;
+        --bg-input: #ffffff;
+        --bg-selected: rgba(0, 140, 110, 0.08);
+        --border: #d4d4dc;
+        --border-light: #c8c8d0;
+        --text: #2a2a3a;
+        --text-dim: #6e6e80;
+        --text-dark: #9e9eb0;
+        --accent: #00a080;
+        --accent-hover: #00b892;
+        --accent-dim: #007860;
+        --accent-glow: rgba(0, 160, 128, 0.12);
+        --purple: #6040d8;
+        --purple-hover: #7858f0;
+        --success: #22a855;
+        --error: #d44040;
+        --warning: #c89000;
+      }
+
+      /* === Ignite Theme (Orange/Red/Black) === */
+      .theme-ignite {
+        --bg-base: #060301;
+        --bg-sidebar: rgba(14, 5, 2, 0.7);
+        --bg-panel: rgba(22, 8, 4, 0.75);
+        --bg-card: rgba(30, 10, 5, 0.85);
+        --bg-elevated: rgba(45, 15, 8, 0.9);
+        --bg-hover: rgba(85, 30, 15, 0.4);
+        --bg-input: rgba(10, 4, 2, 0.85);
+        --bg-selected: rgba(255, 100, 0, 0.15);
+        --border: rgba(255, 80, 0, 0.15);
+        --border-light: rgba(255, 120, 30, 0.2);
+        --text: #ffeadd;
+        --text-dim: #ba7658;
+        --text-dark: #804020;
+        --accent: #ff5500;
+        --accent-hover: #ff7700;
+        --accent-dim: #cc4400;
+        --accent-glow: rgba(255, 85, 0, 0.4);
+        --purple: #e61919;
+        --purple-hover: #ff3333;
+        --success: #ffaa00;
+        --error: #ff2222;
+        --warning: #ff8800;
+      }
+
+      /* === IGNITE THEME: HYPER-PREMIUM OVERRIDES === */
+      body.theme-ignite {
+        background: 
+          radial-gradient(ellipse at top left, rgba(255, 60, 0, 0.15) 0%, transparent 40%),
+          radial-gradient(ellipse at bottom right, rgba(255, 0, 0, 0.1) 0%, transparent 45%),
+          #050201 !important;
+      }
+      
+      .theme-ignite .btn-primary {
+        background: linear-gradient(135deg, #ff2a00, #ff7b00) !important;
+        border: 1px solid rgba(255,100,0,0.4) !important;
+        box-shadow: 0 4px 15px var(--accent-glow) !important;
+        color: #fff !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      }
+      .theme-ignite .btn-primary:hover:not(:disabled) {
+        box-shadow: 0 6px 25px var(--accent-glow) !important;
+      }
+
+      .theme-ignite .config-item {
+        border-left: 2px solid transparent;
+        border-right: 1px solid transparent;
+      }
+      .theme-ignite .config-item:hover {
+        background: linear-gradient(90deg, var(--bg-hover) 0%, transparent 100%);
+        border-left: 2px solid var(--accent-dim);
+      }
+      .theme-ignite .config-item.selected {
+        background: linear-gradient(90deg, rgba(255, 80, 0, 0.15) 0%, rgba(255,20,0,0.02) 100%) !important;
+        border-left: 3px solid var(--accent) !important;
+        border-right: 1px solid rgba(255,80,0,0.2) !important;
+        box-shadow: inset 2px 0 15px rgba(255, 65, 0, 0.2);
+      }
+
+      .theme-ignite .titlebar-title {
+        background: linear-gradient(90deg, #ff3300, #ffaa00);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+      }
+      
+      .theme-ignite .config-title {
+        background: linear-gradient(90deg, #ff5500, #ffaa00);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .theme-ignite .sidebar {
+        border-right: 1px solid rgba(255, 80, 0, 0.15) !important;
+        box-shadow: 4px 0 30px rgba(255, 50, 0, 0.08) !important;
+      }
+
+      .theme-ignite .titlebar-icon {
+        background: linear-gradient(135deg, #ff1100, #ff8800) !important;
+        box-shadow: 0 0 12px rgba(255, 50, 0, 0.5) !important;
+        color: white !important;
+        text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.2);
+      }
+
+      .theme-ignite .toggle input:checked + .toggle-slider {
+        background: linear-gradient(90deg, #ff2a00, #ff7b00) !important;
+        box-shadow: 0 0 12px var(--accent-glow) !important;
+      }
+
+      .theme-ignite ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #cc4400, #ff1100) !important;
+        border-radius: 4px;
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+      }
+      .theme-ignite ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #ff5500, #ff3333) !important;
+      }
+
+      /* === MATRIX THEME (Hacker Terminal) === */
+      body.theme-matrix {
+        background: #010401 !important;
+        --font-ui: var(--font-mono) !important;
+      }
+      body.theme-matrix::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px);
+        pointer-events: none;
+        z-index: 9999;
+      }
+      .theme-matrix {
+        --bg-base: rgba(1, 4, 1, 0.4);
+        --bg-sidebar: rgba(1, 10, 2, 0.85);
+        --bg-panel: rgba(1, 15, 2, 0.85);
+        --bg-card: rgba(1, 20, 5, 0.85);
+        --bg-elevated: rgba(1, 25, 7, 0.9);
+        --bg-hover: rgba(0, 255, 65, 0.15);
+        --bg-input: rgba(1, 10, 2, 0.9);
+        --bg-selected: rgba(0, 255, 65, 0.2);
+        --border: #00ff41;
+        --border-light: #39ff14;
+        --text: #00ff41;
+        --text-dim: #008f11;
+        --text-dark: #003b00;
+        --accent: #00ff41;
+        --accent-hover: #39ff14;
+        --accent-dim: #008f11;
+        --accent-glow: rgba(0, 255, 65, 0.6);
+        --purple: #00ff41;
+        --purple-hover: #39ff14;
+        --success: #00ff41;
+        --error: #ff003c;
+        --warning: #ffcc00;
+        --radius: 0px !important;
+        --radius-lg: 0px !important;
+      }
+      
+      .theme-matrix .btn {
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+      .theme-matrix .btn-primary {
+        background: rgba(0, 255, 65, 0.1) !important;
+        border: 1px solid var(--accent) !important;
+        color: var(--accent) !important;
+        box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.2) !important;
+        text-shadow: 0 0 5px var(--accent) !important;
+      }
+      .theme-matrix .btn-primary:hover:not(:disabled), .theme-matrix .btn-secondary:hover {
+        background: var(--accent) !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 15px var(--accent) !important;
+      }
+      .theme-matrix .btn-secondary {
+        background: rgba(0, 255, 65, 0.05) !important;
+        border: 1px solid var(--accent) !important;
+        color: var(--accent) !important;
+      }
+      .theme-matrix .sidebar {
+        border-right: 2px solid var(--border) !important;
+        box-shadow: 5px 0 20px rgba(0, 255, 65, 0.1) !important;
+      }
+      .theme-matrix * {
+        font-family: var(--font-mono) !important;
+      }
+      .theme-matrix .titlebar-title {
+        color: var(--accent) !important;
+        text-shadow: 0 0 5px var(--accent-glow);
+      }
+      .theme-matrix .config-item.selected {
+        border-left: 4px solid var(--accent) !important;
+        background: rgba(0, 255, 65, 0.1) !important;
+        box-shadow: inset 2px 0 15px rgba(0, 255, 65, 0.15) !important;
+      }
+      /* Improve readability in Matrix dark mode */
+      body.theme-matrix:not(.light-theme) .config-item .flag-name {
+        color: #fff !important;
+        font-weight: 700;
+        text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+      }
+      body.theme-matrix:not(.light-theme) .config-item .flag-value {
+        color: #00ff41 !important;
+        opacity: 1 !important;
+        font-weight: 800;
+        text-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+      }
+      body.theme-matrix:not(.light-theme) .config-item .flag-type {
+        background: rgba(0, 255, 65, 0.2) !important;
+        color: #fff !important;
+        border: 1px solid rgba(0, 255, 65, 0.4);
+        font-weight: 900;
+      }
+      body.theme-matrix:not(.light-theme) .config-item:hover {
+        background: rgba(0, 255, 65, 0.05) !important;
+      }
+
+      /* Matrix Theme UI Elements Visibility */
+      body.theme-matrix:not(.light-theme) .titlebar-version {
+        color: #fff !important;
+        font-weight: 800;
+        text-shadow: 0 0 8px var(--accent);
+        opacity: 1;
+      }
+      body.theme-matrix:not(.light-theme) .tab-btn {
+        color: #00ff41 !important;
+        opacity: 0.7;
+        font-weight: 700;
+      }
+      body.theme-matrix:not(.light-theme) .tab-btn.active {
+        color: #fff !important;
+        opacity: 1;
+        text-shadow: 0 0 10px var(--accent);
+      }
+      body.theme-matrix:not(.light-theme) .tab-dot {
+        background: #003b00 !important;
+        box-shadow: inset 0 0 3px #000;
+      }
+      body.theme-matrix:not(.light-theme) .tab-btn.active .tab-dot {
+        background: #fff !important;
+        box-shadow: 0 0 8px var(--accent);
+      }
+      body.theme-matrix:not(.light-theme) .tab-bar {
+        background: rgba(1, 10, 2, 0.95) !important;
+        border-bottom: 1px solid var(--accent);
+      }
+      .theme-matrix ::-webkit-scrollbar-thumb {
+        background: var(--accent) !important;
+        border-radius: 0 !important;
+      }
+      #matrix-canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: -1;
+        pointer-events: none;
+        display: none;
+      }
+      body.theme-matrix #matrix-canvas {
+        display: block;
+      }
+
+      /* === MATRIX LIGHT THEME OVERRIDES === */
+      body.theme-matrix.light-theme {
+        background: #ffffff !important;
+        --bg-base: rgba(255, 255, 255, 0.4);
+        --bg-sidebar: rgba(245, 245, 245, 0.85);
+        --bg-panel: rgba(240, 240, 240, 0.85);
+        --bg-card: rgba(235, 235, 235, 0.85);
+        --bg-elevated: rgba(225, 225, 225, 0.9);
+        --bg-hover: rgba(0, 0, 0, 0.05);
+        --bg-input: rgba(255, 255, 255, 0.9);
+        --bg-selected: rgba(0, 0, 0, 0.1);
+        --border: #000000;
+        --border-light: #444444;
+        --text: #000000;
+        --text-dim: #333333;
+        --text-dark: #666666;
+        --accent: #000000;
+        --accent-hover: #222222;
+        --accent-dim: #444444;
+        --accent-glow: rgba(0, 0, 0, 0.1);
+        --purple: #000000;
+        --purple-hover: #111111;
+        --success: #008f11;
+        --error: #cc0000;
+      }
+      body.theme-matrix.light-theme::before {
+        background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 1px, transparent 1px, transparent 2px);
+      }
+      body.theme-matrix.light-theme .btn-primary {
+        background: rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid #000 !important;
+        color: #000 !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+      }
+      body.theme-matrix.light-theme .btn-primary:hover:not(:disabled) {
+        background: #000 !important;
+        color: #fff !important;
+      }
+      body.theme-matrix.light-theme .titlebar-title {
+        text-shadow: none !important;
+      }
+      body.theme-matrix.light-theme .config-item.selected {
+        box-shadow: inset 2px 0 10px rgba(0,0,0,0.05) !important;
+      }
+      body.theme-matrix.light-theme .titlebar-icon {
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #000000;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        background: radial-gradient(circle at 60% -20%, var(--bg-card), var(--bg-base) 100%);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      /* === Title Bar === */
+      .titlebar {
+        display: flex;
+        align-items: center;
+        height: 36px;
+        background: var(--bg-sidebar);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        padding: 0 8px;
+        transition: background 0.2s;
+        -webkit-app-region: drag;
+        position: relative;
+        justify-content: space-between;
+      }
+      /* maximized drag rule removed — no maximize button exists */
+      .titlebar-brand, .titlebar-version, .version-checker {
+        pointer-events: none; /* Let drag pass through to titlebar */
+      }
+      .titlebar-controls {
+        pointer-events: all;
+        -webkit-app-region: no-drag;
+      }
+      .titlebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-left: 8px;
+      }
+      .titlebar-icon {
+        width: 18px;
+        height: 18px;
+        background: var(--accent);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        color: #0a0a0f;
+      }
+      .titlebar-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+      }
+      .titlebar-version {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 11px;
+        color: var(--text-dark);
+      }
+      .version-checker {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        background: rgba(0,0,0,0.2);
+        padding: 2px 8px;
+        border-radius: 12px;
+      }
+      .vc-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--warning);
+      }
+      .vc-dot.up-to-date {
+        background: var(--success);
+        animation: flashGreen 1.5s infinite alternate;
+      }
+      @keyframes flashGreen {
+        0% { box-shadow: 0 0 2px var(--success); opacity: 0.6; }
+        100% { box-shadow: 0 0 8px var(--success); opacity: 1; }
+      }
+      .titlebar-controls {
+        display: flex;
+        -webkit-app-region: no-drag;
+      }
+      .titlebar-btn {
+        width: 40px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 16px;
+        transition: var(--transition);
+        position: relative;
+      }
+      .titlebar-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .titlebar-btn.close:hover {
+        background: #e81123;
+        color: white;
+      }
+
+      /* Refined Symbols for Titlebar (Pseudo-elements for perfect centering) */
+      .titlebar-btn.minimize::before {
+        content: "";
+        width: 10px;
+        height: 1.2px;
+        background: currentColor;
+      }
+      .titlebar-btn.maximize::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border: 1.2px solid currentColor;
+      }
+      .titlebar-btn.close::before, .titlebar-btn.close::after {
+        content: "";
+        position: absolute;
+        width: 12px;
+        height: 1.2px;
+        background: currentColor;
+      }
+      .titlebar-btn.close::before { transform: rotate(45deg); }
+      .titlebar-btn.close::after { transform: rotate(-45deg); }
+      
+      .titlebar-btn:active {
+        transform: scale(0.9);
+      }
+
+      /* === Main Layout === */
+      .app-container {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      /* === Sidebar === */
+      .sidebar {
+        width: 240px;
+        background: var(--bg-sidebar);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+        z-index: 10;
+      }
+      .sidebar-search {
+        padding: 10px 12px;
+      }
+      .sidebar-search input {
+        width: 100%;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 7px 10px;
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--font-ui);
+        outline: none;
+        transition: var(--transition);
+      }
+      .sidebar-search input:focus {
+        border-color: var(--accent-dim);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+      }
+      .sidebar-search input::placeholder {
+        color: var(--text-dark);
+      }
+
+      .sidebar-section-label {
+        padding: 8px 16px 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        color: var(--text-dark);
+        text-transform: uppercase;
+      }
+      .sidebar-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+        position: relative;
+      }
+      .virtual-scroll-viewport {
+        position: relative;
+        width: 100%;
+      }
+      .virtual-scroll-spacer {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        z-index: -1;
+        pointer-events: none;
+      }
+      .virtual-scroll-content {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 2px 8px;
+      }
+      .sidebar-hint {
+        padding: 20px 16px;
+        color: var(--text-dark);
+        font-size: 12px;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .sidebar-flag {
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: var(--transition);
+        font-size: 12px;
+        color: var(--text-dim);
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .sidebar-flag .flag-name-text {
+        vertical-align: middle;
+      }
+      .sidebar-flag:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .sidebar-flag.selected {
+        background: var(--bg-selected);
+        color: var(--accent);
+      }
+      .sidebar-flag.added {
+        color: var(--text-dark);
+        font-style: italic;
+      }
+      .sidebar-add {
+        padding: 8px 12px;
+        display: flex;
+        gap: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      .sidebar-flag .flag-type {
+        font-size: 10px;
+        color: var(--text-dark);
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        margin-left: 6px;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .sidebar-flag.selected .flag-type {
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text-dim);
+      }
+      .sidebar-add input {
+        flex: 1;
+        min-width: 0;
+        max-width: 260px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 5px 8px;
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--font-ui);
+        outline: none;
+      }
+      .sidebar-add input:focus {
+        border-color: var(--accent-dim);
+      }
+
+      /* === Presets Tab === */
+      .presets-panel {
+        display: none;
+        flex-direction: column;
+        height: 100%;
+        min-width: 0; /* Direct child of flex-panel needs this for overflow control */
+        animation: fadeIn 0.3s ease-out;
+      }
+      .presets-panel.active {
+        display: flex;
+      }
+      .presets-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 24px;
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+        justify-content: start;
+        align-content: start;
+        min-width: 0; 
+        min-height: 0; 
+      }
+      
+      /* Responsive adjustments for smaller windows */
+      @media (max-width: 900px) {
+        .presets-grid {
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 16px;
+          padding: 16px;
+        }
+      }
+      
+      @media (max-width: 600px) {
+        .presets-grid {
+          grid-template-columns: 1fr;
+          gap: 12px;
+          padding: 12px;
+        }
+      }
+      .preset-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 20px 24px 20px;
+        position: relative;
+        transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), border-color 0.3s, box-shadow 0.3s;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: auto;
+        min-height: 180px;
+        max-width: 100%;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+      }
+      .preset-matrix-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+      body.theme-matrix .preset-matrix-canvas {
+        opacity: 0.25;
+      }
+      .preset-card::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 4px;
+        background: var(--preset-color, var(--accent));
+        opacity: 0.8;
+      }
+      .preset-add-card::before {
+        display: none;
+      }
+      .preset-card:hover { 
+        border-color: var(--preset-color, var(--accent)); 
+        transform: translateY(-4px); 
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(var(--preset-color-rgb), 0.15); 
+      }
+      .preset-card.active { border-color: var(--accent); background: rgba(0, 212, 170, 0.05); }
+      
+      .preset-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; z-index: 1; }
+      .preset-title { 
+        font-size: 18px; 
+        font-weight: 700; 
+        color: var(--text); 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        white-space: nowrap; 
+        max-width: 85%;
+        min-width: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      .preset-color-strip { height: 4px; border-radius: 2px; margin-bottom: 12px; width: 40px; }
+      
+      .preset-stats { display: flex; flex-direction: column; gap: 8px; flex: 1; margin-top: 4px; }
+      .preset-stat-item { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+      .preset-stat-item i { font-size: 14px; width: 20px; text-align: center; opacity: 0.8; }
+      
+      .preset-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+      .preset-date { font-size: 11px; color: var(--text-dark); }
+      
+      /* Preset Preview Modal */
+      .preview-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8);
+        z-index: 10005;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+        animation: fadeIn 0.2s ease-out;
+      }
+      .preview-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 16px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 30px 70px rgba(0,0,0,0.7);
+        overflow: hidden;
+      }
+      .preview-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .preview-list {
+        padding: 12px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .preview-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 12px;
+      }
+      .preview-item:last-child { border-bottom: none; }
+      .preview-flag-name { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .preview-flag-value { font-size: 12px; color: var(--accent); font-family: var(--font-mono); }
+
+      .preset-btn-select {
+        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+        color: var(--bg-card, #000);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 9px 22px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+        box-shadow: 0 4px 15px var(--accent-glow);
+        z-index: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .preset-btn-select::after {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(rgba(255,255,255,0.1), transparent);
+        opacity: 0;
+        transition: 0.2s;
+      }
+      .preset-btn-select:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 8px 25px var(--accent-glow);
+        filter: brightness(1.1);
+      }
+      .preset-btn-select:hover::after { opacity: 1; }
+      
+      body.theme-matrix.light-theme .preset-btn-select {
+        color: #000 !important;
+        background: rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid #000 !important;
+        box-shadow: 2px 2px 0px rgba(0,0,0,0.05);
+        border-radius: 0 !important;
+        font-weight: 800;
+        padding: 5px 12px !important;
+        font-size: 11px !important;
+        letter-spacing: 0.5px !important;
+      }
+      body.theme-matrix.light-theme .preset-btn-select:hover {
+        background: #000 !important;
+        color: #fff !important;
+        transform: translate(-1px, -1px);
+        box-shadow: 4px 4px 0px rgba(0,0,0,0.15);
+      }
+      body.theme-matrix.light-theme .preset-add-card {
+        border: 1px solid #000 !important;
+        background: rgba(0, 0, 0, 0.02) !important;
+        border-radius: 0 !important;
+      }
+      body.theme-matrix.light-theme .preset-settings-btn {
+        background: rgba(0, 0, 0, 0.03) !important;
+        border: 1px solid #000 !important;
+        color: #000 !important;
+        border-radius: 0 !important;
+        width: 26px !important;
+        height: 26px !important;
+      }
+      body.theme-matrix.light-theme .preset-settings-btn:hover {
+        background: #000 !important;
+        color: #fff !important;
+      }
+      .preset-btn-select:active { transform: translateY(0) scale(0.96); }
+      
+      .preset-settings-btn {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(4px);
+        border: 1px solid var(--border-light);
+        color: var(--text-dim);
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      .preset-settings-btn:hover { 
+        background: rgba(255, 255, 255, 0.08); 
+        color: var(--accent); 
+        border-color: var(--accent-dim);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      }
+      .preset-settings-btn:active {
+        transform: translateY(0);
+      }
+
+      /* Matrix Theme Text Visibility Overrides */
+      body.theme-matrix:not(.light-theme) .preset-card .preset-title {
+        font-weight: 900;
+        color: #fff;
+        text-shadow: 0 0 8px var(--accent);
+      }
+      body.theme-matrix:not(.light-theme) .preset-card .preset-stat-item {
+        color: #00ff41;
+        font-weight: 700;
+      }
+      body.theme-matrix:not(.light-theme) .preset-card .preset-date {
+        color: #00ff41;
+        font-weight: 800;
+        opacity: 0.9;
+      }
+      body.theme-matrix:not(.light-theme) .preset-card .preset-stat-item i {
+        color: #fff !important;
+        text-shadow: 0 0 5px #00ff41;
+      }
+
+      /* Big "+" card */
+      .preset-add-card {
+        border: 2px dashed var(--border);
+        background: rgba(255, 255, 255, 0.02);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        gap: 16px;
+        color: var(--text-dim);
+        height: auto;
+        min-height: 180px;
+        max-width: 100%;
+        box-shadow: none;
+        transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), border-color 0.3s, background 0.3s;
+        border-radius: 12px;
+        z-index: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .preset-add-card:hover {
+        border-color: var(--accent);
+        background: rgba(0, 212, 170, 0.08);
+        color: var(--accent);
+        transform: translateY(-4px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 212, 170, 0.1);
+      }
+      .preset-add-card:active {
+        transform: translateY(-2px) scale(0.99);
+      }
+      .preset-add-icon { 
+        font-size: 48px; 
+        font-weight: 300;
+        transition: 0.3s;
+      }
+      .preset-add-card:hover .preset-add-icon {
+        transform: scale(1.1);
+      }
+      .preset-add-text { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+
+      /* Preset Context Menu (custom dropdown) */
+      .preset-menu {
+        position: fixed;
+        background: var(--bg-card);
+        backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 8px 0;
+        width: 300px;
+        z-index: 10001;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        display: none;
+        animation: menuFadeIn 0.2s cubic-bezier(0,0,0.2,1);
+        overflow: hidden;
+        pointer-events: auto !important;
+      }
+      @keyframes menuFadeIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+      .preset-menu-item {
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--text-dim);
+        cursor: pointer;
+        font-size: 13px;
+        transition: 0.2s;
+      }
+      .preset-menu-item:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+      .preset-menu-item.danger:hover { background: rgba(248, 113, 113, 0.1); color: #ff5555; }
+      .preset-menu-divider { height: 1px; background: rgba(255,255,255,0.05); margin: 6px 0; }
+      
+      .popup-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+      }
+      .popup-label {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        flex: 1;
+        min-width: 0;
+      }
+      .popup-label-title {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .popup-label-desc {
+        font-size: 10px;
+        color: var(--text-dim);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0.85;
+      }
+      .sidebar-status {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--warning);
+        flex-shrink: 0;
+      }
+      .status-dot.connected {
+        background-color: var(--accent);
+        box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+      }
+      .status-dot.error {
+        background: var(--error);
+      }
+      .status-label {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .status-info {
+        font-size: 10px;
+        color: var(--text-dark);
+        padding-left: 13px;
+      }
+
+      @keyframes pulseStatus {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      /* === Main Content === */
+      .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative; /* For layout consistency */
+      }
+
+      .editor-view {
+        flex: 1;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .editor-view.active {
+        display: flex;
+      }
+
+      /* Config Panel */
+      .config-panel {
+        flex: 1;
+        display: flex; /* Always flex inside editor-view */
+        flex-direction: column;
+        overflow: hidden;
+        border-bottom: 1px solid var(--border);
+      }
+      .config-header {
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        gap: 10px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+      }
+      .config-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .config-count {
+        font-size: 11px;
+        color: var(--text-dark);
+        background: var(--bg-card);
+        padding: 2px 8px;
+        border-radius: 10px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .config-actions-top {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+      }
+      .config-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 0;
+      }
+      .config-empty {
+        padding: 40px 20px;
+        text-align: center;
+        color: var(--text-dark);
+        font-size: 13px;
+      }
+      .config-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        margin: 2px 8px;
+        border-radius: var(--radius);
+        gap: 12px;
+        cursor: pointer;
+        transition: var(--transition);
+        border-left: 2px solid transparent;
+      }
+      .config-item:hover {
+        background: var(--bg-hover);
+      }
+      .config-item.editing-flag {
+        background: rgba(0, 0, 0, 0.4);
+        border-left: 2px solid var(--accent-dim);
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        opacity: 0.9;
+        transform: scale(0.995);
+      }
+      .config-item.selected {
+        background: var(--bg-selected);
+        border-left-color: var(--accent);
+        box-shadow: inset 0 0 12px var(--accent-glow);
+      }
+      .config-item .flag-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--text-dark);
+        flex-shrink: 0;
+      }
+      .config-item .flag-dot.success {
+        background: var(--success);
+      }
+      .config-item .flag-dot.error {
+        background: var(--error);
+      }
+      .config-item .flag-name {
+        flex: 1;
+        font-size: 12px;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .config-item .flag-value {
+        font-size: 12px;
+        color: var(--accent-dim);
+        font-family: var(--font-mono);
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .config-item .flag-type {
+        font-size: 10px;
+        color: var(--text-dark);
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+      }
+      .unrecognized-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--warning);
+        font-size: 10px;
+        font-weight: bold;
+        margin-left: 6px;
+        cursor: help;
+        border: 1px solid rgba(251, 191, 36, 0.4);
+        flex-shrink: 0;
+      }
+      .bind-badge {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(0, 212, 170, 0.1);
+        border: 1px dashed rgba(0, 212, 170, 0.4);
+        color: var(--accent);
+        font-size: 9px;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        flex-shrink: 0;
+      }
+
+      /* Config Footer */
+      .config-footer {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        gap: 6px;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--border);
+      }
+      .config-footer input {
+        flex: 1;
+        max-width: 200px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 5px 8px;
+        color: var(--text);
+        font-size: 12px;
+        font-family: var(--font-ui);
+        outline: none;
+      }
+      .config-footer input:focus {
+        border-color: var(--accent-dim);
+      }
+
+      /* === Action Bar === */
+      .action-bar {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        gap: 6px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+      }
+      .spacer {
+        flex: 1;
+      }
+
+      /* === Console === */
+      .console-panel {
+        height: 180px;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+      }
+      .console-panel.collapsed {
+        height: 32px !important;
+      }
+      .console-panel.collapsed + .resizer-h {
+        display: none;
+      }
+      .console-panel.collapsed .console-output {
+        display: none;
+      }
+      .console-header {
+        display: flex;
+        align-items: center;
+        padding: 6px 16px;
+        gap: 10px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        user-select: none;
+      }
+      .console-header:hover {
+        background: var(--bg-hover);
+      }
+      .console-panel.collapsed .console-header {
+        border-bottom: none;
+      }
+      .console-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+      .console-toggle-btn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        font-size: 14px;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.3s;
+      }
+      .console-toggle-btn:hover {
+        color: var(--accent);
+      }
+      .console-panel.collapsed .console-toggle-btn {
+        transform: rotate(180deg);
+      }
+      .console-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+      }
+      .console-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+      }
+      .console-output {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 16px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--bg-base);
+        line-height: 1.7;
+        user-select: text;
+      }
+      .log-line {
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .log-line .timestamp {
+        color: var(--text-dark);
+      }
+      .log-line.success {
+        color: var(--success);
+      }
+      .log-line.error {
+        color: var(--error);
+      }
+      .log-line.warning {
+        color: var(--warning);
+      }
+      .log-line.info {
+        color: var(--accent);
+      }
+      .log-line.default {
+        color: var(--text-dim);
+      }
+
+      /* === Buttons === */
+      .btn {
+        padding: 6px 14px;
+        border-radius: var(--radius);
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 12px;
+        font-family: var(--font-ui);
+        font-weight: 600;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      .btn:active:not(:disabled) {
+        transform: translateY(1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #040406;
+        box-shadow: 0 4px 12px rgba(0, 212, 170, 0.2);
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+        box-shadow: 0 6px 16px var(--accent-glow);
+      }
+
+      .btn-secondary {
+        background: var(--purple);
+        color: #fff;
+      }
+      .btn-secondary:hover {
+        background: var(--purple-hover);
+        box-shadow: 0 6px 16px rgba(124, 92, 252, 0.2);
+      }
+
+      .btn-subtle {
+        background: var(--bg-elevated);
+        color: var(--text);
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        font-weight: 500;
+      }
+      .btn-subtle:hover:not(:disabled) {
+        background: var(--bg-hover);
+        border-color: var(--border-light);
+        color: #fff;
+      }
+
+      .btn-danger {
+        background: rgba(248, 113, 113, 0.1);
+        color: var(--error);
+        border: 1px solid rgba(248, 113, 113, 0.2);
+      }
+      .btn-danger:hover {
+        background: rgba(248, 113, 113, 0.2);
+      }
+
+      .btn-icon {
+        background: none;
+        border: none;
+        color: var(--text-dark);
+        padding: 4px 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .btn-icon:hover {
+        color: var(--text-dim);
+      }
+
+      .btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      /* === Resizers === */
+      .resizer-v {
+        width: 4px;
+        cursor: col-resize;
+        background: transparent;
+        transition: background 0.2s;
+        z-index: 20;
+        flex-shrink: 0;
+      }
+      .resizer-v:hover, .resizer-v.active {
+        background: var(--accent-glow);
+      }
+      .resizer-h {
+        height: 4px;
+        cursor: row-resize;
+        background: transparent;
+        transition: background 0.2s;
+        z-index: 20;
+        flex-shrink: 0;
+      }
+      .resizer-h:hover, .resizer-h.active {
+        background: var(--accent-glow);
+      }
+
+      /* === Sidebar Toggle === */
+      .sidebar-toggle-btn {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 10px;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        margin-right: 8px;
+        margin-left: 10px;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        user-select: none;
+        flex-shrink: 0;
+      }
+      .sidebar-toggle-btn:hover {
+        background: var(--bg-hover);
+        color: var(--accent);
+        border-color: var(--accent-dim);
+        box-shadow: 0 0 12px var(--accent-glow);
+        transform: scale(1.05);
+      }
+      .sidebar-toggle-btn:active {
+        transform: scale(0.95);
+      }
+      .sidebar.collapsed {
+        width: 0 !important;
+        min-width: 0 !important;
+        overflow: hidden;
+        border-right: none;
+      }
+      .sidebar.collapsed + .resizer-v {
+        display: none;
+      }
+
+      /* === Legacy Theme (Dark/Default) === */
+      body.theme-legacy {
+        --bg-base: #0a0a0f;
+        --bg-sidebar: #08080d;
+        --bg-panel: #111118;
+        --bg-card: #16161e;
+        --bg-elevated: #1c1c26;
+        --bg-hover: #1f1f2a;
+        --bg-input: #0c0c14;
+        --bg-selected: rgba(0, 212, 170, 0.08);
+        --border: #1a1a24;
+        --border-light: #262632;
+        --text: #c8c8d4;
+        --text-dim: #5e5e70;
+        --text-dark: #383848;
+        --accent: #00d4aa;
+        --accent-hover: #00edc2;
+        --accent-dim: #009878;
+        --accent-glow: rgba(0, 212, 170, 0.15);
+        --purple: #7c5cfc;
+        --purple-hover: #9478ff;
+        --radius: 6px;
+        --radius-lg: 10px;
+        background: var(--bg-base);
+      }
+
+      /* === Legacy Theme (Light Mode) === */
+      body.theme-legacy.light-theme {
+        --bg-base: #f4f6f8;
+        --bg-sidebar: #ffffff;
+        --bg-panel: #ffffff;
+        --bg-card: #ffffff;
+        --bg-elevated: #ebedef;
+        --bg-hover: #dfe1e5;
+        --bg-input: #ffffff;
+        --bg-selected: rgba(0, 152, 120, 0.08);
+        --border: #d1d5db;
+        --border-light: #e5e7eb;
+        --text: #111827;
+        --text-dim: #4b5563;
+        --text-dark: #9ca3af;
+        --accent: #008f73;
+        --accent-hover: #00a383;
+        --accent-dim: #00765c;
+        --accent-glow: rgba(0, 143, 115, 0.1);
+        --purple: #6366f1;
+        --radius: 4px;
+        --radius-lg: 6px;
+        background: var(--bg-base);
+      }
+
+      body.theme-legacy .sidebar, body.theme-legacy.light-theme .sidebar {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow: none;
+        border-right: 1px solid var(--border);
+      }
+      body.theme-legacy .btn, body.theme-legacy.light-theme .btn {
+        box-shadow: none;
+        border-radius: 4px;
+      }
+      body.theme-legacy .config-item, body.theme-legacy.light-theme .config-item {
+        box-shadow: none;
+        margin: 0;
+        border-radius: 0;
+      }
+
+      /* === Scrollbar === */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--border-light);
+      }
+
+      /* === History Modal === */
+      .history-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(2px);
+      }
+      .history-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        width: 80%;
+        max-width: 500px;
+        max-height: 80%;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      }
+      .history-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+      }
+      .history-list {
+        padding: 16px;
+        overflow-y: auto;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .history-item {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        padding: 12px;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: border-color 0.2s;
+      }
+      .history-item:hover {
+        border-color: var(--accent);
+      }
+      .history-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .history-time {
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      .history-action {
+        font-size: 13px;
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      /* === Custom Confirm Modal === */
+      .confirm-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.65);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(3px);
+      }
+      .confirm-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        width: 320px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+        overflow: hidden;
+      }
+      .confirm-header {
+        padding: 16px 16px 8px;
+        font-weight: 600;
+        font-size: 15px;
+        color: var(--text);
+      }
+      .confirm-body {
+        padding: 0 16px 16px;
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.4;
+      }
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--bg-elevated);
+        border-top: 1px solid var(--border);
+      }
+
+      /* === Premium Input Modal === */
+      .input-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7);
+        z-index: 10000; /* Over modal-catcher */
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+        animation: fadeIn 0.2s ease-out;
+      }
+      .input-modal-content {
+        background: var(--bg-card);
+        backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid var(--border-light);
+        border-radius: 16px;
+        width: 380px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+        overflow: hidden;
+        animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      @keyframes modalSlideUp { from { transform: translateY(20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+      
+      .input-modal-header {
+        padding: 22px 24px 12px;
+        font-weight: 700;
+        font-size: 17px;
+        color: var(--text);
+        letter-spacing: -0.5px;
+      }
+      .input-modal-body {
+        padding: 8px 24px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .input-modal-body label {
+        font-size: 11px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+        margin-bottom: -4px;
+      }
+      .input-modal-body input[type="text"] {
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-family: var(--font-ui);
+        outline: none;
+        transition: all 0.2s;
+      }
+      .input-modal-body input[type="text"]:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-glow);
+      }
+      .input-modal-color-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .input-modal-color-row input[type="color"] {
+        width: 50px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: none; cursor: pointer; padding: 2px;
+      }
+      .input-modal-color-row input[type="text"] { flex: 1; }
+
+      .input-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 18px 24px;
+        background: var(--bg-hover);
+        border-top: 1px solid var(--border);
+      }
+      .input-modal-actions .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+
+      /* === Settings Panel === */
+      .settings-panel {
+        display: none;
+        padding: 20px;
+        overflow-y: auto;
+      }
+      .settings-panel.active {
+        display: block;
+      }
+      .settings-section {
+        margin-bottom: 20px;
+      }
+      .settings-section-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+      }
+      .settings-row {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+        gap: 10px;
+      }
+      .settings-label {
+        font-size: 13px;
+        color: var(--text);
+      }
+      .settings-value {
+        font-size: 12px;
+        color: var(--text-dark);
+        font-family: var(--font-mono);
+      }
+      .settings-value.ok {
+        color: var(--success);
+      }
+      .settings-value.missing {
+        color: var(--error);
+      }
+
+      /* Toggle Switch */
+      .toggle {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        cursor: pointer;
+      }
+      .toggle input {
+        display: none;
+      }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        transition: var(--transition);
+      }
+      .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        left: 2px;
+        top: 2px;
+        background: var(--text-dark);
+        border-radius: 50%;
+        transition: var(--transition);
+      }
+      .toggle input:checked + .toggle-slider {
+        background: var(--accent-dim);
+        border-color: var(--accent-dim);
+      }
+      .toggle input:checked + .toggle-slider::before {
+        transform: translateX(16px);
+        background: white;
+      }
+
+      /* === Tab Bar === */
+      .tab-bar {
+        display: flex;
+        align-items: center;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        gap: 0;
+      }
+      .tab-btn {
+        padding: 8px 20px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: var(--font-ui);
+        color: var(--text-dark);
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tab-btn:hover { color: var(--text-dim); }
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .tab-btn .tab-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--text-dark);
+      }
+      .tab-btn.active .tab-dot { background: var(--accent); }
+
+      /* === Workflow Panel === */
+      .workflow-panel {
+        display: none;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+      }
+      .workflow-panel.active {
+        display: flex;
+      }
+      .workflow-header {
+        padding: 12px 16px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border);
+      }
+      .workflow-header h3 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+      .workflow-progress {
+        display: flex; align-items: center; gap: 10px;
+      }
+      .workflow-progress-bar {
+        flex: 1; height: 6px;
+        background: var(--bg-card);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .workflow-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--purple));
+        border-radius: 3px;
+        transition: width 0.4s ease;
+      }
+      .workflow-progress-label {
+        font-size: 11px;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .workflow-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 0;
+      }
+      .wf-entry {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        transition: var(--transition);
+      }
+      .wf-entry:hover { background: var(--bg-hover); }
+      .wf-entry-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .wf-status {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 3px;
+        letter-spacing: 0.5px;
+      }
+      .wf-status.done      { background: rgba(74,222,128,0.15); color: var(--success); }
+      .wf-status.failed    { background: rgba(248,113,113,0.15); color: var(--error); }
+      .wf-status.promising { background: rgba(251,191,36,0.15); color: var(--warning); }
+      .wf-status.active    { background: rgba(0,212,170,0.15); color: var(--accent); }
+      .wf-status.skipped   { background: rgba(94,94,112,0.15); color: var(--text-dim); }
+      .wf-title {
+        font-size: 12px; font-weight: 600; color: var(--text);
+      }
+      .wf-date {
+        font-size: 10px; color: var(--text-dark); margin-left: auto;
+      }
+      .wf-body {
+        font-size: 11px; color: var(--text-dim); line-height: 1.6;
+        padding-left: 2px;
+      }
+      .wf-body code {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        background: var(--bg-card);
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--accent-dim);
+      }
+      
+      .unavailable-group {
+        margin-top: 10px;
+        border-top: 1px solid var(--border);
+        padding-top: 8px;
+      }
+      .unavailable-group summary {
+        font-size: 11px;
+        color: var(--text-dim);
+        font-weight: 600;
+        cursor: pointer;
+        padding: 4px;
+        user-select: none;
+      }
+      .unavailable-group summary:hover {
+        color: var(--text);
+      }
+      .unavailable-list {
+        margin-top: 4px;
+        opacity: 0.6;
+      }
+      .type-badge {
+        display: inline-block;
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 1px 5px;
+        border-radius: 3px;
+        margin-left: 6px;
+        letter-spacing: 0.3px;
+        vertical-align: middle;
+      }
+      .type-badge.bool   { background: rgba(74,222,128,0.15); color: var(--success); }
+      .type-badge.int    { background: rgba(96,165,250,0.15); color: #60a5fa; }
+      .type-badge.string { background: rgba(251,191,36,0.15); color: var(--warning); }
+      .type-badge.unknown { background: rgba(94,94,112,0.15); color: var(--text-dim); }
+
+      /* === Window Resizers === */
+      .resizer-edge {
+        position: fixed;
+        background: transparent;
+        z-index: 10000;
+      }
+      /* No maximize styles as button was removed */
+      .resizer-t { top: 0; left: 6px; right: 6px; height: 6px; cursor: ns-resize; }
+      .resizer-b { bottom: 0; left: 6px; right: 6px; height: 6px; cursor: ns-resize; }
+      .resizer-l { left: 0; top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
+      .resizer-r { right: 0; top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
+      .resizer-tl { top: 0; left: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+      .resizer-tr { top: 0; right: 0; width: 10px; height: 10px; cursor: nesw-resize; }
+      .resizer-bl { bottom: 0; left: 0; width: 10px; height: 10px; cursor: nesw-resize; }
+      .resizer-br { bottom: 0; right: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+
+      /* === Context Menus & Click Catcher (Unified) === */
+      #cm-click-catcher {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        background: transparent;
+      }
+      #context-menu, .preset-menu {
+        position: fixed;
+        z-index: 10010;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+        pointer-events: auto !important;
+      }
+      #context-menu {
+        background: var(--bg-card);
+        backdrop-filter: blur(20px) saturate(180%);
+        padding: 6px;
+        width: 280px;
+        border-radius: 12px;
+        border: 1px solid var(--border-light);
+        box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+        gap: 6px;
+      }
+      #context-menu.visible { display: flex; }
+
+      .cm-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+        transition: all 0.2s;
+      }
+      .cm-card:hover {
+        border-color: var(--accent-dim);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+        transform: translateY(-1px);
+      }
+
+      .cm-row {
+        display: flex;
+        align-items: center;
+        padding: 6px 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.15s;
+        justify-content: space-between;
+      }
+      .cm-row:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .cm-row-static {
+        display: flex;
+        align-items: center;
+        padding: 6px 12px;
+        justify-content: space-between;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .cm-unapply-action {
+        justify-content: center;
+        gap: 10px;
+        color: var(--text);
+        font-weight: 500;
+        font-size: 11px;
+      }
+      .cm-status-badge {
+        font-size: 8px;
+        text-transform: uppercase;
+        font-weight: 700;
+        padding: 1px 4px;
+        border-radius: 3px;
+        letter-spacing: 0.5px;
+      }
+      .status-active {
+        background: rgba(0, 212, 170, 0.1);
+        color: var(--accent);
+        border: 1px solid rgba(0, 212, 170, 0.2);
+      }
+      .status-inactive {
+        background: rgba(248, 113, 113, 0.1);
+        color: var(--error);
+        border: 1px solid rgba(248, 113, 113, 0.2);
+      }
+      .status-live {
+        background: rgba(0, 150, 255, 0.15);
+        color: #0096ff;
+        border: 1px solid rgba(0, 150, 255, 0.3);
+      }
+      .config-item.disabled-flag {
+        opacity: 0.5;
+        font-style: italic;
+      }
+      .config-item.disabled-flag .flag-dot {
+        background: var(--text-dark) !important;
+        box-shadow: none !important;
+        opacity: 0.5;
+      }
+      .cm-icon-x {
+        font-weight: 900;
+        font-size: 14px;
+        color: var(--error);
+      }
+
+      .cm-label {
+        color: var(--text-dim);
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .cm-lower {
+        display: flex;
+        flex-direction: column;
+        padding: 8px 10px;
+        background: var(--bg-elevated);
+      }
+
+      .seq-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .seq-item-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 2px 0;
+      }
+
+      .seq-val {
+        background: var(--bg-input);
+        border: 1px solid var(--border-light);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        color: var(--text);
+        cursor: text;
+        min-width: 40px;
+        max-width: 100px;
+        text-align: center;
+        outline: none;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        transition: all 0.2s;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      }
+      .seq-val:focus {
+        border-color: var(--accent-dim);
+        box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.1);
+      }
+      .seq-val:empty::before {
+        content: "Original Val";
+        color: var(--text-dark);
+        font-style: italic;
+        font-size: 9px;
+      }
+
+      .seq-add {
+        background: rgba(0, 212, 170, 0.1);
+        border: 1px dashed var(--accent-dim);
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s;
+        position: relative;
+        user-select: none;
+      }
+      .seq-add::before, .seq-add::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        background: var(--accent);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+      }
+      .seq-add::before { width: 8px; height: 1.2px; }
+      .seq-add::after { width: 1.2px; height: 8px; }
+
+      .seq-add:hover {
+        background: rgba(0, 212, 170, 0.2);
+        border-color: var(--accent);
+      }
+      .seq-add:active {
+        transform: scale(0.95);
+        background: rgba(0, 212, 170, 0.3);
+      }
+
+      .seq-arrow {
+        width: 6px;
+        height: 6px;
+        border-top: 1.5px solid var(--text-dark);
+        border-right: 1.5px solid var(--text-dark);
+        transform: rotate(45deg);
+        margin: 0 4px;
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      .delete-val {
+        width: 18px;
+        height: 18px;
+        background: rgba(248, 113, 113, 0.08);
+        border: 1px solid rgba(248, 113, 113, 0.15);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+        position: relative;
+      }
+      .delete-val::before, .delete-val::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 8px;
+        height: 1.2px;
+        background: var(--error);
+        border-radius: 1px;
+        transition: all 0.2s;
+        opacity: 0.6;
+      }
+      .delete-val::before { transform: translate(-50%, -50%) rotate(45deg); }
+      .delete-val::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+      .delete-val:hover {
+        background: #c53030;
+        border-color: #9b2c2c;
+      }
+      .delete-val:hover::before, .delete-val:hover::after {
+        background: white;
+        opacity: 1;
+      }
+      .delete-val:active {
+        transform: scale(0.9);
+        background: #9b2c2c;
+      }
+
+      .btn-inline {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: var(--font-mono);
+        transition: all 0.2s;
+      }
+      .btn-inline:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--accent);
+      }
+      .btn-inline.listening {
+        background: rgba(255, 204, 0, 0.2);
+        color: var(--warning);
+        border-color: var(--warning);
+        animation: pulse 1s infinite alternate;
+      }
+      .btn-inline-remove {
+        background: rgba(255, 60, 60, 0.1);
+        border: 1px solid rgba(255, 60, 60, 0.3);
+        color: var(--error);
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-inline-remove:hover {
+        background: rgba(255, 60, 60, 0.3);
+      }
+      @keyframes pulse {
+        0% { opacity: 1; text-shadow: none; box-shadow: 0 0 5px rgba(255,204,0,0.2); }
+        100% { opacity: 0.8; text-shadow: unset; box-shadow: 0 0 15px rgba(255,204,0,0.8); }
+      }
+    </style>
+    <script src="Sortable.min.js"></script>
+  </head>
+  <body style="background: #040406;">
+    <!-- Loading Screen -->
+    <div id="loading-screen" style="position:fixed; inset:0; background:#040406; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+      <div class="loader-logo" style="width:60px; height:60px; background:#00d4aa; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:900; color:#000; box-shadow:0 0 30px rgba(0, 212, 170, 0.4); animation: pulseLogo 1.5s infinite alternate;">FF</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <div id="loading-text" style="font-size:14px; font-weight:700; color:#e2e2ec; letter-spacing:1px; text-transform:uppercase;">Initializing System</div>
+        <div id="loading-subtext" style="font-size:11px; color:#8888a0;">Preparing deployment pipeline...</div>
+      </div>
+      <div style="width:200px; height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; position:relative;">
+        <div id="loading-bar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#00d4aa; box-shadow:0 0 10px #00d4aa; transition: width 0.3s ease;"></div>
+      </div>
+      <style>
+        @keyframes pulseLogo { 
+          0% { transform: scale(1); box-shadow: 0 0 20px rgba(0, 212, 170, 0.3); }
+          100% { transform: scale(1.1); box-shadow: 0 0 50px rgba(0, 212, 170, 0.6); }
+        }
+      </style>
+    </div>
+
+    <!-- Main App Wrapper (Hidden during load) -->
+    <div id="app-root" style="opacity: 0; display: flex; flex-direction: column; height: 100vh; width: 100vw; transition: opacity 0.8s ease-in-out;">
+      <!-- Context Menu & Catcher -->
+      <div id="cm-click-catcher" onmousedown="closeContextMenu()" oncontextmenu="closeContextMenu(); return false;"></div>
+      <div id="context-menu"></div>
+      <div id="preset-cm" class="preset-menu"></div>
+
+      <!-- Matrix Animation Layer -->
+      <canvas id="matrix-canvas"></canvas>
+
+      <!-- Title Bar -->
+      <div class="titlebar pywebview-drag-region">
+        <div class="titlebar-brand">
+          <div class="titlebar-icon">FF</div>
+          <span class="titlebar-title">FFlag Manager</span>
+          
+          <div class="version-checker" id="version-checker">
+            <div class="vc-dot" id="vc-dot"></div>
+            <span class="vc-text" id="vc-text">Waiting for Update<span id="vc-dots">..</span></span>
+          </div>
+        </div>
+        <div class="titlebar-version">v3.0</div>
+        <div class="titlebar-controls">
+          <button
+            class="titlebar-btn minimize"
+            onclick="minimizeWindow()"
+            title="Minimize"
+          ></button>
+          <button
+            class="titlebar-btn close"
+            onclick="closeWindow()"
+            title="Close"
+            style="border-top-right-radius: 8px"
+          ></button>
+        </div>
+      </div>
+
+      <!-- App Container -->
+      <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+          <div class="sidebar-search">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search flags..."
+              oninput="onSearch(this.value)"
+            />
+          </div>
+
+          <div class="sidebar-section-label">Available Flags</div>
+          <div class="sidebar-list" id="sidebar-list">
+            <div class="sidebar-hint">Loading flags...</div>
+          </div>
+
+          <div class="sidebar-add">
+            <input type="text" id="add-value" placeholder="Value..." disabled />
+            <select id="add-value-bool" style="display:none; background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; flex: 1; min-width: 0;">
+              <option value="true">True</option>
+              <option value="false">False</option>
+            </select>
+            <button
+              class="btn btn-subtle"
+              id="add-btn"
+              onclick="addFlag()"
+              disabled
+            >
+              + Add
+            </button>
+          </div>
+
+          <!-- Status -->
+          <div class="sidebar-status">
+            <div class="status-row">
+              <div class="status-dot" id="status-dot"></div>
+              <span class="status-label" id="status-label">Waiting...</span>
+            </div>
+            <div class="status-info" id="status-info"></div>
+          </div>
+        </div>
+
+        <div class="resizer-v" id="sidebar-resizer"></div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="main-content">
+          <!-- Tab Bar -->
+          <div class="tab-bar">
+            <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">&#x276E;</button>
+            <button class="tab-btn active" onclick="switchTab('editor')">
+              <span class="tab-dot"></span> Editor
+            </button>
+            <button class="tab-btn" onclick="switchTab('presets')">
+              <span class="tab-dot"></span> Presets
+            </button>
+            <button class="tab-btn" onclick="switchTab('settings')">
+              <span class="tab-dot"></span> Settings
+            </button>
+          </div>
+
+          <!-- Editor View (default) -->
+          <div id="editor-view" class="editor-view active">
+            <!-- Config Panel -->
+            <div class="config-panel" id="config-panel">
+              <div class="config-header">
+                <span class="config-title">My Configuration</span>
+                <select id="config-sort" onchange="changeSortMode(this.value)" style="background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">
+                  <option value="custom">Custom Order</option>
+                  <option value="priority">Priority (Binds first)</option>
+                  <option value="a-z">A-Z</option>
+                  <option value="z-a">Z-A</option>
+                </select>
+                <span class="config-count" id="config-count">0 Fast Flags</span>
+                <div class="config-actions-top" style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="config-search" placeholder="Search my flags..." oninput="filterConfig()" style="background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 11px; width: 140px;" />
+                  <button
+                    class="btn btn-subtle"
+                    onclick="showHistory()"
+                    title="History"
+                    style="padding: 4px 10px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px;"
+                  >
+                    <span style="font-size: 14px;">&#x21BA;</span> History
+                  </button>
+                </div>
+              </div>
+              <div class="config-list" id="config-list">
+                <div class="config-empty">
+                  No flags configured.<br />Search and add flags from the sidebar.
+                </div>
+              </div>
+              <div class="config-footer">
+                <input
+                  type="text"
+                  id="edit-value"
+                  placeholder="Edit value..."
+                  disabled
+                />
+                <select id="edit-value-bool" style="display:none; background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; width: 100px;">
+                  <option value="true">True</option>
+                  <option value="false">False</option>
+                </select>
+                <button
+                  class="btn btn-subtle"
+                  id="save-btn"
+                  onclick="saveFlag()"
+                  disabled
+                >
+                  Save
+                </button>
+                <button
+                  class="btn btn-danger"
+                  id="remove-btn"
+                  onclick="removeFlags()"
+                  disabled
+                >
+                  Remove
+                </button>
+                <div class="spacer"></div>
+                <button class="btn btn-subtle" onclick="importFlags()">
+                  Import
+                </button>
+                <button class="btn btn-subtle" onclick="exportFlags()">
+                  Export
+                </button>
+                <button class="btn btn-danger" onclick="showConfirmModal('Clear All Flags', 'This will remove all flags from your configuration. This cannot be undone.', clearAll)">
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="action-bar">
+              <label class="toggle" title="Auto Apply">
+                <input
+                  type="checkbox"
+                  id="auto-apply-toggle"
+                  onchange="toggleAutoApply(this.checked)"
+                />
+                <div class="toggle-slider"></div>
+              </label>
+              <span style="font-size: 11px; color: var(--text-dark)"
+                >Auto Apply</span
+              >
+              <div class="spacer"></div>
+              <button class="btn btn-secondary" id="launch-btn" onclick="launchRoblox()">
+                Launch Roblox
+              </button>
+              <button class="btn btn-danger" id="reapply-btn" onclick="killAndReapply()" title="Kills running process and spawns fresh with flags">
+                Kill & Relaunch
+              </button>
+              <button
+                class="btn btn-primary"
+                id="inject-btn"
+                onclick="applyFlags()"
+              >
+                Apply Flags
+              </button>
+            </div>
+
+            <div class="resizer-h" id="console-resizer"></div>
+
+            <!-- Console Panel -->
+            <div class="console-panel">
+              <div class="console-header" onclick="toggleConsole()">
+                <div class="console-title-wrap">
+                  <button class="console-toggle-btn" id="console-toggle">
+                    &#x25BC;
+                  </button>
+                  <span class="console-title">Output</span>
+                </div>
+                <div class="console-actions">
+                  <button class="btn-icon" onclick="event.stopPropagation(); copyConsole()" title="Copy">
+                    Copy
+                  </button>
+                  <button class="btn-icon" onclick="event.stopPropagation(); clearConsole()" title="Clear">
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div class="console-output" id="console-output"></div>
+            </div>
+          </div>
+
+          <!-- Presets View -->
+          <div class="presets-panel" id="presets-view">
+            <div class="presets-grid" id="presets-grid">
+              <div class="preset-card preset-add-card" onclick="showPresetOptions(event)">
+                <div class="preset-add-icon">+</div>
+                <div class="preset-add-text">Import Preset</div>
+              </div>
+              <!-- Preset Cards injected here -->
+            </div>
+          </div>
+
+          <!-- Preset Preview Modal -->
+          <div class="preview-modal" id="preview-modal" onclick="if(event.target === this) closePreview();">
+            <div class="preview-content">
+              <div class="preview-header">
+                <div style="display:flex; align-items:center; gap:12px; flex: 1;">
+                  <div id="preview-color-dot" style="width:12px; height:12px; border-radius:50%;"></div>
+                  <span id="preview-title" class="config-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">Preset Preview</span>
+                  <div style="position: relative; flex: 1; max-width: 250px; margin-left: 10px;">
+                    <input type="text" id="preview-search" placeholder="Search flags in preset..." oninput="filterPreview(this.value)" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px 6px 30px; color: var(--text); font-size: 11px; outline: none; transition: var(--transition);" />
+                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; opacity: 0.4; pointer-events: none;">&#128269;</span>
+                  </div>
+                </div>
+                <button class="btn btn-subtle" onclick="closePreview()">Close</button>
+              </div>
+              <div class="preview-list" id="preview-list"></div>
+              <div class="config-footer" style="background: var(--bg-elevated); padding: 12px 20px;">
+                <button class="btn btn-primary" id="preview-apply-btn">Apply This Preset</button>
+                <div class="spacer"></div>
+                <span id="preview-count" class="config-count">0 Flags</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings View (shown as tab) -->
+          <div class="settings-panel" id="settings-view">
+            <div class="settings-section">
+              <div class="settings-section-title">General</div>
+              <div class="settings-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-auto-apply"
+                    onchange="toggleAutoApply(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Auto Apply when Roblox starts</span>
+              </div>
+              <div class="settings-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-close-tray"
+                    onchange="setCloseTray(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Close to system tray</span>
+              </div>
+              <div class="settings-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-launch-min"
+                    onchange="setLaunchMinimized(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Launch minimized</span>
+              </div>
+              
+              <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between; width: 100%;">
+                  <span class="settings-label" style="margin: 0;">Configuration History Limit: <span id="history-limit-val" style="color: var(--accent); font-weight: bold;">30</span></span>
+                </div>
+                <input type="range" id="settings-history-limit" min="3" max="100" style="width: 100%; accent-color: var(--accent);" oninput="updateHistoryLimitUI(this.value)" onchange="saveHistoryLimit(this.value)" />
+                <div id="history-warning" style="display: none; color: var(--error); font-size: 11px; margin-top: 4px; font-weight: bold; background: rgba(255,50,50,0.1); padding: 6px; border-radius: 4px; border: 1px solid var(--error); width: 100%; box-sizing: border-box;">
+                  &#x26A0;&#xFE0F; Warning: Making history unlimited can consume massive local storage over time!
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-title">Appearance</div>
+              <div class="settings-row" id="light-mode-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-theme"
+                    onchange="toggleTheme(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Light Mode</span>
+              </div>
+              <div class="settings-row" style="margin-top: 8px;">
+                <span class="settings-label">UI Theme:</span>
+                <select id="settings-ui-theme" onchange="setUITheme(this.value)" style="background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; font-size: 12px; flex: 1; max-width: 150px;">
+                  <option value="premium">Premium Glass</option>
+                  <option value="ignite">Ignite (Lava)</option>
+                  <option value="matrix">Matrix (Terminal)</option>
+                  <option value="legacy">Legacy</option>
+                </select>
+              </div>
+              <div class="settings-row" id="matrix-speed-row" style="margin-top: 8px; flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span class="settings-label">Animation Speed: <span id="matrix-speed-val" style="color: var(--accent); font-weight: bold;">5</span></span>
+                <input type="range" id="settings-matrix-speed" min="1" max="10" step="1" value="5" style="width: 100%; accent-color: var(--accent);" oninput="updateMatrixSpeedUI(this.value)" onchange="saveMatrixSpeed(this.value)" />
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-title">About FFlag Manager</div>
+              <div style="font-size: 11.5px; color: var(--text-dim); line-height: 1.8; padding: 4px 0;">
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; background: var(--bg-card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; font-weight: 900; box-shadow: 0 0 20px var(--accent-glow); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">4</div>
+                    <div style="flex: 1;">
+                      <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: var(--text); font-size: 14px;">Developed by 4anti</strong>
+                        <span style="color: var(--accent); font-weight: 800; font-size: 12px;">v3.0</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-dark); margin-top: -2px;">Professional FastFlag Management Suite</div>
+                    </div>
+                  </div>
+
+                  <div style="display: flex; gap: 8px; margin-top: 4px;">
+                    <button class="btn btn-subtle" onclick="pywebview.api.open_url('https://github.com/4anti/Roblox-Fastflag-Manager')" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px; background: var(--bg-elevated);">
+                      GitHub Source
+                    </button>
+                    <button class="btn btn-subtle" onclick="pywebview.api.open_url('https://discord.gg/ECekjAkQu7')" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px; background: rgba(124, 92, 252, 0.08); border-color: rgba(124, 92, 252, 0.2); color: var(--purple-hover);">
+                      Discord Server
+                    </button>
+                  </div>
+                </div>
+
+                <span style="color: var(--accent)">&#x2022;</span> <strong>Low-End Hardware Integration:</strong> Optimized for seamless performance across all system specifications.<br>
+                <span style="color: var(--accent)">&#x2022;</span> <strong>Instant Flag Indexing:</strong> Ultra-fast search and discovery across the entire FFlag database.<br>
+                <span style="color: var(--accent)">&#x2022;</span> <strong>Conflict-Aware Preset Merging:</strong> Smart multi-layer configuration with keybind protection.<br>
+                <span style="color: var(--accent)">&#x2022;</span> <strong>Secure Variable Deployment:</strong> A reliable and trace-free injection pipeline for your settings.<br><br>
+
+                <div style="border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 4px; font-style: italic; opacity: 0.8;">
+                  Project is fully open-source and community-driven.
+                </div>
+                <br>
+                <span id="fflag-metrics-display">FFlags being searched<span id="metrics-dots">...</span></span>
+              </div>
+            </div>          </div>
+
+        </div>
+      </div>
+    </div> <!-- End app-root -->
+    <!-- History Modal -->
+    <div class="history-modal" id="history-modal" onclick="if(event.target === this) closeHistory();">
+      <div class="history-content">
+        <div class="history-header">
+          <span>Configuration History</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-subtle" style="padding: 4px 12px; color: var(--error); border-color: rgba(255, 100, 100, 0.3);" onclick="showConfirmModal('Delete All History', 'Are you sure you want to permanently wipe your configuration history? This action cannot be undone.', performClearHistory)">Clear History</button>
+            <button class="btn btn-subtle" style="padding: 4px 12px;" onclick="closeHistory()">Close</button>
+          </div>
+        </div>
+        <div class="history-list" id="history-list"></div>
+      </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div class="confirm-modal" id="confirm-modal">
+      <div class="confirm-content">
+        <div class="confirm-header" id="confirm-title">Confirm Action</div>
+        <div class="confirm-body" id="confirm-message">Are you sure?</div>
+        <div class="confirm-actions">
+          <button class="btn btn-subtle" style="padding: 6px 16px;" onclick="closeConfirmModal()">Cancel</button>
+          <button class="btn btn-subtle" style="padding: 6px 16px; background: rgba(255, 100, 100, 0.15); color: var(--error); border-color: rgba(255, 100, 100, 0.3);" id="confirm-ok-btn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Modal (custom prompt replacement) -->
+    <div class="input-modal" id="input-modal" onclick="if(event.target === this) closeInputModal();">
+      <div class="input-modal-content">
+        <div class="input-modal-header" id="input-modal-title">Enter Value</div>
+        <div class="input-modal-body" id="input-modal-body">
+          <!-- Dynamically filled -->
+        </div>
+        <div class="input-modal-actions">
+          <button class="btn btn-subtle" style="padding: 6px 16px;" onclick="closeInputModal()">Cancel</button>
+          <button class="btn btn-subtle" style="padding: 6px 16px; background: rgba(0, 212, 170, 0.15); color: var(--accent); border-color: rgba(0, 212, 170, 0.3);" id="input-modal-ok">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Large Input Modal (for JSON Batch) -->
+    <div class="input-modal" id="large-input-modal" onclick="if(event.target === this) closeLargeInputModal();" style="backdrop-filter: blur(2px);">
+      <div class="input-modal-content" style="width: 550px; border-radius: 12px;">
+        <div class="input-modal-header" id="large-input-modal-title">Batch Import FastFlags (JSON)</div>
+        <div class="input-modal-body" style="padding: 20px;">
+          <textarea id="large-input-textarea" placeholder="Paste JSON here (Bloxstrap or FFlag list)..." style="width: 100%; height: 280px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; font-family: var(--font-mono); font-size: 12px; outline: none; resize: none;"></textarea>
+        </div>
+        <div class="input-modal-actions" style="padding: 12px 20px; background: var(--bg-panel);">
+          <button class="btn btn-subtle" onclick="closeLargeInputModal()" style="padding: 6px 16px;">Cancel</button>
+          <button class="btn btn-subtle" id="large-input-modal-file" style="padding: 6px 16px; border-color: var(--accent-dim); color: var(--accent);">Choose JSON File</button>
+          <button class="btn btn-primary" id="large-input-modal-ok" style="padding: 6px 20px;">Import All</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resizer Handles -->
+    <div class="resizer-edge resizer-t" onmousedown="initResize(event, 3)"></div>
+    <div class="resizer-edge resizer-b" onmousedown="initResize(event, 6)"></div>
+    <div class="resizer-edge resizer-l" onmousedown="initResize(event, 1)"></div>
+    <div class="resizer-edge resizer-r" onmousedown="initResize(event, 2)"></div>
+    <div class="resizer-edge resizer-tl" onmousedown="initResize(event, 4)"></div>
+    <div class="resizer-edge resizer-tr" onmousedown="initResize(event, 5)"></div>
+    <div class="resizer-edge resizer-bl" onmousedown="initResize(event, 7)"></div>
+    <div class="resizer-edge resizer-br" onmousedown="initResize(event, 8)"></div>
+
+    <script>
+      // === State ===
+      let selectedSidebarFlag = null;
+      let selectedConfigFlags = [];
+      let logIndex = 0;
+      let isReady = false;
+
+      // Layout State
+      let sidebarWidth = 240;
+      let consoleHeight = 180;
+      let isSidebarCollapsed = false;
+      let currentTheme = 'premium'; // premium or legacy
+
+      // === Window Controls ===
+      function updateDragRegion() {
+        // Managed by pywebview-drag-region
+      }
+
+      function minimizeWindow() {
+        pywebview.api.minimize_window();
+      }
+      // toggleMaximize removed as requested
+
+      // === Resizing Fallback (JS Bridge) ===
+      let isResizing = false;
+      let startX, startY, startW, startH, currentDir;
+
+      async function initResize(e, dir) {
+        e.preventDefault();
+        
+        // 1. Try Win32 primary (Fastest)
+        pywebview.api.start_resize(dir);
+        
+        // 2. JS Fallback Prep
+        isResizing = true;
+        currentDir = dir;
+        startX = e.screenX;
+        startY = e.screenY;
+        
+        const bounds = await pywebview.api.get_window_bounds();
+        startW = bounds.width;
+        startH = bounds.height;
+        
+        document.addEventListener('mousemove', handleResizeMove);
+        document.addEventListener('mouseup', stopResize);
+        document.body.style.cursor = window.getComputedStyle(e.target).cursor;
+      }
+
+      function handleResizeMove(e) {
+        if (!isResizing) return;
+        
+        const dx = e.screenX - startX;
+        const dy = e.screenY - startY;
+        
+        let newW = startW;
+        let newH = startH;
+        
+        // Basic Right/Bottom/Diagonal Logic for Fallback
+        if (currentDir === 2 || currentDir === 5 || currentDir === 8) newW = startW + dx;
+        if (currentDir === 6 || currentDir === 7 || currentDir === 8) newH = startH + dy;
+        
+        // Throttled API Call
+        pywebview.api.resize_window(newW, newH);
+      }
+
+      function stopResize() {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', stopResize);
+        document.body.style.cursor = '';
+      }
+      function closeWindow() {
+        pywebview.api.close_window();
+      }
+
+      // === Layout & Resizing ===
+      function toggleSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        isSidebarCollapsed = !isSidebarCollapsed;
+        
+        if (isSidebarCollapsed) {
+          sidebar.classList.add('collapsed');
+          toggleBtn.innerHTML = '&#x276F;'; // Chevron Right
+        } else {
+          sidebar.classList.remove('collapsed');
+          toggleBtn.innerHTML = '&#x276E;'; // Chevron Left
+        }
+        saveLayout();
+      }
+
+      let isConsoleCollapsed = false;
+      function toggleConsole() {
+        const panel = document.querySelector('.console-panel');
+        isConsoleCollapsed = !isConsoleCollapsed;
+        
+        if (isConsoleCollapsed) {
+          panel.classList.add('collapsed');
+        } else {
+          panel.classList.remove('collapsed');
+        }
+        saveLayout();
+      }
+
+      function initResizers() {
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarResizer = document.getElementById('sidebar-resizer');
+        const consolePanel = document.querySelector('.console-panel');
+        const consoleResizer = document.getElementById('console-resizer');
+        
+        // Sidebar Resizing
+        sidebarResizer.addEventListener('mousedown', (e) => {
+          document.addEventListener('mousemove', resizeSidebar);
+          document.addEventListener('mouseup', stopResizeSidebar);
+          sidebarResizer.classList.add('active');
+          document.body.style.cursor = 'col-resize';
+        });
+
+        function resizeSidebar(e) {
+          if (isSidebarCollapsed) return;
+          const newWidth = e.clientX;
+          if (newWidth > 150 && newWidth < 500) {
+            sidebarWidth = newWidth;
+            sidebar.style.width = newWidth + 'px';
+          }
+        }
+
+        function stopResizeSidebar() {
+          document.removeEventListener('mousemove', resizeSidebar);
+          document.removeEventListener('mouseup', stopResizeSidebar);
+          sidebarResizer.classList.remove('active');
+          document.body.style.cursor = 'default';
+          saveLayout();
+        }
+
+        // Console Resizing
+        consoleResizer.addEventListener('mousedown', (e) => {
+          document.addEventListener('mousemove', resizeConsole);
+          document.addEventListener('mouseup', stopResizeConsole);
+          consoleResizer.classList.add('active');
+          document.body.style.cursor = 'row-resize';
+        });
+
+        function resizeConsole(e) {
+          const newHeight = window.innerHeight - e.clientY;
+          if (newHeight > 100 && newHeight < 500) {
+            consoleHeight = newHeight;
+            consolePanel.style.height = newHeight + 'px';
+          }
+        }
+
+        function stopResizeConsole() {
+          document.removeEventListener('mousemove', resizeConsole);
+          document.removeEventListener('mouseup', stopResizeConsole);
+          consoleResizer.classList.remove('active');
+          document.body.style.cursor = 'default';
+          saveLayout();
+        }
+      }
+
+      function saveLayout() {
+        const layout = {
+          sidebarWidth,
+          consoleHeight,
+          isSidebarCollapsed,
+          isConsoleCollapsed,
+          currentTheme
+        };
+        localStorage.setItem('ffm_layout', JSON.stringify(layout));
+        
+        // Save to Python backend for robust persistence
+        if (window.pywebview && pywebview.api) {
+          pywebview.api.save_ui_layout(layout);
+        }
+      }
+
+      function loadLayout(s = null) {
+        // 1. Try Python settings first if provided
+        if (s) {
+          sidebarWidth = s.sidebar_width || 240;
+          consoleHeight = s.console_height || 180;
+          isSidebarCollapsed = s.sidebar_collapsed || false;
+          isConsoleCollapsed = s.console_collapsed || false;
+          currentTheme = s.ui_theme || 'premium';
+        } else {
+          // 2. Fallback to localStorage
+          const saved = localStorage.getItem('ffm_layout');
+          if (saved) {
+            const layout = JSON.parse(saved);
+            sidebarWidth = layout.sidebarWidth || 240;
+            consoleHeight = layout.consoleHeight || 180;
+            isSidebarCollapsed = layout.isSidebarCollapsed || false;
+            isConsoleCollapsed = layout.isConsoleCollapsed || false;
+            currentTheme = layout.currentTheme || 'premium';
+          }
+        }
+
+        // Apply to DOM
+        document.querySelector('.sidebar').style.width = sidebarWidth + 'px';
+        const panel = document.querySelector('.console-panel');
+        panel.style.height = consoleHeight + 'px';
+        
+        if (isSidebarCollapsed) {
+          document.querySelector('.sidebar').classList.add('collapsed');
+          document.getElementById('sidebar-toggle').innerHTML = '&#x276F;';
+        } else {
+          document.querySelector('.sidebar').classList.remove('collapsed');
+          document.getElementById('sidebar-toggle').innerHTML = '&#x276E;';
+        }
+
+        if (isConsoleCollapsed) {
+          panel.classList.add('collapsed');
+        } else {
+          panel.classList.remove('collapsed');
+        }
+        
+        // Final theme application happens in pywebviewready to ensure instances exist
+      }
+
+      function setUITheme(theme, save = true) {
+        currentTheme = theme;
+        
+        // Remove existing theme classes
+        document.body.classList.remove('theme-legacy', 'theme-ignite', 'theme-matrix');
+        
+        // Apply the newly selected theme class (if it is not premium, which is the default CSS)
+        if (theme && theme !== 'premium') {
+          document.body.classList.add('theme-' + theme);
+        }
+        
+        // Manage Matrix Canvas Animation
+        toggleMatrixAnim(theme === 'matrix');
+
+        // Hide/Show Matrix speed slider
+        const matrixSpeedRow = document.getElementById('matrix-speed-row');
+        if (matrixSpeedRow) {
+          matrixSpeedRow.style.display = (theme === 'matrix') ? 'flex' : 'none';
+        }
+
+        // Hide Light Mode for Ignite (strictly dark)
+        const lightModeRow = document.getElementById('light-mode-row');
+        if (lightModeRow) {
+          const isIgnite = theme === 'ignite';
+          lightModeRow.style.display = isIgnite ? 'none' : 'flex';
+          if (isIgnite && document.body.classList.contains('light-theme')) {
+            toggleTheme(false);
+            document.getElementById('settings-theme').checked = false;
+          }
+        }
+        
+        // Final sanity check for light mode backgrounds
+        if (document.body.classList.contains('light-theme')) {
+           document.body.style.background = 'var(--bg-base)';
+        } else {
+           document.body.style.background = '';
+        }
+        
+        if (save) {
+          saveLayout();
+          if (window.pywebview && pywebview.api) {
+            pywebview.api.set_ui_theme(theme);
+          }
+        }
+      }
+
+      // === Tab Switching ===
+      function switchTab(tab) {
+        const editorView = document.getElementById('editor-view');
+        const settingsView = document.getElementById('settings-view');
+        const presetsView = document.getElementById('presets-view');
+        const tabs = document.querySelectorAll('.tab-btn');
+
+        tabs.forEach(t => t.classList.remove('active'));
+
+        editorView.style.display = 'none';
+        settingsView.classList.remove('active');
+        presetsView.classList.remove('active');
+
+        if (tab === 'editor') {
+          editorView.style.display = 'flex';
+          tabs[0].classList.add('active');
+        } else if (tab === 'presets') {
+          presetsView.classList.add('active');
+          tabs[1].classList.add('active');
+          loadPresets();
+        } else {
+          settingsView.classList.add('active');
+          tabs[2].classList.add('active');
+        }
+      }
+
+      // === Loading Screen Logic ===
+      function updateLoadingScreen(percent, text, subtext) {
+        const bar = document.getElementById('loading-bar');
+        const txt = document.getElementById('loading-text');
+        const sub = document.getElementById('loading-subtext');
+        if (bar) bar.style.width = percent + '%';
+        if (txt) txt.textContent = text;
+        if (sub) sub.textContent = subtext;
+      }
+
+      function hideLoadingScreen() {
+        const screen = document.getElementById('loading-screen');
+        const root = document.getElementById('app-root');
+        if (!screen) return;
+        
+        // Fade in the app
+        if (root) root.style.opacity = '1';
+        
+        // Fade out the loader
+        screen.style.opacity = '0';
+        screen.style.transition = 'opacity 0.8s ease-in-out, visibility 0.8s';
+        screen.style.visibility = 'hidden';
+        
+        setTimeout(() => screen.remove(), 800);
+      }
+
+      // === Init ===
+      window.addEventListener("pywebviewready", async function () {
+        const startTime = Date.now();
+        const minTotalTime = 1150; // 1.15 seconds as requested
+        isReady = true;
+
+        async function runStage(percent, title, subtext, minMs, taskFn) {
+          updateLoadingScreen(percent, title, subtext);
+          const stageStart = Date.now();
+          if (taskFn) {
+            try { await taskFn(); } catch(e) { console.error(`Error in ${title}:`, e); }
+          }
+          const elapsed = Date.now() - stageStart;
+          if (elapsed < minMs) {
+            await new Promise(r => setTimeout(r, minMs - elapsed));
+          }
+        }
+
+        // Sequence the stages with distributed minimum times totaling ~1.15s
+        await runStage(20, "Loading Settings", "Fetching user preferences...", 150, loadSettings);
+        
+        await runStage(40, "Scanning Roblox", "Checking active processes...", 300, async () => {
+          await refreshConfig();
+          await updateStatus();
+        });
+
+        await runStage(60, "Indexing Flags", "Processing FastFlag database...", 250, loadInitialFlags);
+        
+        await runStage(80, "Syncing Presets", "Preparing saved configurations...", 200, loadPresets);
+        
+        await runStage(100, "Ready", "System deployment complete.", 250);
+
+        // Initialize Layout
+        initResizers();
+        setUITheme(currentTheme, false);
+        
+        // Setup shared listeners
+        document.getElementById('edit-value').addEventListener('keypress', e => { if (e.key === 'Enter') saveFlag(); });
+        document.getElementById('add-value').addEventListener('keypress', e => { if (e.key === 'Enter') addFlag(); });
+
+        // SortableJS init
+        new Sortable(document.getElementById('config-list'), {
+          animation: 150,
+          handle: '.config-item',
+          filter: '.config-empty, .unavailable-group',
+          preventOnFilter: false,
+          onEnd: function (evt) {
+            if (currentSortMode !== 'custom') {
+               currentSortMode = 'custom';
+               document.getElementById("config-sort").value = "custom";
+            }
+            const itemEls = document.querySelectorAll('#config-list .config-item');
+            const newOrder = Array.from(itemEls).map(el => el.getAttribute('data-fname')).filter(x => x);
+            pywebview.api.reorder_flags(newOrder);
+          }
+        });
+
+        setInterval(updateStatus, 2000);
+        setInterval(pollLogs, 800);
+        setInterval(checkVersionStatus, 1000);
+
+        // Final check to ensure we met the total minimum time
+        const totalElapsed = Date.now() - startTime;
+        const remaining = Math.max(0, minTotalTime - totalElapsed);
+        setTimeout(hideLoadingScreen, remaining);
+      });
+
+      let currentSortMode = 'custom';
+      function changeSortMode(mode) {
+         currentSortMode = mode;
+         if (window.pywebview && pywebview.api) {
+           pywebview.api.set_sort_mode(mode);
+         }
+         refreshConfig();
+      }
+
+      // === Version Checker ===
+      let initialFlagsLoaded = false;
+      let metricsDotCount = 1;
+      let metricsInterval = null;
+      let dotAnimateTimer = null;
+      let dotCount = 1;
+      let versionReady = false;
+
+      function animateDots() {
+        if (versionReady) return;
+        dotCount = (dotCount % 3) + 1;
+        const dotsEl = document.getElementById('vc-dots');
+        if (dotsEl) dotsEl.textContent = '.'.repeat(dotCount);
+      }
+
+      function animateMetricsDots() {
+        metricsDotCount = (metricsDotCount % 3) + 1;
+        const dotsEl = document.getElementById('metrics-dots');
+        if (dotsEl) dotsEl.textContent = '.'.repeat(metricsDotCount);
+      }
+
+      async function checkVersionStatus() {
+        if (!isReady) return;
+        try {
+          const status = await pywebview.api.get_loading_status();
+          const vcText = document.getElementById('vc-text');
+          const vcDot = document.getElementById('vc-dot');
+          const metricsDisplay = document.getElementById('fflag-metrics-display');
+          
+          const flagCount = await pywebview.api.get_fflag_count();
+          
+          if (flagCount > 0) {
+            const kCount = Math.floor(flagCount / 1000);
+            metricsDisplay.innerHTML = `More than <strong style="color:var(--accent)">${kCount}k+</strong> supported fflags`;
+            if (metricsInterval) { clearInterval(metricsInterval); metricsInterval = null; }
+            
+            // Auto-refresh sidebar if it's the first time we have flags
+            if (!initialFlagsLoaded) {
+              initialFlagsLoaded = true;
+              loadInitialFlags();
+            }
+          } else {
+            if (!metricsInterval) {
+               metricsDisplay.innerHTML = 'FFlags being searched<span id="metrics-dots">.</span>';
+               metricsInterval = setInterval(animateMetricsDots, 500);
+            }
+          }
+
+          if (status.ready && !status.loading) {
+            versionReady = true;
+            vcText.textContent = "Up-to-Date";
+            vcText.style.color = "var(--success)";
+            vcDot.className = "vc-dot up-to-date";
+            if (dotAnimateTimer) { clearInterval(dotAnimateTimer); dotAnimateTimer = null; }
+          } else {
+            versionReady = false;
+            vcText.innerHTML = 'Waiting for Update<span id="vc-dots">.</span>';
+            vcText.style.color = "var(--warning)";
+            vcDot.className = "vc-dot";
+            if (!dotAnimateTimer) { dotAnimateTimer = setInterval(animateDots, 500); }
+          }
+        } catch(e) {}
+      }
+
+      // === Settings ===
+      async function loadSettings() {
+        try {
+          const s = await pywebview.api.get_settings();
+          document.getElementById("auto-apply-toggle").checked = s.auto_apply;
+          document.getElementById("settings-auto-apply").checked = s.auto_apply;
+          // UI Theme
+          if (s.ui_theme) {
+            setUITheme(s.ui_theme, false);
+            document.getElementById('settings-ui-theme').value = s.ui_theme;
+          }
+          
+          const isLight = s.theme === 'light';
+          document.getElementById("settings-theme").checked = isLight;
+          if (isLight) document.body.classList.add('light-theme');
+          // Other settings
+          const closeTray = document.getElementById("settings-close-tray");
+          if (closeTray) closeTray.checked = s.close_to_tray || false;
+          const launchMin = document.getElementById("settings-launch-min");
+          if (launchMin) launchMin.checked = s.launch_minimized || false;
+          
+          const limitSlider = document.getElementById("settings-history-limit");
+          if (limitSlider && s.history_limit !== undefined) {
+              const val = (s.history_limit <= 0 || s.history_limit >= 100) ? 100 : s.history_limit;
+              limitSlider.value = val;
+              updateHistoryLimitUI(val);
+          }
+          
+          if (s.sort_mode) {
+              currentSortMode = s.sort_mode;
+              document.getElementById("config-sort").value = s.sort_mode;
+          }
+          
+          // Load Layout from settings
+          loadLayout(s);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function toggleAutoApply(val) {
+        try {
+          await pywebview.api.set_auto_apply(val);
+          document.getElementById("auto-apply-toggle").checked = val;
+          document.getElementById("settings-auto-apply").checked = val;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function toggleTheme(isLight) {
+        if (isLight) {
+          document.body.classList.add('light-theme');
+          document.body.style.background = 'var(--bg-base)';
+        } else {
+          document.body.classList.remove('light-theme');
+          document.body.style.background = '';
+        }
+        
+        // Instant reset of matrix canvas to prevent "grayish" ghosting
+        resetMatrixCanvas();
+
+        try {
+          await pywebview.api.set_theme(isLight ? 'light' : 'dark');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      function resetMatrixCanvas() {
+        if (!matrixCanvas) return;
+        const isLight = document.body.classList.contains('light-theme');
+        // Instantly fill with the solid base color
+        ctx.fillStyle = isLight ? '#f5f5f8' : '#010401';
+        ctx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+        // Also reset preset canvases
+        presetMatrixInstances.forEach(inst => {
+          inst.ctx.fillStyle = isLight ? '#f0f0f5' : 'rgba(1, 20, 5, 1)';
+          inst.ctx.fillRect(0, 0, inst.canvas.width, inst.canvas.height);
+        });
+      }
+
+      async function setCloseTray(val) {
+        try { await pywebview.api.set_close_to_tray(val); } catch (e) { console.error(e); }
+      }
+      async function setLaunchMinimized(val) {
+        try { await pywebview.api.set_launch_minimized(val); } catch (e) { console.error(e); }
+      }
+
+      function updateHistoryLimitUI(val) {
+        document.getElementById("history-limit-val").textContent = val >= 100 ? "Unlimited" : val;
+        document.getElementById("history-warning").style.display = val >= 100 ? "block" : "none";
+      }
+
+      function saveHistoryLimit(val) {
+        const limitToSave = val >= 100 ? 0 : val;
+        pywebview.api.set_history_limit(limitToSave);
+      }
+
+      async function showHistory() {
+        const modal = document.getElementById("history-modal");
+        const list = document.getElementById("history-list");
+        list.innerHTML = "<div class='config-empty'>Loading...</div>";
+        modal.style.display = "flex";
+        
+        try {
+          const history = await pywebview.api.get_history();
+          if (!history || history.length === 0) {
+            list.innerHTML = "<div class='config-empty'>No history found. Save or edit a flag to start tracking.</div>";
+            return;
+          }
+          
+          let html = "";
+          for (const item of history) {
+            const d = new Date(item.timestamp * 1000);
+            const timeStr = d.toLocaleString();
+            const flagCount = item.flags ? item.flags.length : 0;
+            html += `
+              <div class="history-item">
+                <div class="history-item-info">
+                  <span class="history-action">${escHtml(item.action || "Unknown Action")}</span>
+                  <span class="history-time">${timeStr} &bull; ${flagCount} flags tracked</span>
+                </div>
+                <button class="btn btn-subtle" onclick="restoreHistory(${item.timestamp})" style="padding: 4px 12px;">Restore</button>
+              </div>
+            `;
+          }
+          list.innerHTML = html;
+        } catch (e) {
+          list.innerHTML = "<div class='config-empty' style='color:var(--error)'>Failed to load history</div>";
+        }
+      }
+
+      function closeHistory() {
+        document.getElementById("history-modal").style.display = "none";
+      }
+
+      async function restoreHistory(timestamp) {
+        try {
+          const success = await pywebview.api.restore_history(timestamp);
+          if (success) {
+            closeHistory();
+            await refreshConfig();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      let pendingConfirmAction = null;
+
+      function showConfirmModal(title, message, onConfirm) {
+        document.getElementById("confirm-title").textContent = title;
+        document.getElementById("confirm-message").textContent = message;
+        pendingConfirmAction = onConfirm;
+        document.getElementById("confirm-modal").style.display = "flex";
+      }
+
+      function closeConfirmModal() {
+        document.getElementById("confirm-modal").style.display = "none";
+        pendingConfirmAction = null;
+      }
+
+      document.getElementById("confirm-ok-btn").addEventListener("click", () => {
+        if (pendingConfirmAction) pendingConfirmAction();
+        closeConfirmModal();
+      });
+
+      async function performClearHistory() {
+        try {
+          const success = await pywebview.api.clear_history();
+          if (success) closeHistory();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function showQuickAddModal() {
+        const result = await showInputModal('Quick Add FastFlag', [
+          { key: 'name', label: 'Flag Name (Paste here)', type: 'text', placeholder: 'e.g. DFFlagDisableShadows', value: '' },
+          { key: 'value', label: 'Value', type: 'text', placeholder: 'True, 1, 0.5, etc.', value: '' }
+        ]);
+        
+        if (!result || !result.name) return;
+        
+        const cleanedName = cleanFlagInput(result.name);
+        try {
+          const res = await pywebview.api.add_flag(cleanedName, result.value);
+          if (res && res.ok) {
+            await refreshConfig();
+          } else if (res && res.error) {
+            console.error("Error adding flag:", res.error);
+          }
+        } catch(e) { console.error(e); }
+      }
+
+      function cleanFlagInput(name) {
+        const prefixes = ['DFFlag', 'DFInt', 'DFString', 'DFFloat', 'FFlag', 'FInt', 'FString', 'FFloat', 'SFFlag', 'SFInt', 'SFString', 'SFFloat'];
+        let cleaned = name.trim();
+        for (const p of prefixes) {
+          if (cleaned.startsWith(p)) {
+            cleaned = cleaned.substring(p.length);
+            break;
+          }
+        }
+        return cleaned;
+      }
+
+      // === Virtual Scroll Engine for Sidebar ===
+      class VirtualFlagList {
+        constructor(containerId) {
+          this.container = document.getElementById(containerId);
+          this.viewport = document.createElement('div');
+          this.viewport.className = 'virtual-scroll-viewport';
+          this.spacer = document.createElement('div');
+          this.spacer.className = 'virtual-scroll-spacer';
+          this.content = document.createElement('div');
+          this.content.className = 'virtual-scroll-content';
+          
+          this.viewport.appendChild(this.spacer);
+          this.viewport.appendChild(this.content);
+          this.container.innerHTML = '';
+          this.container.appendChild(this.viewport);
+          
+          this.itemHeight = 28; // height of .sidebar-flag
+          this.visibleCount = 0;
+          this.startIndex = -1;
+          this.totalCount = 0;
+          this.searchTerm = '';
+          this.items = []; // Cache for current visible slice
+          
+          this.container.addEventListener('scroll', () => this.render());
+          window.addEventListener('resize', () => this.updateViewport());
+        }
+
+        async reset(searchTerm = '') {
+          this.searchTerm = searchTerm;
+          this.totalCount = await pywebview.api.get_fflag_count(searchTerm);
+          this.spacer.style.height = (this.totalCount * this.itemHeight) + 'px';
+          this.container.scrollTop = 0;
+          this.startIndex = -1;
+          this.items = [];
+          
+          if (this.totalCount === 0) {
+            this.content.innerHTML = '<div class="sidebar-hint">No flags found</div>';
+            return;
+          }
+          
+          this.updateViewport();
+          this.render(true);
+        }
+
+        updateViewport() {
+          this.visibleCount = Math.ceil(this.container.clientHeight / this.itemHeight) + 5;
+        }
+
+        async render(force = false) {
+          if (this.totalCount === 0) return;
+          
+          const scrollTop = this.container.scrollTop;
+          const newStartIndex = Math.max(0, Math.floor(scrollTop / this.itemHeight) - 2);
+          
+          if (newStartIndex === this.startIndex && !force) return;
+          
+          this.startIndex = newStartIndex;
+          const offset = this.startIndex;
+          const limit = this.visibleCount;
+          
+          // Move the content block to the correct scroll position
+          this.content.style.transform = `translateY(${offset * this.itemHeight}px)`;
+          
+          try {
+            const flags = await pywebview.api.get_available_flags(this.searchTerm, offset, limit);
+            
+            let html = '';
+            for (const f of flags) {
+              const isSelected = f.name === selectedSidebarFlag;
+              const cls = f.added ? "sidebar-flag added" : isSelected ? "sidebar-flag selected" : "sidebar-flag";
+              const displayType = f.expected_type || 'unknown';
+              const typeBadge = displayType !== 'unknown' ? `<span class="flag-type">${escHtml(displayType)}</span>` : '';
+              
+              html += `<div class="${cls}" data-fname="${escHtml(f.name)}" onclick="selectSidebarFlag('${escHtml(f.name)}', '${escHtml(f.expected_type || '')}')" title="${escHtml(f.name)} [${f.prefix || ''}] expects: ${f.expected_type || '?'}">
+                <span class="flag-name-text">${escHtml(f.name)}</span>${typeBadge}
+              </div>`;
+            }
+            this.content.innerHTML = html;
+          } catch(e) { console.error("VirtualScroll Render Error:", e); }
+        }
+      }
+
+      let flagVirtualList = null;
+      let searchTimeout = null;
+
+      async function loadInitialFlags() {
+        if (!isReady) return;
+        if (!flagVirtualList) flagVirtualList = new VirtualFlagList('sidebar-list');
+        await flagVirtualList.reset('');
+      }
+
+      function onSearch(term) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => doSearch(term), 200);
+        
+        // Dynamically enable the add inputs regardless if an explicit item is selected, allowing blind adding of unmapped variables
+        const hasText = term.trim().length > 0 || selectedSidebarFlag != null;
+        document.getElementById("add-value").disabled = !hasText;
+        document.getElementById("add-btn").disabled = !hasText;
+      }
+
+      async function doSearch(term) {
+        if (!isReady) return;
+        if (!flagVirtualList) flagVirtualList = new VirtualFlagList('sidebar-list');
+        await flagVirtualList.reset(term);
+      }
+
+      function selectSidebarFlag(name, expectedType) {
+        selectedSidebarFlag = name;
+        const addInput = document.getElementById("add-value");
+        const addBool = document.getElementById("add-value-bool");
+        document.getElementById("add-btn").disabled = false;
+        
+        if (expectedType === 'bool') {
+          // Show dropdown, hide text input
+          addInput.style.display = 'none';
+          addInput.disabled = true;
+          addBool.style.display = '';
+          addBool.focus();
+        } else {
+          // Show text input, hide dropdown
+          addBool.style.display = 'none';
+          addInput.style.display = '';
+          addInput.disabled = false;
+          const hints = {
+            'int': 'whole number (e.g. 0, 60, 9999)',
+            'string': 'text value',
+          };
+          addInput.placeholder = hints[expectedType] || 'Value...';
+          addInput.focus();
+        }
+        
+        // Highlight
+        document.querySelectorAll(".sidebar-flag").forEach((el) => {
+          el.classList.toggle("selected", el.getAttribute('data-fname') === name);
+        });
+      }
+
+      async function addFlag() {
+        let flagName = selectedSidebarFlag;
+        if (!flagName) {
+            const customQuery = document.getElementById("search-input").value.trim();
+            if (customQuery.length > 0) {
+                flagName = customQuery;
+            } else {
+                return;
+            }
+        }
+        
+        const addInput = document.getElementById("add-value");
+        const addBool = document.getElementById("add-value-bool");
+        // Read from whichever input is currently visible
+        const val = addBool.style.display !== 'none' ? addBool.value : addInput.value.trim();
+        try {
+          const result = await pywebview.api.add_flag(flagName, val);
+          if (result && result.ok === false) {
+            addInput.style.borderColor = 'var(--error)';
+            addInput.value = '';
+            addInput.placeholder = result.error || 'Invalid value!';
+            addInput.style.display = '';
+            addBool.style.display = 'none';
+            setTimeout(() => {
+              addInput.style.borderColor = '';
+              addInput.placeholder = 'Value...';
+            }, 3000);
+            return;
+          }
+          addInput.value = "";
+          addInput.disabled = true;
+          addInput.style.display = '';
+          addBool.style.display = 'none';
+          document.getElementById("add-btn").disabled = true;
+          selectedSidebarFlag = null;
+          await refreshConfig();
+          const term = document.getElementById("search-input").value;
+          if (term.length >= 2) doSearch(term);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // === Config List ===
+      async function refreshConfig() {
+        if (!isReady) return;
+        try {
+          const flags = await pywebview.api.get_user_flags();
+          const list = document.getElementById("config-list");
+          document.getElementById("config-count").textContent =
+            flags.length + " flags";
+
+          if (flags.length === 0) {
+            list.innerHTML =
+              '<div class="config-empty">No flags configured.<br>Search and add flags from the sidebar.</div>';
+            return;
+          }
+
+          if (currentSortMode === 'a-z') {
+            flags.sort((a,b) => a.name.localeCompare(b.name));
+          } else if (currentSortMode === 'z-a') {
+            flags.sort((a,b) => b.name.localeCompare(a.name));
+          } else if (currentSortMode === 'priority') {
+            flags.sort((a, b) => {
+              const aHasBind = a.bind || a.unapply_bind;
+              const bHasBind = b.bind || b.unapply_bind;
+              if (aHasBind && !bHasBind) return -1;
+              if (!aHasBind && bHasBind) return 1;
+              return a.name.localeCompare(b.name);
+            });
+          }
+
+          let activeHtml = "";
+          let unavailHtml = "";
+          let unavailCount = 0;
+
+          for (const f of flags) {
+            const sel = selectedConfigFlags.includes(f.name) ? " selected" : "";
+            const isUnavail = f.status === "unavailable";
+            const isEnabled = f.enabled !== false;
+            
+            const dotCls =
+              f.status === "success"
+                ? "flag-dot success"
+                : (f.status === "failed" || isUnavail)
+                  ? "flag-dot error"
+                  : "flag-dot";
+                  
+            const unrecHtml = f.is_unrecognized 
+              ? `<span class="unrecognized-badge" title="FastFlag couldn't be found inside the scanned list">?</span>`
+              : '';
+              
+            let bindHtml = '';
+            if (f.bind) {
+              bindHtml += `<span class="bind-badge" title="Cycle Bind" style="border-color: rgba(0, 212, 170, 0.4);">CYCLE: ${escHtml(f.bind)}</span>`;
+            }
+            if (f.unapply_bind) {
+              bindHtml += `<span class="bind-badge" title="Un-Apply Bind" style="background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.4); color: var(--error);">UN-APPLY: ${escHtml(f.unapply_bind)}</span>`;
+            }
+              
+            const itemHtml = `<div class="config-item${sel}${!isEnabled ? ' disabled-flag' : ''}" data-fname="${escHtml(f.name)}" data-fprefix="${escHtml(f.prefix || '')}" data-ftype="${escHtml(f.type)}" data-fbind="${escHtml(f.bind || '')}" data-funapplybind="${escHtml(f.unapply_bind || '')}" data-fcycle="${escHtml((f.cycle_states || []).join(','))}" data-fenabled="${isEnabled}" oncontextmenu="showContextMenu(event, this)" onclick="selectConfigFlag(event, '${escHtml(f.name)}', '${escHtml(f.value)}', '${escHtml(f.type)}')">
+                <div class="${dotCls}"></div>
+                <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
+                  <span class="flag-name" style="flex:0 1 auto;">${escHtml(f.name)}</span>
+                  ${unrecHtml}
+                  ${bindHtml}
+                </div>
+                <span class="flag-value">${escHtml(f.value)}</span>
+                <span class="flag-type">${escHtml(f.type)}</span>
+            </div>`;
+            
+            if (isUnavail) {
+              unavailHtml += itemHtml;
+              unavailCount++;
+            } else {
+              activeHtml += itemHtml;
+            }
+          }
+          
+          // Inline Quick Add Row at the top
+          let html = `
+            <div id="inline-add-row" class="config-item" style="border: 1px dashed var(--border); margin-bottom: 12px; justify-content: center; opacity: 0.6; display: flex;" onclick="showInlineAdd()">
+              <span style="font-size: 14px; font-weight: bold; margin-right: 8px;">+</span>
+              <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Add New Flag</span>
+            </div>
+            <div id="inline-add-input-container" class="config-item" style="display: none; border: 1px solid var(--accent); margin-bottom: 12px; gap: 8px; padding: 4px 12px; background: rgba(0,0,0,0.2);">
+              <input type="text" id="inline-add-name" placeholder="Flag Name (will clean prefix)..." style="flex: 2; background: transparent; border: none; color: var(--text); font-size: 12px; outline: none;" onkeydown="handleInlineAddKey(event)" oninput="this.value = cleanFlagInput(this.value)" />
+              <div style="width: 1px; height: 16px; background: var(--border);"></div>
+              <input type="text" id="inline-add-value" placeholder="Value..." style="flex: 1; background: transparent; border: none; color: var(--accent); font-size: 12px; outline: none;" onkeydown="handleInlineAddKey(event)" />
+              <button class="btn-icon" onclick="hideInlineAdd()" style="color: var(--text-dark); font-size: 16px; padding: 0 4px;">\u2715</button>
+            </div>
+          `;
+
+          html += activeHtml;
+          if (unavailCount > 0) {
+            html += `
+            <details class="unavailable-group">
+              <summary>&gt; Unavailable (${unavailCount})</summary>
+              <div class="unavailable-list">
+                ${unavailHtml}
+              </div>
+            </details>`;
+          }
+
+          list.innerHTML = html;
+        } catch (e) {
+          console.error(e);
+        }
+        // Sync any active search filter
+        filterConfig();
+      }
+
+      function showInlineAdd() {
+        document.getElementById('inline-add-row').style.display = 'none';
+        const container = document.getElementById('inline-add-input-container');
+        container.style.display = 'flex';
+        const nameInput = document.getElementById('inline-add-name');
+        nameInput.focus();
+      }
+
+      function hideInlineAdd() {
+        document.getElementById('inline-add-row').style.display = 'flex';
+        document.getElementById('inline-add-input-container').style.display = 'none';
+        document.getElementById('inline-add-name').value = '';
+        document.getElementById('inline-add-value').value = '';
+      }
+
+      async function handleInlineAddKey(e) {
+        if (e.key === 'Enter') {
+          const name = document.getElementById('inline-add-name').value.trim();
+          const value = document.getElementById('inline-add-value').value.trim();
+          if (!name) return;
+          
+          try {
+            const res = await pywebview.api.add_flag(name, value || 'True');
+            if (res && res.ok) {
+              hideInlineAdd();
+              await refreshConfig();
+            }
+          } catch(err) { console.error(err); }
+        } else if (e.key === 'Escape') {
+          hideInlineAdd();
+        }
+      }
+
+      function filterConfig() {
+        const term = document.getElementById("config-search").value.toLowerCase();
+        const items = document.querySelectorAll("#config-list .config-item");
+        items.forEach(el => {
+          // Skip the special inline-add rows so they maintain their own visibility state
+          if (el.id === 'inline-add-row' || el.id === 'inline-add-input-container') return;
+
+          const name = (el.getAttribute("data-fname") || "").toLowerCase();
+          if (name.includes(term)) {
+            el.style.display = "flex";
+          } else {
+            el.style.display = "none";
+          }
+        });
+      }
+
+      function selectConfigFlag(ev, name, value, flagType) {
+        if (ev.ctrlKey) {
+          const idx = selectedConfigFlags.indexOf(name);
+          if (idx >= 0) selectedConfigFlags.splice(idx, 1);
+          else selectedConfigFlags.push(name);
+        } else {
+          selectedConfigFlags = [name];
+        }
+        
+        const editInput = document.getElementById("edit-value");
+        const editBool = document.getElementById("edit-value-bool");
+        const hasSelection = selectedConfigFlags.length > 0;
+        
+        if (flagType === 'bool' && selectedConfigFlags.length === 1) {
+          // Show bool dropdown, hide text input
+          editInput.style.display = 'none';
+          editInput.disabled = true;
+          editBool.style.display = '';
+          editBool.value = value.toLowerCase();
+        } else {
+          // Show text input, hide dropdown
+          editBool.style.display = 'none';
+          editInput.style.display = '';
+          editInput.value = value;
+          editInput.disabled = !hasSelection;
+        }
+        
+        document.getElementById("save-btn").disabled = !hasSelection;
+        document.getElementById("remove-btn").disabled = !hasSelection;
+
+        // Update visual selection
+        document.querySelectorAll(".config-item").forEach((el) => {
+          const fname = el.getAttribute("data-fname");
+          el.classList.toggle("selected", selectedConfigFlags.includes(fname));
+        });
+      }
+
+      async function saveFlag() {
+        if (selectedConfigFlags.length !== 1) return;
+        const editInput = document.getElementById("edit-value");
+        const editBool = document.getElementById("edit-value-bool");
+        // Read from whichever input is currently visible
+        const val = editBool.style.display !== 'none' ? editBool.value : editInput.value.trim();
+        try {
+          const result = await pywebview.api.update_flag(selectedConfigFlags[0], val);
+          if (result && result.ok === false) {
+            editInput.style.borderColor = 'var(--error)';
+            const originalVal = editInput.value;
+            editInput.value = '';
+            editInput.placeholder = result.error || 'Invalid value!';
+            editInput.style.display = '';
+            editBool.style.display = 'none';
+            setTimeout(() => {
+              editInput.style.borderColor = '';
+              editInput.value = originalVal;
+              editInput.placeholder = 'Edit value...';
+            }, 3000);
+            return;
+          }
+          await refreshConfig();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function removeFlags() {
+        if (selectedConfigFlags.length === 0) return;
+        try {
+          await pywebview.api.remove_flags(selectedConfigFlags);
+          selectedConfigFlags = [];
+          document.getElementById("edit-value").value = "";
+          document.getElementById("edit-value").disabled = true;
+          document.getElementById("save-btn").disabled = true;
+          document.getElementById("remove-btn").disabled = true;
+          await refreshConfig();
+          const term = document.getElementById("search-input").value;
+          if (term.length >= 2) doSearch(term);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // === Context Menu & Binds ===
+      
+      function positionPopup(el, e) {
+        // Show temporarily to measure
+        const originalDisplay = el.style.display;
+        el.style.visibility = 'hidden';
+        el.style.display = 'flex';
+        
+        const rect = el.getBoundingClientRect();
+        const w = rect.width || 280;
+        const h = rect.height || 160;
+        
+        el.style.display = originalDisplay;
+        el.style.visibility = 'visible';
+
+        let x = e.clientX;
+        let y = e.clientY;
+
+        // Boundaries with adaptive padding
+        const pad = window.innerWidth < 900 ? 5 : 15;
+        if (x + w > window.innerWidth) x = window.innerWidth - w - pad;
+        if (y + h > window.innerHeight) y = window.innerHeight - h - pad;
+        if (x < pad) x = pad;
+        if (y < pad) y = pad;
+
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+      }
+
+      let currentContextMenuTarget = null;
+      function closeContextMenu() {
+        const menu = document.getElementById("context-menu");
+        if (menu) {
+           menu.classList.remove("visible");
+           menu.style.display = "none";
+        }
+        const pcm = document.getElementById("preset-cm");
+        if (pcm) pcm.style.display = "none";
+        
+        const catcher = document.getElementById("cm-click-catcher");
+        if (catcher) catcher.style.display = "none";
+        
+        // Remove editing background from active flag
+        document.querySelectorAll('.config-item.editing-flag').forEach(n => n.classList.remove('editing-flag'));
+      }
+      
+      let isDraggingCM = false;
+      let cmDragOffsetX = 0;
+      let cmDragOffsetY = 0;
+
+      function startDragContextMenu(e) {
+        if (e.button !== 0) return; // Only left click
+        isDraggingCM = true;
+        const menu = document.getElementById("context-menu");
+        cmDragOffsetX = e.clientX - menu.offsetLeft;
+        cmDragOffsetY = e.clientY - menu.offsetTop;
+        document.addEventListener("mousemove", dragContextMenu);
+        document.addEventListener("mouseup", stopDragContextMenu);
+        document.getElementById("cm-drag-handle").style.cursor = "grabbing";
+      }
+
+      function dragContextMenu(e) {
+        if (!isDraggingCM) return;
+        e.preventDefault();
+        const menu = document.getElementById("context-menu");
+        
+        let newX = e.clientX - cmDragOffsetX;
+        let newY = e.clientY - cmDragOffsetY;
+        
+        if (newX < 0) newX = 0;
+        if (newY < 0) newY = 0;
+        if (newX + menu.offsetWidth > window.innerWidth) newX = window.innerWidth - menu.offsetWidth;
+        if (newY + menu.offsetHeight > window.innerHeight) newY = window.innerHeight - menu.offsetHeight;
+        
+        menu.style.left = newX + "px";
+        menu.style.top = newY + "px";
+      }
+
+      function stopDragContextMenu() {
+        if (!isDraggingCM) return;
+        isDraggingCM = false;
+        document.removeEventListener("mousemove", dragContextMenu);
+        document.removeEventListener("mouseup", stopDragContextMenu);
+        const handle = document.getElementById("cm-drag-handle");
+        if (handle) handle.style.cursor = "grab";
+      }
+
+          async function toggleFlagApply(fname) {
+         try {
+            await pywebview.api.toggle_flag_apply(fname);
+            await refreshConfig();
+            // Optional: small delay to let user see the status change before menu closes
+            setTimeout(closeContextMenu, 150);
+         } catch(e) {}
+      }
+
+      function showContextMenu(ev, el) {
+        ev.preventDefault();
+        currentContextMenuTarget = el;
+        const menu = document.getElementById("context-menu");
+        
+        document.querySelectorAll('.config-item.editing-flag').forEach(n => n.classList.remove('editing-flag'));
+        if (el) el.classList.add('editing-flag');
+        
+        const fname = el.getAttribute("data-fname");
+        const fprefix = el.getAttribute("data-fprefix");
+        const ftype = el.getAttribute("data-ftype");
+        const fbind = el.getAttribute("data-fbind");
+        const funapplybind = el.getAttribute("data-funapplybind");
+        const fcycle = el.getAttribute("data-fcycle");
+        const fenabled = el.getAttribute("data-fenabled") === 'true';
+        
+        const isLive = el.querySelector(".flag-dot.success") !== null;
+        const isString = ftype === 'string';
+        
+        let html = `
+          <!-- Header Bar -->
+          <div id="cm-drag-handle" style="cursor: grab; font-size: 10px; color: var(--accent); padding: 2px 4px 6px; text-align: center; border-bottom: 1px dashed var(--border-light); font-weight: 600; font-family: var(--font-mono); word-break: break-all; margin-bottom: 2px;" onmousedown="startDragContextMenu(event)">
+            ${escHtml(fname)}
+          </div>
+          <!-- Un-Apply Card -->
+          <div class="cm-card">
+            <div class="cm-row cm-unapply-action" onclick="toggleFlagApply('${escHtml(fname)}')">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="cm-icon-x">\u2715</span>
+                <span>${fenabled ? 'Disable' : 'Enable'} Flag</span>
+              </div>
+              <div style="display:flex; gap:4px; align-items:center;">
+                ${isLive ? '<span class="cm-status-badge status-live">LIVE</span>' : ''}
+                <span class="cm-status-badge ${fenabled ? 'status-active' : 'status-inactive'}">${fenabled ? 'ENABLED' : 'DISABLED'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // String flags are the only ones we don't support mid-game yet
+        if (isString) {
+          html += `
+            <div class="cm-card" style="padding: 8px; border-style: dashed; background: transparent; opacity: 0.6;">
+              <div class="cm-label" style="display:flex; gap:6px; align-items:center;">
+                <span style="font-size:14px;">\u26A0\uFE0F</span> String Flag (Restart Required)
+              </div>
+            </div>
+          `;
+        } else {
+          const bindText = fbind ? escHtml(fbind) : 'Add Bind';
+          const unapplyBindText = funapplybind ? escHtml(funapplybind) : 'Add Bind';
+          
+          html += `
+            <!-- Un-apply Bind Card -->
+            <div class="cm-card">
+              <div class="cm-row-static">
+                <span class="cm-label" style="color:var(--error);">Un-apply Button</span>
+                <div class="cm-hotkey-ctrl">
+                  <button class="btn-inline" id="cm-unapply-btn" onclick="startInlineBinding(event, '${escHtml(fname)}', 'unapply_bind')">${unapplyBindText}</button>
+                  ${funapplybind ? `<button class="btn-inline-remove" onclick="removeInlineBinding(event, '${escHtml(fname)}', 'unapply_bind')">&times;</button>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <!-- Cycle Bind & Sequence Card -->
+            <div class="cm-card">
+              <div class="cm-row-static" style="border-bottom: 1px dashed var(--border-light); padding-bottom: 10px; margin-bottom: 10px;">
+                <span class="cm-label">Cycle Bind & Values</span>
+                <div class="cm-hotkey-ctrl">
+                  <button class="btn-inline" id="cm-bind-btn" onclick="startInlineBinding(event, '${escHtml(fname)}', 'bind')">${bindText}</button>
+                  ${fbind ? `<button class="btn-inline-remove" onclick="removeInlineBinding(event, '${escHtml(fname)}', 'bind')">&times;</button>` : ''}
+                </div>
+              </div>
+              <div class="seq-row" id="sequence-container">
+        `;
+
+        if (fcycle && fcycle.length > 0) {
+          const states = fcycle.split(',');
+          states.forEach((state, i) => {
+            html += `
+              <div class="seq-item-wrapper">
+                <div class="seq-val" contenteditable="true" onblur="saveSequence('${escHtml(fname)}')" onkeydown="handleSeqKey(event, '${escHtml(fname)}')">${escHtml(state)}</div>
+                <div class="delete-val" onclick="deleteSeqItem(this, '${escHtml(fname)}')"></div>
+              </div>
+            `;
+            if (i < states.length - 1) html += '<div class="seq-arrow"></div>';
+          });
+          html += `
+              ${states.length > 0 ? '<div class="seq-arrow"></div>' : ''}
+              <div class="seq-add" onclick="addNewSeqVal('${escHtml(fname)}')"></div>
+            </div>
+          </div>
+        `;
+        } else {
+          html += `
+              <div class="seq-item-wrapper">
+                <div class="seq-val" contenteditable="true" onblur="saveSequence('${escHtml(fname)}')" onkeydown="handleSeqKey(event, '${escHtml(fname)}')"></div>
+              </div>
+              <div class="seq-arrow"></div>
+              <div class="seq-item-wrapper">
+                <div class="seq-val" contenteditable="true" onblur="saveSequence('${escHtml(fname)}')" onkeydown="handleSeqKey(event, '${escHtml(fname)}')"></div>
+              </div>
+              <div class="seq-arrow"></div>
+              <div class="seq-add" onclick="addNewSeqVal('${escHtml(fname)}')"></div>
+            </div>
+          </div>
+        `;
+        }
+        }
+
+        menu.innerHTML = html;
+        menu.style.display = 'flex';
+        const rect = menu.getBoundingClientRect();
+        let x = ev.clientX;
+        let y = ev.clientY;
+        if (x + rect.width > window.innerWidth) x -= rect.width;
+        if (y + rect.height > window.innerHeight) y -= rect.height;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        
+        const catcher = document.getElementById("cm-click-catcher");
+        if (catcher) catcher.style.display = "block";
+        
+        menu.classList.add("visible");
+      }
+
+      // --- Sequence Helpers ---
+      async function saveSequence(fname) {
+        const container = document.getElementById('sequence-container');
+        if (!container) return;
+        const vals = Array.from(container.querySelectorAll('.seq-val')).map(el => el.textContent.trim()).filter(v => v !== '');
+        
+        try {
+          await pywebview.api.set_advanced_bind(fname, {cycle_states: vals});
+          // Refresh data attributes on the hidden el so subsequent opens have correct data
+          const el = document.querySelector(`.config-item[data-fname="${fname}"]`);
+          if (el) el.setAttribute('data-fcycle', vals.join(','));
+        } catch(e) {}
+      }
+
+      function handleSeqKey(ev, fname) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          ev.target.blur();
+        }
+      }
+
+      function deleteSeqItem(btn, fname) {
+        const wrapper = btn.parentElement;
+        const arrow = wrapper.previousElementSibling;
+        const nextArrow = wrapper.nextElementSibling;
+        
+        if (arrow && arrow.classList.contains('seq-arrow')) arrow.remove();
+        else if (nextArrow && nextArrow.classList.contains('seq-arrow')) nextArrow.remove();
+        
+        wrapper.remove();
+        saveSequence(fname);
+      }
+
+      function addNewSeqVal(fname) {
+        const container = document.getElementById('sequence-container');
+        const addButton = container.querySelector('.seq-add');
+        
+        // Add arrow if there are existing items
+        if (container.querySelectorAll('.seq-item-wrapper').length > 0) {
+          const arrow = document.createElement('div');
+          arrow.className = 'seq-arrow';
+          container.insertBefore(arrow, addButton);
+        }
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'seq-item-wrapper';
+        wrapper.innerHTML = `
+          <div class="seq-val" contenteditable="true" onblur="saveSequence('${escHtml(fname)}')" onkeydown="handleSeqKey(event, '${escHtml(fname)}')"></div>
+          <div class="delete-val" onclick="deleteSeqItem(this, '${escHtml(fname)}')"></div>
+        `;
+        
+        container.insertBefore(wrapper, addButton);
+        wrapper.querySelector('.seq-val').focus();
+      }
+      
+      let isBinding = false;
+      let bindingFlag = null;
+      let bindingType = null;
+      
+      function startInlineBinding(ev, fname, type="bind") {
+        ev.stopPropagation(); 
+        if (isBinding) cleanupBinding();
+        
+        isBinding = true;
+        bindingFlag = fname;
+        bindingType = type;
+        
+        const btnId = type === "bind" ? "cm-bind-btn" : "cm-unapply-btn";
+        const btn = document.getElementById(btnId);
+        if (btn) {
+          btn.textContent = "...";
+          btn.classList.add("listening");
+        }
+
+        
+        setTimeout(() => {
+          document.addEventListener("keydown", bindingHandler, {once: true});
+          document.addEventListener("mousedown", bindingMouseHandler, {once: true});
+        }, 100);
+      }
+      
+      function cleanupBinding() {
+        document.removeEventListener("keydown", bindingHandler);
+        document.removeEventListener("mousedown", bindingMouseHandler);
+        
+        const btnId = bindingType === "bind" ? "cm-bind-btn" : "cm-unapply-btn";
+        const btn = document.getElementById(btnId);
+        if (btn) btn.classList.remove("listening");
+        isBinding = false;
+      }
+      
+      async function bindingHandler(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cleanupBinding();
+        
+        const btnId = bindingType === "bind" ? "cm-bind-btn" : "cm-unapply-btn";
+        
+        if (ev.code === "Escape") {
+           const btn = document.getElementById(btnId);
+           if (btn) btn.textContent = currentContextMenuTarget.getAttribute(bindingType === "bind" ? "data-fbind" : "data-funapplybind") || (bindingType === "bind" ? "Add Bind" : "Add Bind");
+           return;
+        }
+        
+        const btn = document.getElementById(btnId);
+        if (btn) {
+           btn.textContent = ev.code;
+           let removeBtn = btn.nextSibling;
+           if (!removeBtn || !removeBtn.classList || !removeBtn.classList.contains('btn-inline-remove')) {
+              btn.insertAdjacentHTML('afterend', `<button class="btn-inline-remove" onclick="removeInlineBinding(event, '${escHtml(bindingFlag)}', '${bindingType}')">&times;</button>`);
+           }
+        }
+        
+        try {
+          if (bindingType === "bind") {
+            await pywebview.api.set_flag_bind(bindingFlag, ev.code);
+          } else {
+            await pywebview.api.set_advanced_bind(bindingFlag, {unapply_bind: ev.code});
+          }
+          await refreshConfig();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function bindingMouseHandler(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cleanupBinding();
+        
+        let mouseCode = "";
+        switch (ev.button) {
+          case 0: mouseCode = "MouseLeft"; break;
+          case 1: mouseCode = "MouseMiddle"; break;
+          case 2: mouseCode = "MouseRight"; break;
+          case 3: mouseCode = "MouseX1"; break;
+          case 4: mouseCode = "MouseX2"; break;
+          default: mouseCode = "Mouse" + ev.button;
+        }
+        
+        const btnId = bindingType === "bind" ? "cm-bind-btn" : "cm-unapply-btn";
+        const btn = document.getElementById(btnId);
+        if (btn) {
+           btn.textContent = mouseCode;
+           let removeBtn = btn.nextSibling;
+           if (!removeBtn || !removeBtn.classList || !removeBtn.classList.contains('btn-inline-remove')) {
+              btn.insertAdjacentHTML('afterend', `<button class="btn-inline-remove" onclick="removeInlineBinding(event, '${escHtml(bindingFlag)}', '${bindingType}')">&times;</button>`);
+           }
+        }
+        
+        try {
+          if (bindingType === "bind") {
+            await pywebview.api.set_flag_bind(bindingFlag, mouseCode);
+          } else {
+            await pywebview.api.set_advanced_bind(bindingFlag, {unapply_bind: mouseCode});
+          }
+          await refreshConfig();
+        } catch(e) { console.error(e); }
+      }
+      
+      async function removeInlineBinding(ev, fname, type="bind") {
+        ev.stopPropagation();
+        try {
+          if (type === "bind") {
+            await pywebview.api.set_flag_bind(fname, "");
+          } else {
+            await pywebview.api.set_advanced_bind(fname, {unapply_bind: ""});
+          }
+          const btnId = type === "bind" ? "cm-bind-btn" : "cm-unapply-btn";
+          const btn = document.getElementById(btnId);
+          if (btn) btn.textContent = "Add Bind";
+          ev.target.remove();
+          await refreshConfig();
+        } catch(e) { console.error(e); }
+      }
+
+      // === Actions ===
+
+      async function applyFlags() {
+        try {
+          document.getElementById("inject-btn").disabled = true;
+          document.getElementById("inject-btn").textContent = "Applying...";
+          await pywebview.api.inject();
+          setTimeout(() => {
+            document.getElementById("inject-btn").disabled = false;
+            document.getElementById("inject-btn").textContent = "Apply Flags";
+          }, 2000);
+        } catch (e) {
+          console.error(e);
+          document.getElementById("inject-btn").disabled = false;
+          document.getElementById("inject-btn").textContent = "Apply Flags";
+        }
+      }
+
+      async function launchRoblox() {
+        try {
+          document.getElementById("launch-btn").disabled = true;
+          document.getElementById("launch-btn").textContent = "Launching...";
+          await pywebview.api.launch_and_apply();
+          setTimeout(() => {
+            document.getElementById("launch-btn").disabled = false;
+            document.getElementById("launch-btn").textContent = "Launch Roblox";
+          }, 4000);
+        } catch (e) {
+          console.error(e);
+          document.getElementById("launch-btn").disabled = false;
+          document.getElementById("launch-btn").textContent = "Launch Roblox";
+        }
+      }
+
+      async function killAndReapply() {
+        try {
+          document.getElementById("reapply-btn").disabled = true;
+          document.getElementById("reapply-btn").textContent = "Restarting...";
+          await pywebview.api.reapply_flags();
+          setTimeout(() => {
+            document.getElementById("reapply-btn").disabled = false;
+            document.getElementById("reapply-btn").textContent = "Kill & Relaunch";
+          }, 4000);
+        } catch (e) {
+          console.error(e);
+          document.getElementById("reapply-btn").disabled = false;
+          document.getElementById("reapply-btn").textContent = "Kill & Relaunch";
+        }
+      }
+
+      async function importFlags() {
+        try {
+          const result = await showLargeInputModal('Import FastFlags', 'Paste JSON here (Bloxstrap format or FFlag list)...');
+          if (!result) return;
+
+          if (result === '__FILE__') {
+            // User chose to import from file
+            const fileRes = await pywebview.api.import_flags();
+            if (fileRes) await refreshConfig();
+          } else {
+            // User pasted text
+            try {
+              let data = JSON.parse(result);
+              let items = [];
+              
+              if (Array.isArray(data)) {
+                items = data.map(f => ({ name: f.name, value: String(f.value) }));
+              } else if (typeof data === 'object') {
+                items = Object.entries(data).map(([k, v]) => ({ name: k, value: String(v) }));
+              }
+              
+              if (items.length === 0) return;
+              
+              const res = await pywebview.api.batch_add_flags(items);
+              if (res && res.ok) {
+                await refreshConfig();
+              }
+            } catch(e) {
+              alert("Invalid JSON format! Please ensure you copied the entire block correctly.");
+            }
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function exportFlags() {
+        try {
+          await pywebview.api.export_flags();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function clearAll() {
+        try {
+          await pywebview.api.clear_all();
+          selectedConfigFlags = [];
+          await refreshConfig();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // === Status ===
+      async function updateStatus() {
+        if (!isReady) return;
+        try {
+          const s = await pywebview.api.get_status();
+          const dot = document.getElementById("status-dot");
+          const label = document.getElementById("status-label");
+          const info = document.getElementById("status-info");
+
+          if (s.attached) {
+            dot.className = "status-dot connected";
+            label.textContent = "Connected";
+            label.style.color = "var(--accent)";
+            info.textContent = "PID: " + s.pid;
+          } else {
+            dot.className = "status-dot";
+            label.textContent = "Waiting...";
+            label.style.color = "var(--text-dim)";
+            info.textContent = "";
+          }
+
+          // Also refresh config if apply happened
+          if (s.needs_refresh) {
+            await refreshConfig();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // === Console ===
+      async function pollLogs() {
+        if (!isReady) return;
+        try {
+          const result = await pywebview.api.get_logs(logIndex);
+          if (result && result.logs.length > 0) {
+            const output = document.getElementById("console-output");
+            for (const log of result.logs) {
+              const line = document.createElement("div");
+              line.className = "log-line " + getLogClass(log.color);
+              line.textContent = log.msg;
+              output.appendChild(line);
+            }
+            logIndex = result.total;
+            output.scrollTop = output.scrollHeight;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      function getLogClass(color) {
+        if (!color || !Array.isArray(color)) return "default";
+        const [r, g, b] = color;
+        if (r > 200 && g < 130 && b < 130) return "error";
+        if (g > 200 && r < 130) return "success";
+        if (r > 200 && g > 150 && b < 130) return "warning";
+        if (b > 200 || (g > 200 && b > 200)) return "info";
+        return "default";
+      }
+
+      function copyConsole() {
+        const text = document.getElementById("console-output").innerText;
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+
+      function clearConsole() {
+        document.getElementById("console-output").innerHTML = "";
+        // We set logIndex to current total count to skip existing logs
+        // instead of resetting to 0 which causes re-fetching.
+        pywebview.api.get_logs().then(res => {
+          if (res) logIndex = res.total;
+        });
+      }
+
+      // === Utilities ===
+      function escHtml(s) {
+        if (s === null || s === undefined) return "";
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+      
+      function getLuminance(hex) {
+        const rgb = hexToRgb(hex);
+        if (!rgb) return 0.5;
+        const [r, g, b] = [rgb.r/255, rgb.g/255, rgb.b/255].map(v => {
+          return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+
+      function getContrastColor(hex) {
+        return getLuminance(hex) > 0.179 ? "#000000" : "#ffffff";
+      }
+
+      function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : null;
+      }
+
+      // Matrix State
+      let matrixSpeed = 5;
+
+      function updateMatrixSpeedUI(val) {
+        document.getElementById("matrix-speed-val").textContent = val;
+        matrixSpeed = parseInt(val);
+      }
+
+      function saveMatrixSpeed(val) {
+        if (window.pywebview && pywebview.api) {
+          pywebview.api.save_setting('matrix_speed', parseInt(val));
+        }
+      }
+
+      // === Matrix Canvas Animation Engine ===
+      class PresetMatrix {
+        constructor(canvas, flagCount) {
+          this.canvas = canvas;
+          this.ctx = canvas.getContext('2d');
+          this.flagCount = flagCount;
+          this.drops = [];
+          this.fontSize = 10;
+          this.matrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
+          this.animFrame = null;
+          this.lastDrawTime = 0;
+          
+          this.resize();
+        }
+
+        resize() {
+          const rect = this.canvas.parentElement.getBoundingClientRect();
+          this.canvas.width = rect.width;
+          this.canvas.height = rect.height;
+          const columns = Math.ceil(this.canvas.width / this.fontSize);
+          this.drops = [];
+          for (let i = 0; i < columns; i++) {
+            this.drops[i] = Math.random() * -20;
+          }
+        }
+
+        draw(timestamp) {
+        // Piecewise throttle based on speed 4 as the base
+        // 1 = ~490ms (Very slow)
+        // 4 = ~100ms (Your favorite base)
+        // 10 = ~20ms (Original top speed)
+        const baseThrottle = matrixSpeed <= 4 
+          ? 100 + (4 - matrixSpeed) * 130 
+          : 100 - (matrixSpeed - 4) * 13.3;
+          
+        // Further adjust by flag count (more flags = slightly more active)
+        const throttle = Math.max(15, baseThrottle - (this.flagCount / 5));
+
+          if (timestamp - this.lastDrawTime < throttle) {
+            this.animFrame = requestAnimationFrame((t) => this.draw(t));
+            return;
+          }
+          this.lastDrawTime = timestamp;
+
+          const isLight = document.body.classList.contains('light-theme');
+
+          // Adapt background and text color to theme
+          this.ctx.fillStyle = isLight ? 'rgba(255, 255, 255, 0.15)' : 'rgba(1, 4, 1, 0.1)';
+          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+          
+          this.ctx.font = this.fontSize + 'px monospace';
+
+          for (let i = 0; i < this.drops.length; i++) {
+            const text = this.matrixChars[Math.floor(Math.random() * this.matrixChars.length)];
+            const x = i * this.fontSize;
+            const y = this.drops[i] * this.fontSize;
+
+            // SPECIAL: Make the LEADING (last added) character stand out
+            if (isLight) {
+              this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // Darker leading char for light mode
+            } else {
+              this.ctx.fillStyle = '#fff'; // Glowing white lead for dark mode
+            }
+            this.ctx.fillText(text, x, y);
+
+            // Set color for the trail
+            this.ctx.fillStyle = isLight ? 'rgba(0, 0, 0, 0.35)' : '#00ff41';
+            
+            if (this.drops[i] * this.fontSize > this.canvas.height && Math.random() > 0.975) {
+              this.drops[i] = 0;
+            }
+            this.drops[i]++;
+          }
+          this.animFrame = requestAnimationFrame((t) => this.draw(t));
+        }
+
+        start() {
+          this.resize();
+          this.lastDrawTime = performance.now();
+          this.animFrame = requestAnimationFrame((t) => this.draw(t));
+        }
+
+        stop() {
+          if (this.animFrame) cancelAnimationFrame(this.animFrame);
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+      }
+
+      let presetMatrixInstances = [];
+      let currentPreviewPreset = null;
+
+      async function loadPresets() {
+        if (!isReady) return;
+        const grid = document.getElementById('presets-grid');
+        grid.innerHTML = `
+          <div class="preset-card preset-add-card" onclick="showPresetOptions(event)">
+            <div class="preset-add-icon">+</div>
+            <div class="preset-add-text">Import Preset</div>
+          </div>
+        `;
+        
+        // Clean up old instances
+        presetMatrixInstances.forEach(inst => inst.stop());
+        presetMatrixInstances = [];
+
+        try {
+          const presets = await pywebview.api.get_presets();
+          for (const p of presets) {
+            let unapplyCount = 0;
+            let cycleCount = 0;
+            const binds = new Set();
+            for (const f of p.flags) {
+               if (f.bind) { cycleCount++; binds.add(f.bind); }
+               if (f.unapply_bind) { unapplyCount++; binds.add(f.unapply_bind); }
+            }
+            
+            const dateStr = new Date(p.added_at * 1000).toLocaleDateString();
+            const bindsArr = Array.from(binds);
+            const bindsStr = bindsArr.length > 0 ? bindsArr.slice(0, 3).join(', ') + (bindsArr.length > 3 ? '...' : '') : 'None';
+
+            const card = document.createElement('div');
+            card.className = 'preset-card';
+            card.setAttribute('data-id', p.id);
+            
+            // Override coloring for Dark Matrix (looks ass otherwise)
+            const isDarkMatrix = (currentTheme === 'matrix' && !document.body.classList.contains('light-theme'));
+            const displayColor = isDarkMatrix ? '#00ff41' : p.color;
+            
+            card.style.setProperty('--preset-color', displayColor);
+            const rgb = hexToRgb(displayColor) || {r:0, g:212, b:170};
+            card.style.setProperty('--preset-color-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+            
+            card.onclick = () => showPresetPreview(p);
+            
+            const contrastColor = getContrastColor(displayColor);
+
+            card.innerHTML = `
+              <canvas class="preset-matrix-canvas"></canvas>
+              <div class="preset-header">
+                <div style="flex:1; min-width:0;">
+                  <div class="preset-color-strip" style="background:${displayColor}"></div>
+                  <div class="preset-title" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
+                </div>
+                <button class="preset-settings-btn" title="Preset Settings" onclick="event.stopPropagation(); openPresetSettings('${p.id}', '${escHtml(p.name)}', '${p.color}', event)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+              </div>
+              <div class="preset-stats">
+                <div class="preset-stat-item"><i style="color:${displayColor}">\u2690</i> <strong>${p.flags.length}</strong> FFlags Total</div>
+                <div class="preset-stat-item"><i style="color:#ff4444">\u238C</i> <strong>${unapplyCount}</strong> Unapply Binds</div>
+                <div class="preset-stat-item"><i style="color:#8b5cf6">\u21BB</i> <strong>${cycleCount}</strong> Cycle States</div>
+                <div class="preset-stat-item"><i style="color:var(--text-dim-extra)">\u2328</i> Active Keys: <span style="color:var(--text-dim)">${escHtml(bindsStr)}</span></div>
+              </div>
+              <div class="preset-card-footer">
+                <div class="preset-date">Created ${dateStr}</div>
+                <button class="preset-btn-select" style="color:${contrastColor}" onclick="event.stopPropagation(); applyPreset('${p.id}')">Select</button>
+              </div>
+            `;
+            grid.appendChild(card);
+            
+            const canvas = card.querySelector('.preset-matrix-canvas');
+            const inst = new PresetMatrix(canvas, p.flags.length);
+            presetMatrixInstances.push(inst);
+            if (currentTheme === 'matrix') inst.start();
+          }
+
+          // Init Sortable for presets
+          if (!window.presetSortable) {
+            window.presetSortable = new Sortable(grid, {
+              animation: 150,
+              filter: '.preset-add-card',
+              onEnd: function() {
+                const items = grid.querySelectorAll('.preset-card:not(.preset-add-card)');
+                const ids = Array.from(items).map(el => el.getAttribute('data-id'));
+                pywebview.api.reorder_presets(ids);
+              }
+            });
+          }
+        } catch(e) { console.error(e); }
+      }
+
+      function showPresetPreview(p) {
+        currentPreviewPreset = p;
+        const modal = document.getElementById('preview-modal');
+        const title = document.getElementById('preview-title');
+        const dot = document.getElementById('preview-color-dot');
+        const applyBtn = document.getElementById('preview-apply-btn');
+        const searchInput = document.getElementById('preview-search');
+
+        title.textContent = p.name;
+        dot.style.background = p.color;
+        applyBtn.onclick = () => { closePreview(); applyPreset(p.id); };
+        
+        if (searchInput) searchInput.value = '';
+        
+        renderPreviewList(p.flags);
+        modal.style.display = 'flex';
+      }
+
+      function renderPreviewList(flags) {
+        const list = document.getElementById('preview-list');
+        const count = document.getElementById('preview-count');
+        
+        count.textContent = flags.length + " Flags";
+        
+        if (flags.length === 0) {
+          list.innerHTML = '<div class="config-empty">No flags found matching your search.</div>';
+          return;
+        }
+
+        let html = '';
+        for (const f of flags) {
+          html += `
+            <div class="preview-item">
+              <span class="preview-flag-name">${escHtml(f.name)}</span>
+              <span class="preview-flag-value">${escHtml(f.value)}</span>
+              <span class="flag-type" style="margin-left:auto;">${escHtml(f.type)}</span>
+            </div>
+          `;
+        }
+        list.innerHTML = html;
+      }
+
+      function filterPreview(term) {
+        if (!currentPreviewPreset) return;
+        const query = term.toLowerCase();
+        const filtered = currentPreviewPreset.flags.filter(f => 
+          f.name.toLowerCase().includes(query) || 
+          String(f.value).toLowerCase().includes(query)
+        );
+        renderPreviewList(filtered);
+      }
+
+      function closePreview() {
+        document.getElementById('preview-modal').style.display = 'none';
+        currentPreviewPreset = null;
+      }
+
+      function showPresetOptions(e) {
+        e.stopPropagation();
+        const cm = document.getElementById('preset-cm');
+        cm.innerHTML = `
+          <div class="preset-menu-item" onclick="importFromConfig()">
+            <div class="popup-icon" style="background:rgba(0,212,170,0.12); color:var(--accent);">&#x2B50;</div>
+            <div class="popup-label">
+              <span class="popup-label-title" style="color:var(--accent);">Save Current Config</span>
+              <span class="popup-label-desc">Snapshot your active flags & binds</span>
+            </div>
+          </div>
+          <div class="preset-menu-item" onclick="importFromFile()">
+            <div class="popup-icon" style="background:rgba(139,92,246,0.12); color:#8b5cf6;">&#128193;</div>
+            <div class="popup-label">
+              <span class="popup-label-title">Import from File</span>
+              <span class="popup-label-desc">Load a .json configuration</span>
+            </div>
+          </div>
+        `;
+        cm.style.display = 'flex';
+        const rect = cm.getBoundingClientRect();
+        const menuWidth = rect.width || 300;
+        cm.classList.add('visible');
+        positionPopup(cm, e);
+        document.getElementById("cm-click-catcher").style.display = "block";
+      }
+
+      // === Input Modal Helpers ===
+      let inputModalResolve = null;
+
+      function showInputModal(title, fields) {
+        return new Promise((resolve) => {
+          inputModalResolve = resolve;
+          document.getElementById('input-modal-title').textContent = title;
+          const body = document.getElementById('input-modal-body');
+          body.innerHTML = '';
+          for (const f of fields) {
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '6px';
+            
+            const lbl = document.createElement('label');
+            lbl.textContent = f.label;
+            container.appendChild(lbl);
+            
+            if (f.type === 'color') {
+              const row = document.createElement('div');
+              row.className = 'input-modal-color-row';
+              const picker = document.createElement('input');
+              picker.type = 'color';
+              picker.value = f.value || '#00d4aa';
+              picker.id = 'im-' + f.key;
+              const txt = document.createElement('input');
+              txt.type = 'text';
+              txt.value = f.value || '#00d4aa';
+              txt.id = 'im-' + f.key + '-text';
+              picker.addEventListener('input', () => { txt.value = picker.value; });
+              txt.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(txt.value)) picker.value = txt.value; });
+              row.appendChild(picker);
+              row.appendChild(txt);
+              container.appendChild(row);
+            } else {
+              const inp = document.createElement('input');
+              inp.type = 'text';
+              inp.value = f.value || '';
+              inp.placeholder = f.placeholder || '';
+              inp.id = 'im-' + f.key;
+              inp.autocomplete = 'off';
+              container.appendChild(inp);
+              setTimeout(() => inp.focus(), 150);
+              inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('input-modal-ok').click(); });
+            }
+            body.appendChild(container);
+          }
+          const okBtn = document.getElementById('input-modal-ok');
+          okBtn.onclick = () => {
+            const result = {};
+            for (const f of fields) {
+              if (f.type === 'color') {
+                const txt = document.getElementById('im-' + f.key + '-text');
+                result[f.key] = txt ? txt.value : f.value;
+              } else {
+                const inp = document.getElementById('im-' + f.key);
+                result[f.key] = inp ? inp.value : '';
+              }
+            }
+            closeInputModal();
+            resolve(result);
+          };
+          document.getElementById('input-modal').style.display = 'flex';
+        });
+      }
+
+      function showLargeInputModal(title, placeholder) {
+        return new Promise((resolve) => {
+          document.getElementById('large-input-modal-title').textContent = title;
+          const textarea = document.getElementById('large-input-textarea');
+          textarea.placeholder = placeholder;
+          textarea.value = '';
+          
+          document.getElementById('large-input-modal-file').onclick = () => {
+            closeLargeInputModal();
+            resolve('__FILE__');
+          };
+
+          document.getElementById('large-input-modal-ok').onclick = () => {
+            const val = textarea.value.trim();
+            closeLargeInputModal();
+            resolve(val);
+          };
+          document.getElementById('large-input-modal').style.display = 'flex';
+          setTimeout(() => textarea.focus(), 150);
+        });
+      }
+
+      function closeLargeInputModal() {
+        document.getElementById('large-input-modal').style.display = 'none';
+      }
+
+      function closeInputModal() {
+        const modal = document.getElementById('input-modal');
+        modal.style.opacity = '0';
+        modal.style.transition = 'opacity 0.2s';
+        setTimeout(() => {
+          modal.style.display = 'none';
+          modal.style.opacity = '1';
+          if (inputModalResolve) { inputModalResolve(null); inputModalResolve = null; }
+        }, 200);
+      }
+
+      // === Preset Import / Apply / Settings ===
+
+      async function importFromConfig() {
+         closeContextMenu();
+         const result = await showInputModal('Save Current Config as Preset', [
+           { key: 'name', label: 'Preset Name', type: 'text', placeholder: 'My Custom Config', value: '' },
+           { key: 'color', label: 'Color', type: 'color', value: '#00d4aa' }
+         ]);
+         if (!result || !result.name) return;
+         const res = await pywebview.api.import_preset_from_config(result.name, result.color || '#00d4aa');
+         if (res && res.ok) {
+            loadPresets();
+         }
+      }
+
+      async function importFromFile() {
+         closeContextMenu();
+         const res = await pywebview.api.import_preset_from_file();
+         if (res && res.ok) {
+            loadPresets();
+         }
+      }
+
+      async function applyPreset(id) {
+         const res = await pywebview.api.apply_preset(id);
+         if (res && res.ok) {
+            await refreshConfig();
+            switchTab('editor');
+         }
+      }
+
+      function openPresetSettings(id, name, color, e) {
+         e.stopPropagation();
+         const cm = document.getElementById('preset-cm');
+         cm.innerHTML = `
+            <div class="preset-menu-item" onclick="updatePresetFlags('${id}')">
+              <div class="popup-icon" style="background:rgba(0,212,170,0.1); color:var(--accent);">&#x21BB;</div>
+              <div class="popup-label">
+                <span class="popup-label-title">Update Flags</span>
+                <span class="popup-label-desc">Replace with current configuration</span>
+              </div>
+            </div>
+            <div class="preset-menu-item" onclick="mergePreset('${id}', '${escHtml(name)}')">
+              <div class="popup-icon" style="background:rgba(0,212,170,0.1); color:var(--accent);">&#x271A;</div>
+              <div class="popup-label">
+                <span class="popup-label-title">Merge with Current</span>
+                <span class="popup-label-desc">Add these flags to your active config</span>
+              </div>
+            </div>
+            <div class="preset-menu-item" onclick="renamePreset('${id}', '${escHtml(name)}')">
+              <div class="popup-icon" style="background:rgba(139,92,246,0.1); color:#8b5cf6;">&#x270F;&#xFE0E;</div>
+              <div class="popup-label"><span class="popup-label-title">Rename</span></div>
+            </div>
+            <div class="preset-menu-item" onclick="changePresetColor('${id}', '${color}')">
+              <div class="popup-icon" style="background:rgba(255,255,255,0.05); color:#fff;">&#x25CF;</div>
+              <div class="popup-label"><span class="popup-label-title">Change Color</span></div>
+            </div>
+            <div class="preset-menu-divider"></div>
+            <div class="preset-menu-item danger" onclick="deletePreset('${id}')">
+              <div class="popup-icon" style="background:rgba(248,113,113,0.1); color:var(--error);">&#x2715;</div>
+              <div class="popup-label"><span class="popup-label-title">Delete</span></div>
+            </div>
+         `;
+         cm.style.display = 'flex';
+         positionPopup(cm, e);
+         document.getElementById("cm-click-catcher").style.display = "block";
+      }
+
+      async function mergePreset(id, name) {
+         closeContextMenu();
+         showConfirmModal("Merge Preset", 
+            `Merge '${name}' into your current configuration? 
+            New flags will be added. 
+            Existing flags will only be updated if the preset has a keybind and your current one doesn't.`, 
+            async () => {
+                closeConfirmModal();
+                const res = await pywebview.api.merge_preset(id);
+                if (res && res.ok) {
+                   await refreshConfig();
+                   switchTab('editor');
+                }
+            }
+         );
+      }
+
+      async function updatePresetFlags(id) {
+         closeContextMenu();
+         showConfirmModal("Update Preset", "Replace this preset's flags with your current configuration?", async () => {
+             closeConfirmModal();
+             const res = await pywebview.api.update_preset_from_config(id);
+             if (res && res.ok) loadPresets();
+         });
+      }
+
+      async function renamePreset(id, currentName) {
+         closeContextMenu();
+         const result = await showInputModal('Rename Preset', [
+           { key: 'name', label: 'New Name', type: 'text', placeholder: 'Enter new name...', value: currentName }
+         ]);
+         if (!result || !result.name) return;
+         await pywebview.api.update_preset(id, result.name, null);
+         loadPresets();
+      }
+
+      async function changePresetColor(id, currentColor) {
+         closeContextMenu();
+         const result = await showInputModal('Change Preset Color', [
+           { key: 'color', label: 'Pick a Color', type: 'color', value: currentColor }
+         ]);
+         if (!result) return;
+         await pywebview.api.update_preset(id, null, result.color);
+         loadPresets();
+      }
+
+      async function deletePreset(id) {
+         closeContextMenu();
+         showConfirmModal("Delete Preset", "Are you sure you want to delete this preset?", async () => {
+             closeConfirmModal();
+             await pywebview.api.delete_preset(id);
+             loadPresets();
+         });
+      }
+
+      // === Matrix Canvas Animation Engine ===
+      const matrixCanvas = document.getElementById('matrix-canvas');
+      const ctx = matrixCanvas.getContext('2d');
+      let matrixAnimFrame;
+      let drops = [];
+      let matrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()ラドクリフイケメン';
+      matrixChars = matrixChars.split('');
+      const fontSize = 11;
+      let lastDrawTime = 0;
+
+      function resizeMatrix() {
+        matrixCanvas.width = window.innerWidth;
+        matrixCanvas.height = window.innerHeight;
+        const columns = Math.ceil(matrixCanvas.width / fontSize);
+        drops = [];
+        for (let i = 0; i < columns; i++) {
+          drops[i] = Math.random() * -100; // Start off-screen
+        }
+      }
+
+      function drawMatrix(timestamp) {
+        matrixAnimFrame = requestAnimationFrame(drawMatrix);
+        
+        // Balanced linear range for better responsiveness
+        // 1 = ~119ms (Active enough)
+        // 4 = ~86ms (Your preferred baseline area)
+        // 10 = 20ms (Original top speed)
+        const throttle = 130 - (matrixSpeed * 11);
+        
+        if (timestamp - lastDrawTime < throttle) return;
+        lastDrawTime = timestamp;
+
+        const isLight = document.body.classList.contains('light-theme');
+
+        // Proportional Fading: Adjust alpha based on throttle to keep trail lengths consistent
+        // If the speed is slow, we fade less per frame. If fast, we fade more.
+        const baseAlpha = isLight ? 0.12 : 0.06;
+        const fadeAlpha = baseAlpha * (throttle / 130);
+        
+        ctx.fillStyle = isLight ? `rgba(255, 255, 255, ${fadeAlpha})` : `rgba(1, 4, 1, ${fadeAlpha})`;
+        ctx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+        
+        ctx.font = fontSize + 'px "Courier New", monospace';
+        
+        for (let i = 0; i < drops.length; i++) {
+          const text = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+          
+          // Smoother fading colors
+          const opacity = (0.4 + Math.random() * 0.35).toFixed(2);
+          if (isLight) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+          } else {
+            ctx.fillStyle = `rgba(0, 255, 65, ${opacity})`;
+          }
+          
+          ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+          
+          if (drops[i] * fontSize > matrixCanvas.height && Math.random() > 0.985) {
+            drops[i] = 0;
+          }
+          // Fall exactly 1 character block down
+          drops[i]++;
+        }
+      }
+
+      function toggleMatrixAnim(enable) {
+        if (enable) {
+          resizeMatrix();
+          window.addEventListener('resize', resizeMatrix);
+          lastDrawTime = performance.now();
+          matrixAnimFrame = requestAnimationFrame(drawMatrix);
+          presetMatrixInstances.forEach(inst => inst.start());
+        } else {
+          window.removeEventListener('resize', resizeMatrix);
+          cancelAnimationFrame(matrixAnimFrame);
+          ctx.clearRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+          presetMatrixInstances.forEach(inst => inst.stop());
+        }
+      }
+    </script>
+  </body>
+</html>
