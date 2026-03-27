@@ -1,6 +1,6 @@
 # 🚀 Roblox FastFlag Manager
 
-![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v3.0.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
