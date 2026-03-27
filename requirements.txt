@@ -1,3 +1,4 @@
-dearpygui
 requests
-pymem
+pywebview
+pystray
+Pillow
