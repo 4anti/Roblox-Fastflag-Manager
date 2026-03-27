@@ -6,16 +6,45 @@
 
 A professional, high-performance management suite designed to give you complete control over Roblox FastFlags. Optimized for everything from high-end rigs to low-end hardware.
 
+<div align="center">
+  <img src="https://i.ibb.co/JRQF7LzY/Menu-Picture-Normal-just-the-starting.png" alt="Roblox FastFlag Manager Main Interface" width="800">
+</div>
+
+---
+
+## ✨ Showcase
+
+<details open>
+  <summary><b>View Features in Action</b></summary>
+  <br>
+  <div align="center">
+    <table border="0">
+      <tr>
+        <td align="center" valign="top">
+          <img src="https://i.ibb.co/CNKnS9b/Menu-pic-2-with-white-matrix-theme.png" alt="Matrix Theme" width="450"><br>
+          <b>🎨 Dynamic Themes</b><br>
+          <i>Personalize your experience with themes like White Matrix.</i>
+        </td>
+        <td align="center" valign="top">
+          <img src="https://i.ibb.co/XkJtMs8r/right-click-menu-pic.png" alt="Context Menu" width="450"><br>
+          <b>⚡ Advanced Controls</b><br>
+          <i>Powerful right-click menus for rapid flag management and offsets.</i>
+        </td>
+      </tr>
+    </table>
+  </div>
+</details>
+
 ---
 
 ## ✨ Key Features
 
 - **⚡ Instant Indexing**: Search through thousands of FFlags in milliseconds.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
-- **🧩 Conflict Resolution**: Intelligent multi-layer merging with keybind protection.
+- **🧩 Bindable Fastflags**: We implemented a bind system to the fastflags. It also comes with cycle binds too!
 - **🛰️ Silent Updates**: Stay current with automated code and FFlag offset updates.
-- **🎨 Premium UI**: Modern, sleek interface with multiple themes (Premium, Ignite, Matrix).
-- **🔒 Secure Injection**: A reliable and trace-free deployment pipeline.
+- **🎨 Premium Themes**: Modern, sleek interface with multiple themes (Glass, Ignite, Matrix).
+- **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 
 ## 📥 Installation
 
@@ -48,11 +77,10 @@ A professional, high-performance management suite designed to give you complete 
 3. **Keybinds**: Assign hotkeys to toggle specific flags or presets instantly while in-game.
 4. **Apply**: Click the 'Apply' button to inject settings into your Roblox client.
 
-## 🔄 Silent Auto-Updates
-This application features a built-in silent update system. On every startup, the program checks the official GitHub repository for new releases. If an update is found, it is downloaded and applied automatically, ensuring you always have the latest optimizations and security fixes without any manual effort.
 
 ## 💬 Community & Support
 Join our official Discord for support, sharing presets, and community discussions:
+
 [**Join the Discord Server**](https://discord.gg/ECekjAkQu7)
 
 ## ⚖️ License
