@@ -27,7 +27,7 @@ def main():
         # Fallback logging if GUI fails
         try:
              log(f"Critical Error: {e}", (255, 100, 100))
-        except:
+        except Exception:
              print(f"Critical Error: {e}")
              
         # Create a simple error file if everything fails
@@ -84,7 +84,12 @@ if __name__ == "__main__":
                 subprocess.check_call([sys.executable, "-m", "pip", "install", *missing, "--quiet", "--no-warn-script-location"])
                 
                 # Restart app to ensure all new modules are available in current process
-                os.execv(sys.executable, [sys.executable] + sys.argv)
+                # Use subprocess instead of os.execv to avoid Windows mutex race condition
+                # (os.execv spawns before the old process dies, triggering the single-instance check)
+                if mutex:
+                    ctypes.windll.kernel32.CloseHandle(mutex)
+                subprocess.Popen([sys.executable] + sys.argv)
+                sys.exit(0)
         except Exception as boot_err:
             # If bootstrapper fails, we still try to run main() (it might just be a metadata check error)
             with open("bootstrapper_error.log", "w") as f:

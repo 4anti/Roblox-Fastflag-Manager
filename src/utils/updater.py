@@ -51,6 +51,26 @@ def perform_silent_update(zip_url, new_version):
         log(f"[*] Update v{new_version} found! Downloading in background...", (100, 255, 100))
         r = requests.get(zip_url, timeout=60)
         if r.status_code != 200:
+            log(f"[!] Update download returned HTTP {r.status_code}", (255, 100, 100))
+            return False
+
+        # Basic integrity: verify we got a non-trivial amount of data
+        content_length = r.headers.get('Content-Length')
+        if content_length and abs(int(content_length) - len(r.content)) > 100:
+            log(f"[!] Update download size mismatch (expected {content_length}, got {len(r.content)})", (255, 100, 100))
+            return False
+        if len(r.content) < 1024:
+            log(f"[!] Update download too small ({len(r.content)} bytes), likely corrupt", (255, 100, 100))
+            return False
+
+        # Validate ZIP before extracting
+        try:
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            if z.testzip() is not None:
+                log("[!] Update ZIP failed integrity check", (255, 100, 100))
+                return False
+        except zipfile.BadZipFile:
+            log("[!] Update download is not a valid ZIP file", (255, 100, 100))
             return False
 
         # Use a temporary directory for extraction
@@ -59,7 +79,6 @@ def perform_silent_update(zip_url, new_version):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir)
 
-        z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(temp_dir)
         
         log(f"[+] Update v{new_version} downloaded and ready for next restart!", (100, 255, 100))
@@ -89,7 +108,7 @@ def apply_staged_update():
             f.write(f"start \"\" \"{sys.executable}\" \"{os.path.join(base_dir, 'main.pyw')}\"\n")
             f.write(f"del \"%~f0\"\n") # Self delete
 
-        subprocess.Popen(["cmd", "/c", updater_bat], shell=True)
+        subprocess.Popen(["cmd", "/c", updater_bat])
         return True
     except Exception as e:
         log(f"[!] Error applying staged update: {e}", (255, 100, 100))

@@ -109,20 +109,9 @@ class FFlagScanner:
             log("[-] [Local Scanner] Missing .text section.", (255, 100, 100))
             return 0
         
-        # Define structures for VirtualQueryEx
+        # Use module-level definitions from roblox_manager
+        from src.core.roblox_manager import MEMORY_BASIC_INFORMATION
         _k32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        class MEMORY_BASIC_INFORMATION(ctypes.Structure):
-            _fields_ = [
-                ("BaseAddress", ctypes.c_void_p),
-                ("AllocationBase", ctypes.c_void_p),
-                ("AllocationProtect", wintypes.DWORD),
-                ("RegionSize", ctypes.c_size_t),
-                ("State", wintypes.DWORD),
-                ("Protect", wintypes.DWORD),
-                ("Type", wintypes.DWORD),
-            ]
-        _k32.VirtualQueryEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(MEMORY_BASIC_INFORMATION), ctypes.c_size_t]
-        _k32.VirtualQueryEx.restype = ctypes.c_size_t
         
         xrefs = []
         

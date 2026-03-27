@@ -128,7 +128,7 @@ class Api:
             self.settings['history_limit'] = val
             Config.save_settings(self.settings)
             log(f"[+] History limit set to: {'Unlimited' if val >= 100 else val}")
-        except:
+        except Exception:
             pass
 
     def set_auto_apply(self, value):
@@ -542,7 +542,7 @@ class Api:
             if success and self.settings.get('auto_apply'):
                 self.inject()
             return success
-        except:
+        except Exception:
             return False
 
     def toggle_flag_apply(self, name):
@@ -696,7 +696,9 @@ class Api:
                         # Use prefix-based type detection, fall back to value guessing
                         flag_type = infer_type_from_name(name) or infer_type(str(val))
                         self.flag_manager.user_flags.append({
-                            'name': name, 'value': str(val), 'type': flag_type
+                            'name': name, 'value': str(val), 'type': flag_type,
+                            'enabled': True,
+                            'original_value': get_default_value(name)
                         })
                         added += 1
                 self.flag_manager.save_user_flags()
@@ -1211,9 +1213,10 @@ class Api:
                     self.roblox_manager.reset()
                     self.flag_manager.flags_applied = False
                     # Clear statuses
-                    for f in self.flag_manager.user_flags:
-                        if f.get('_status'):
-                            f['_status'] = None
+                    with self.flag_manager._lock:
+                        for f in self.flag_manager.user_flags:
+                            if f.get('_status'):
+                                f['_status'] = None
                     # Clean up old PIDs to prevent unbounded growth
                     self.processed_pids.clear()
             except Exception as e:

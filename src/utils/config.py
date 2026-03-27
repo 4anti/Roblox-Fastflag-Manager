@@ -5,7 +5,6 @@ from pathlib import Path
 class Config:
     APP_NAME = "FFlag Manager"
     APP_DIR = Path(os.path.expanduser("~")) / ".FFlagManager"
-    APP_DIR.mkdir(parents=True, exist_ok=True)
     
     SETTINGS_FILE = APP_DIR / "settings.json"
     USER_FLAGS_FILE = APP_DIR / "user_flags.json"
@@ -28,7 +27,13 @@ class Config:
     }
 
     @classmethod
+    def _ensure_dirs(cls):
+        """Lazily create the app directory on first use instead of at import time."""
+        cls.APP_DIR.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
     def load_settings(cls):
+        cls._ensure_dirs()
         if not cls.SETTINGS_FILE.exists():
             return cls.DEFAULT_SETTINGS.copy()
         try:
@@ -36,11 +41,12 @@ class Config:
                 loaded = json.load(f)
             # Merge defaults so new keys are always present
             return {**cls.DEFAULT_SETTINGS, **loaded}
-        except:
+        except Exception:
             return cls.DEFAULT_SETTINGS.copy()
 
     @classmethod
     def save_settings(cls, settings):
+        cls._ensure_dirs()
         try:
             with open(cls.SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=4)

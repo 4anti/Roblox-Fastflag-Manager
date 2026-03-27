@@ -59,7 +59,7 @@ class MainWindow:
                 # Update settings in-memory
                 self.api.settings['window_width'] = self.window.width
                 self.api.settings['window_height'] = self.window.height
-            except:
+            except Exception:
                 pass
 
     def _create_icon_image(self):
@@ -68,25 +68,11 @@ class MainWindow:
         height = 64
         # Theme colors
         accent = (0, 212, 170) # #00d4aa
-        # Create image with transparency support
-        image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-        dc = ImageDraw.Draw(image)
-        
-        # Draw rounded rectangle (matching .logo in CSS)
         padding = 4
         radius = 12
-        dc.rounded_rectangle(
-            [padding, padding, width - padding, height - padding],
-            radius=radius,
-            fill=accent
-        )
-        
         white = (255, 255, 255)
-        dc.rectangle([18, 18, 24, 46], fill=white) # Stem
-        dc.rectangle([18, 18, 38, 24], fill=white) # Top bar
-        dc.rectangle([18, 30, 34, 35], fill=white) # Middle bar
-        dc.rectangle([34, 18, 40, 46], fill=white) # Stem (offset slightly)
-        dc.rectangle([34, 18, 54, 24], fill=white) # Top bar
+        
+        # Create image with transparency support
         image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
         dc = ImageDraw.Draw(image)
         dc.rounded_rectangle([padding, padding, width - padding, height - padding], radius=radius, fill=accent)

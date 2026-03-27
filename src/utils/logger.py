@@ -1,5 +1,6 @@
 import logging
 import threading
+from collections import deque
 from datetime import datetime
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ class Logger:
     _lock = threading.Lock()
 
     def __init__(self):
-        self.console_log = []
+        self.console_log = deque(maxlen=1000)
         self.lock = threading.Lock()
         
         # Setup file logging
@@ -47,8 +48,6 @@ class Logger:
 
         with self.lock:
             self.console_log.append((formatted_msg, color))
-            if len(self.console_log) > 1000:
-                self.console_log.pop(0)
 
     def get_logs(self):
         with self.lock:
