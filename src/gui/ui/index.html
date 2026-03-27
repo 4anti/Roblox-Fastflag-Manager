@@ -4360,7 +4360,10 @@
           } else {
             // User pasted text
             try {
-              let data = JSON.parse(result);
+              // Pre-process: Strip trailing commas which are invalid in strict JSON.parse
+              let cleaned = result.replace(/,\s*([\]}])/g, '$1');
+              
+              let data = JSON.parse(cleaned);
               let items = [];
               
               if (Array.isArray(data)) {
