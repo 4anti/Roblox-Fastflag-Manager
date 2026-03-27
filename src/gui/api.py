@@ -669,14 +669,14 @@ class Api:
                     name = item.get('name')
                     val = item.get('value')
                     if name and val is not None:
-                        clean = clean_flag_name(name)
-                        if any(f['name'] == clean for f in self.flag_manager.user_flags):
+                        # DO NOT clean the name; Roblox JSON and memory patching require the prefix
+                        if any(f['name'] == name for f in self.flag_manager.user_flags):
                             skipped += 1
                             continue
                         # Use prefix-based type detection, fall back to value guessing
                         flag_type = infer_type_from_name(name) or infer_type(str(val))
                         self.flag_manager.user_flags.append({
-                            'name': clean, 'value': str(val), 'type': flag_type
+                            'name': name, 'value': str(val), 'type': flag_type
                         })
                         added += 1
                 self.flag_manager.save_user_flags()
