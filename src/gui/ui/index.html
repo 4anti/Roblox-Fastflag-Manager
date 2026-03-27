@@ -2393,7 +2393,7 @@
             <span class="vc-text" id="vc-text">Waiting for Update<span id="vc-dots">..</span></span>
           </div>
         </div>
-        <div class="titlebar-version">v3.0</div>
+        <div class="titlebar-version" id="titlebar-version">v...</div>
         <div class="titlebar-controls">
           <button
             class="titlebar-btn minimize"
@@ -2678,6 +2678,17 @@
             </div>
 
             <div class="settings-section">
+              <div class="settings-section-title">Safety & Reset</div>
+              <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span class="settings-label" style="font-weight: 600; color: var(--error);">Emergency Revert</span>
+                <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Instantly disable all custom flags and revert live game memory tracking.</span>
+                <button class="btn btn-danger" style="padding: 8px 16px; width: 100%; border-radius: 8px;" onclick="showConfirmModal('Panic Revert', 'This will disable ALL active flags and restore Roblox memory limits/defaults immediately. Proceed?', async () => { await pywebview.api.panic_revert(); showHistory(); })">
+                  Execute Panic Revert
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-section">
               <div class="settings-section-title">Appearance</div>
               <div class="settings-row" id="light-mode-row">
                 <label class="toggle">
@@ -2714,7 +2725,7 @@
                     <div style="flex: 1;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong style="color: var(--text); font-size: 14px;">Developed by 4anti</strong>
-                        <span style="color: var(--accent); font-weight: 800; font-size: 12px;">v3.0</span>
+                        <span id="about-version" style="color: var(--accent); font-weight: 800; font-size: 12px;">v...</span>
                       </div>
                       <div style="font-size: 11px; color: var(--text-dark); margin-top: -2px;">Professional FastFlag Management Suite</div>
                     </div>
@@ -3253,17 +3264,39 @@
             }
           }
 
-          if (status.ready && !status.loading) {
+          
+          // Inject dynamic version
+          if (status.version) {
+            document.getElementById('titlebar-version').textContent = 'v' + status.version;
+            document.getElementById('about-version').textContent = 'v' + status.version;
+          }
+
+          if (status.update_ready) {
+            versionReady = true;
+            vcText.textContent = "Restart needed";
+            vcText.style.color = "var(--warning)";
+            vcText.style.cursor = "pointer";
+            vcText.onclick = async () => { await pywebview.api.trigger_updater_restart(); };
+            vcDot.className = "vc-dot";
+            vcDot.style.background = "var(--warning)";
+            if (dotAnimateTimer) { clearInterval(dotAnimateTimer); dotAnimateTimer = null; }
+          } else if (status.ready && !status.loading) {
             versionReady = true;
             vcText.textContent = "Up-to-Date";
             vcText.style.color = "var(--success)";
+            vcText.style.cursor = "default";
+            vcText.onclick = null;
             vcDot.className = "vc-dot up-to-date";
+            vcDot.style.background = ""; // Reset background to use class styling
             if (dotAnimateTimer) { clearInterval(dotAnimateTimer); dotAnimateTimer = null; }
           } else {
             versionReady = false;
             vcText.innerHTML = 'Waiting for Update<span id="vc-dots">.</span>';
             vcText.style.color = "var(--warning)";
+            vcText.style.cursor = "default";
+            vcText.onclick = null;
             vcDot.className = "vc-dot";
+            vcDot.style.background = ""; // Reset background to use class styling
             if (!dotAnimateTimer) { dotAnimateTimer = setInterval(animateDots, 500); }
           }
         } catch(e) {}
@@ -4783,6 +4816,13 @@
               <span class="popup-label-desc">Load a .json configuration</span>
             </div>
           </div>
+          <div class="preset-menu-item" onclick="importFromClipboard()">
+            <div class="popup-icon" style="background:rgba(96,165,250,0.12); color:#60a5fa;">&#x1F4CB;</div>
+            <div class="popup-label">
+              <span class="popup-label-title">Import from Clipboard</span>
+              <span class="popup-label-desc">Paste Base64 or JSON string</span>
+            </div>
+          </div>
         `;
         cm.style.display = 'flex';
         const rect = cm.getBoundingClientRect();
@@ -4954,6 +4994,15 @@
               <div class="popup-label"><span class="popup-label-title">Change Color</span></div>
             </div>
             <div class="preset-menu-divider"></div>
+            <div class="preset-menu-item" onclick="copyPresetBase64('${escHtml(name)}')">
+              <div class="popup-icon" style="background:rgba(96,165,250,0.1); color:#60a5fa;">&#x1F4CB;</div>
+              <div class="popup-label"><span class="popup-label-title">Copy as Base64</span></div>
+            </div>
+            <div class="preset-menu-item" onclick="copyPresetJSON('${escHtml(name)}')">
+              <div class="popup-icon" style="background:rgba(96,165,250,0.1); color:#60a5fa;">{}</div>
+              <div class="popup-label"><span class="popup-label-title">Copy as JSON code</span></div>
+            </div>
+            <div class="preset-menu-divider"></div>
             <div class="preset-menu-item danger" onclick="deletePreset('${id}')">
               <div class="popup-icon" style="background:rgba(248,113,113,0.1); color:var(--error);">&#x2715;</div>
               <div class="popup-label"><span class="popup-label-title">Delete</span></div>
@@ -4979,6 +5028,57 @@
                 }
             }
          );
+      }
+
+      async function copyPresetJSON(name) {
+         closeContextMenu();
+         const res = await pywebview.api.export_preset_json(name);
+         if (res) {
+             navigator.clipboard.writeText(res).catch(() => {
+                 const ta = document.createElement('textarea');
+                 ta.value = res; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+             });
+         }
+      }
+
+      async function copyPresetBase64(name) {
+         closeContextMenu();
+         const res = await pywebview.api.export_preset_base64(name);
+         if (res) {
+             navigator.clipboard.writeText(res).catch(() => {
+                 const ta = document.createElement('textarea');
+                 ta.value = res; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+             });
+         }
+      }
+
+      async function importFromClipboard() {
+          closeContextMenu();
+          try {
+              let text = '';
+              if (navigator.clipboard && navigator.clipboard.readText) {
+                  text = await navigator.clipboard.readText();
+              } else {
+                  text = prompt("Please paste your Base64 or JSON string here:");
+              }
+              if (!text) return;
+              
+              const res = await pywebview.api.import_preset_clipboard(text);
+              if (res && res[0]) {
+                  loadPresets();
+              } else {
+                  alert("Import Failed: " + (res ? res[1] : "Unknown Error"));
+              }
+          } catch(err) {
+              const text = prompt("Automatic clipboard access denied. Please paste your Base64 or JSON string here:");
+              if (!text) return;
+              const res = await pywebview.api.import_preset_clipboard(text);
+              if (res && res[0]) {
+                  loadPresets();
+              } else {
+                  alert("Import Failed: " + (res ? res[1] : "Unknown Error"));
+              }
+          }
       }
 
       async function updatePresetFlags(id) {

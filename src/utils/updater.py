@@ -30,25 +30,31 @@ def check_for_updates():
             remote_version = data.get("tag_name", "0.0.0").replace("v", "")
             local_version = get_current_version().replace("v", "")
             
-            if remote_version != local_version:
-                # We assume any different version is an update for simplicity, 
-                # or you can do proper semantic version comparison
+            try:
+                remote_parts = tuple(map(int, remote_version.split('.')))
+                local_parts = tuple(map(int, local_version.split('.')))
+                has_update = remote_parts > local_parts
+            except Exception:
+                # Fallback to simple string mismatch if tags aren't standard formatting
+                has_update = remote_version != local_version
+            
+            if has_update:
                 zip_url = data.get("zipball_url")
                 return True, zip_url, remote_version
     except Exception as e:
         log(f"[!] Update check failed: {e}", (255, 100, 100))
     return False, None, None
 
-def stage_silent_update(zip_url, new_version):
-    \"\"\"Download and stage an update to be applied on next manual restart or user confirmation.\"\"\"
+def perform_silent_update(zip_url, new_version):
+    """Download and stage an update to be applied on next manual restart or user confirmation."""
     try:
-        log(f\"[*] Update v{new_version} found! Downloading in background...\", (100, 255, 100))
+        log(f"[*] Update v{new_version} found! Downloading in background...", (100, 255, 100))
         r = requests.get(zip_url, timeout=60)
         if r.status_code != 200:
             return False
 
         # Use a temporary directory for extraction
-        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), \"..\", \"..\", \"update_staged\")
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "update_staged")
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir)
@@ -56,16 +62,16 @@ def stage_silent_update(zip_url, new_version):
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(temp_dir)
         
-        log(f\"[+] Update v{new_version} downloaded and ready for next restart!\", (100, 255, 100))
+        log(f"[+] Update v{new_version} downloaded and ready for next restart!", (100, 255, 100))
         return True
     except Exception as e:
-        log(f\"[!] Background update failed: {e}\", (255, 100, 100))
+        log(f"[!] Background update failed: {e}", (255, 100, 100))
         return False
 
 def apply_staged_update():
-    \"\"\"If a staged update exists, create a batch script to apply it and restart.\"\"\"
+    """If a staged update exists, create a batch script to apply it and restart."""
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    temp_dir = os.path.join(base_dir, \"update_staged\")
+    temp_dir = os.path.join(base_dir, "update_staged")
     
     if not os.path.exists(temp_dir):
         return False
@@ -74,19 +80,19 @@ def apply_staged_update():
         # ZIPs from GitHub usually have a root folder like 'repo-name-hash'
         root_folder = os.path.join(temp_dir, os.listdir(temp_dir)[0])
         
-        updater_bat = os.path.join(base_dir, \"finish_update.bat\")
-        with open(updater_bat, \"w\") as f:
-            f.write(f\"@echo off\\n\")
-            f.write(f\"timeout /t 2 /nobreak > nul\\n\") # Wait for app to close
-            f.write(f\"xcopy /s /y /e \\\"{root_folder}\\\\*\\\" \\\"{base_dir}\\\\\\\"\\n\")
-            f.write(f\"rd /s /q \\\"{temp_dir}\\\"\\n\")
-            f.write(f\"start \\\"\\\" \\\"{sys.executable}\\\" \\\"{os.path.join(base_dir, 'main.pyw')}\\\"\\n\")
-            f.write(f\"del \\\"%~f0\\\"\\n\") # Self delete
+        updater_bat = os.path.join(base_dir, "finish_update.bat")
+        with open(updater_bat, "w") as f:
+            f.write(f"@echo off\n")
+            f.write(f"timeout /t 2 /nobreak > nul\n") # Wait for app to close
+            f.write(f"xcopy /s /y /e \"{root_folder}\\*\" \"{base_dir}\\\"\n")
+            f.write(f"rd /s /q \"{temp_dir}\"\n")
+            f.write(f"start \"\" \"{sys.executable}\" \"{os.path.join(base_dir, 'main.pyw')}\"\n")
+            f.write(f"del \"%~f0\"\n") # Self delete
 
-        subprocess.Popen([\"cmd\", \"/c\", updater_bat], shell=True)
+        subprocess.Popen(["cmd", "/c", updater_bat], shell=True)
         return True
     except Exception as e:
-        log(f\"[!] Error applying staged update: {e}\", (255, 100, 100))
+        log(f"[!] Error applying staged update: {e}", (255, 100, 100))
         return False
 
 def update_fflags():
