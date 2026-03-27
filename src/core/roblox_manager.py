@@ -94,6 +94,21 @@ _ntdll.NtQueryInformationProcess.argtypes = [
 ]
 _ntdll.NtQueryInformationProcess.restype = ctypes.c_long
 
+# Memory query
+class MEMORY_BASIC_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ("BaseAddress", ctypes.c_void_p),
+        ("AllocationBase", ctypes.c_void_p),
+        ("AllocationProtect", wintypes.DWORD),
+        ("RegionSize", ctypes.c_size_t),
+        ("State", wintypes.DWORD),
+        ("Protect", wintypes.DWORD),
+        ("Type", wintypes.DWORD),
+    ]
+
+_k32.VirtualQueryEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(MEMORY_BASIC_INFORMATION), ctypes.c_size_t]
+_k32.VirtualQueryEx.restype = ctypes.c_size_t
+
 # ================================================================
 # Offsets Caching
 # ================================================================
@@ -241,20 +256,6 @@ class RobloxManager:
             image_base = struct.unpack("<Q", base_buf.raw[:8])[0]
             
             s = scanner.FFlagScanner(pi.hProcess, image_base)
-            
-            # Define struct for VirtualQueryEx
-            class MEMORY_BASIC_INFORMATION(ctypes.Structure):
-                _fields_ = [
-                    ("BaseAddress", ctypes.c_void_p),
-                    ("AllocationBase", ctypes.c_void_p),
-                    ("AllocationProtect", wintypes.DWORD),
-                    ("RegionSize", ctypes.c_size_t),
-                    ("State", wintypes.DWORD),
-                    ("Protect", wintypes.DWORD),
-                    ("Type", wintypes.DWORD),
-                ]
-            _k32.VirtualQueryEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER(MEMORY_BASIC_INFORMATION), ctypes.c_size_t]
-            _k32.VirtualQueryEx.restype = ctypes.c_size_t
             
             # Poll until .text section is readable (no longer PAGE_NOACCESS)
             unpacked = False
@@ -479,6 +480,49 @@ class RobloxManager:
         if match:
             return self.base_address + match.start()
         return None
+
+    def write_memory_external(self, addr, data):
+        """Write raw bytes to a target address in the Roblox process."""
+        if not self._h_process:
+            if not self.open_process_for_write():
+                return False, "Cannot open process"
+        
+        size = len(data)
+        buf = ctypes.create_string_buffer(data)
+        bytes_written = ctypes.c_size_t(0)
+        
+        # Try NtWriteVirtualMemory first
+        status = _ntdll.NtWriteVirtualMemory(
+            self._h_process, ctypes.c_void_p(addr),
+            buf, ctypes.c_size_t(size), ctypes.byref(bytes_written)
+        )
+        
+        if status == 0 and bytes_written.value == size:
+            return True, f"OK|NtWrite (0x{addr:X})"
+        
+        # Fallback: VirtualProtectEx + WriteProcessMemory
+        old_protect = wintypes.DWORD(0)
+        vp_ok = _k32.VirtualProtectEx(
+            self._h_process, ctypes.c_void_p(addr),
+            ctypes.c_size_t(size), PAGE_READWRITE, ctypes.byref(old_protect)
+        )
+        
+        if vp_ok:
+            wpm_bytes = ctypes.c_size_t(0)
+            success = _k32.WriteProcessMemory(
+                self._h_process, ctypes.c_void_p(addr),
+                buf, ctypes.c_size_t(size), ctypes.byref(wpm_bytes)
+            )
+            # Restore original protection
+            restored = wintypes.DWORD(0)
+            _k32.VirtualProtectEx(
+                self._h_process, ctypes.c_void_p(addr),
+                ctypes.c_size_t(size), old_protect.value, ctypes.byref(restored)
+            )
+            if success and wpm_bytes.value == size:
+                return True, f"OK|VP+WPM (0x{addr:X})"
+        
+        return False, f"Write failed at 0x{addr:X}"
 
     def write_fps_direct(self, value):
         """Directly overwrite the TaskScheduler target FPS singleton."""
