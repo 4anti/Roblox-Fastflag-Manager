@@ -119,7 +119,7 @@ class FlagManager:
         try:
             with open(Config.HISTORY_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception:
             return []
 
     def clear_history(self):
@@ -128,7 +128,7 @@ class FlagManager:
             with open(Config.HISTORY_FILE, 'w', encoding='utf-8') as f:
                 json.dump([], f, indent=4)
             return True
-        except:
+        except Exception:
             return False
             
     def restore_history(self, timestamp: int):
@@ -218,13 +218,21 @@ class FlagManager:
             
     def _watchdog_loop(self):
         """Periodically re-applies flags to counteract engine refreshes and reversion."""
-        settings = Config.load_settings()
-        interval = settings.get("watchdog_interval", 5.0)
-        enforce_all = settings.get("enforce_all_flags", True)
-        
-        log(f"[*] Watchdog loop active (Interval: {interval}s, EnforceAll: {enforce_all})", (150, 150, 255))
+        last_settings_reload = 0
+        interval = 5.0
+        enforce_all = True
         
         while self._watchdog_running:
+            # Reload settings periodically (every 60s) so changes take effect without restart
+            now = time.time()
+            if now - last_settings_reload > 60.0:
+                settings = Config.load_settings()
+                interval = settings.get("watchdog_interval", 5.0)
+                enforce_all = settings.get("enforce_all_flags", True)
+                if last_settings_reload == 0:
+                    log(f"[*] Watchdog loop active (Interval: {interval}s, EnforceAll: {enforce_all})", (150, 150, 255))
+                last_settings_reload = now
+            
             time.sleep(interval)
             
             if not self.user_flags or not self._rm or not self._rm.is_attached:
@@ -361,7 +369,8 @@ class FlagManager:
                                     try:
                                         self._rm.open_process_for_write()
                                         self._rm.write_flag_external(fname, flag_type, int(offset_hex, 16), str(flag['original_value']))
-                                    except: pass
+                                    except Exception:
+                                        pass
 
                     # Bind/Cycle action
                     if bind and VK_MAP.get(bind) in just_pressed:
@@ -405,7 +414,8 @@ class FlagManager:
                                         self._rm.open_process_for_write()
                                         self._rm.write_flag_external(fname, flag_type, offset_int, new_val)
                                         log(f"[HOTKEY] Toggled {fname} to {new_val}", (255,100,255))
-                                    except: pass
+                                    except Exception:
+                                        pass
             
             if updated_flags:
                 self.save_user_flags()
@@ -501,6 +511,7 @@ class FlagManager:
         enabled_count = len(enabled_flags)
         total_list_count = len(flags_snapshot)
         failed_flags = []  # Flags that fail external writes
+        _originals_captured = False  # Track if we need to save after the loop
 
         for flag in flags_snapshot:
             name = flag['name']
@@ -532,7 +543,7 @@ class FlagManager:
                 orig_val = roblox_manager.read_flag_external(flag_type, offset_int)
                 if orig_val is not None:
                     flag['original_value'] = orig_val
-                    self.save_user_flags()
+                    _originals_captured = True
 
             if is_enabled:
                 value_to_write = str(flag['value'])
@@ -563,6 +574,10 @@ class FlagManager:
                 flag['_status'] = 'unavailable'
                 if is_enabled:
                     failed_flags.append(flag)
+
+        # Persist any newly captured original values in a single write
+        if _originals_captured:
+            self.save_user_flags()
 
         # The count logic: X/Y where X is successful enabled flags, Y is total enabled flags
         log(f"[=] Injection Result: {mem_ok}/{enabled_count} flags APPLIED. ({mem_reverted} reverted, {mem_skip} skipped).", 
@@ -643,7 +658,4 @@ class FlagManager:
                 
         # Start watchdog to maintain DF flags
         self.start_watchdog(roblox_manager)
-        
-        self.flags_applied = True
-        self.last_apply_time = time.time()
 

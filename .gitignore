@@ -57,7 +57,9 @@ Offsets.h
 error.log
 startup_error.log
 update_tmp/
+update_staged/
 finish_update.bat
+bootstrapper_error.log
 
 # IDEs
 .vscode/
