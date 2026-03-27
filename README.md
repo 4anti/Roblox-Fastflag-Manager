@@ -22,6 +22,7 @@ A professional, high-performance management suite designed to give you complete 
 ### Prerequisites
 - [Python 3.10+](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
+- **[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)** (Mandatory: Select "Desktop development with C++" workload during installation)
 
 ### Setup
 1. **Clone the repository:**
