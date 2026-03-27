@@ -52,6 +52,38 @@ if __name__ == "__main__":
                 f'"{self_path}"', None, 0
             )
             sys.exit()
+
+        # --- Bootstrapper: Auto-install dependencies ---
+        try:
+            import subprocess
+            import importlib.metadata
+            
+            # Packages to check (matching requirements.txt exactly)
+            required = ["requests", "pywebview", "pystray", "Pillow"]
+            missing = []
+            
+            for pkg in required:
+                try:
+                    importlib.metadata.version(pkg)
+                except importlib.metadata.PackageNotFoundError:
+                    missing.append(pkg)
+            
+            if missing:
+                # Use a simple messagebox to inform user (native win32)
+                ctypes.windll.user32.MessageBoxW(0, 
+                    f"First-time setup: Installing missing components ({', '.join(missing)}).\n\nPlease wait a moment...", 
+                    "FFlag Manager - Setup", 0x40) # 0x40 = MB_ICONINFORMATION
+                
+                # Run pip install silently
+                # --no-warn-script-location and --disable-pip-version-check to reduce noise
+                subprocess.check_call([sys.executable, "-m", "pip", "install", *missing, "--quiet", "--no-warn-script-location"])
+                
+                # Restart app to ensure all new modules are available in current process
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+        except Exception as boot_err:
+            # If bootstrapper fails, we still try to run main() (it might just be a metadata check error)
+            with open("bootstrapper_error.log", "w") as f:
+                f.write(f"Bootstrapper Error: {boot_err}\n")
         
         main()
     except Exception as e:
