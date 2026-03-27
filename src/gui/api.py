@@ -5,6 +5,7 @@ import threading
 import ctypes
 from ctypes import wintypes
 import webview
+from src.utils.updater import check_for_updates, stage_silent_update
 from src.utils.logger import log, get_logs
 from src.utils.config import Config
 from src.utils.helpers import infer_type, infer_type_from_name, clean_flag_name, get_flag_prefix, get_default_value
@@ -65,6 +66,21 @@ class Api:
         if self.flag_manager:
             self.flag_manager.start_hotkey_listener(self.roblox_manager)
         threading.Thread(target=self._monitor_loop, daemon=True).start()
+        threading.Thread(target=self._update_loop, daemon=True).start()
+
+    def _update_loop(self):
+        \"\"\"Background thread: Check for updates every 5 minutes and stage them silently.\"\"\"
+        while True:
+            try:
+                has_update, zip_url, remote_version = check_for_updates()
+                if has_update and zip_url:
+                    # Found update! Stage it silently
+                    stage_silent_update(zip_url, remote_version)
+            except Exception as e:
+                log(f\"[!] Background update loop error: {e}\", (255, 100, 100))
+            
+            # Sleep for 5 minutes (300 seconds)
+            time.sleep(300)
 
     def _init_offsets(self):
         """Background thread: load flag offsets without blocking UI."""

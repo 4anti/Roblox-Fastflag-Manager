@@ -55,6 +55,11 @@ if __name__ == "__main__":
 
         # --- Bootstrapper: Auto-install dependencies ---
         try:
+            from src.utils.updater import apply_staged_update
+            # Apply any background-downloaded updates first
+            if apply_staged_update():
+                sys.exit(0)
+
             import subprocess
             import importlib.metadata
             
