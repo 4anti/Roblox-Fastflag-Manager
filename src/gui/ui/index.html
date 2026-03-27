@@ -5054,30 +5054,13 @@
 
       async function importFromClipboard() {
           closeContextMenu();
-          try {
-              let text = '';
-              if (navigator.clipboard && navigator.clipboard.readText) {
-                  text = await navigator.clipboard.readText();
-              } else {
-                  text = prompt("Please paste your Base64 or JSON string here:");
-              }
-              if (!text) return;
-              
-              const res = await pywebview.api.import_preset_clipboard(text);
-              if (res && res[0]) {
-                  loadPresets();
-              } else {
-                  alert("Import Failed: " + (res ? res[1] : "Unknown Error"));
-              }
-          } catch(err) {
-              const text = prompt("Automatic clipboard access denied. Please paste your Base64 or JSON string here:");
-              if (!text) return;
-              const res = await pywebview.api.import_preset_clipboard(text);
-              if (res && res[0]) {
-                  loadPresets();
-              } else {
-                  alert("Import Failed: " + (res ? res[1] : "Unknown Error"));
-              }
+          const text = await showLargeInputModal('Import Preset from Clipboard', 'Paste your Base64 string or JSON code here...');
+          if (!text || text === '__FILE__') return;
+          const res = await pywebview.api.import_preset_clipboard(text);
+          if (res && res[0]) {
+              loadPresets();
+          } else {
+              alert("Import Failed: " + (res ? res[1] : "Unknown Error"));
           }
       }
 
