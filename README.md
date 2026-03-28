@@ -72,8 +72,8 @@ A professional, high-performance management suite designed to give you complete 
 
 ## 🎮 How to Use
 
-1. **Search**: Use the search bar to find specific FFlags or browse categories.
-2. **Presets**: Drag and drop presets to reorder priority. High-priority presets override lower ones.
+1. **Search**: Use the search bar to find specific FFlags or browse categories!
+2. **Presets**: Drag and drop presets, reorder them, share them!
 3. **Keybinds**: Assign hotkeys to toggle specific flags or presets instantly while in-game.
 4. **Apply**: Click the 'Apply' button to inject settings into your Roblox client.
 
