@@ -80,10 +80,62 @@ class FlagManager:
                     
             with open(Config.USER_FLAGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(clean_flags, f, indent=4)
+            
+            # Pre-emptive Sync: Update ClientAppSettings.json immediately
+            # This ensures that browser-launches have the correct flags even before RFM detects the process.
+            settings = Config.load_settings()
+            if settings.get('auto_apply', False):
+                threading.Thread(target=self.sync_json_to_roblox, daemon=True).start()
+                
             return True
         except Exception as e:
             log(f"Failed to save flags: {e}", (255, 100, 100))
             return False
+
+    def sync_json_to_roblox(self, roblox_manager=None):
+        """Pre-emptively write enabled flags to ClientAppSettings.json.
+        
+        This happens even if Roblox is not running, ensuring that the next 
+        launch (including browser launches) picks up the correct flags.
+        """
+        try:
+            if not roblox_manager:
+                from src.core.roblox_manager import RobloxManager
+                roblox_manager = RobloxManager
+                
+            with self._lock:
+                flags_snapshot = list(self.user_flags)
+                
+            if not flags_snapshot:
+                return
+                
+            flags_dict = {}
+            for flag in flags_snapshot:
+                if not flag.get('enabled', True):
+                    continue
+                    
+                name = flag['name']
+                val_str = str(flag['value'])
+                ftype = flag.get('type', 'string')
+                
+                if ftype == 'bool':
+                    val = val_str.lower() in ('true', '1', 'yes')
+                elif ftype == 'int':
+                    try: val = int(val_str)
+                    except ValueError: val = 0
+                elif ftype == 'float':
+                    try: val = float(val_str)
+                    except ValueError: val = 0.0
+                else:
+                    val = val_str
+                    
+                flags_dict[name] = val
+            
+            # This writes to the latest version directory's ClientSettings/ClientAppSettings.json
+            return roblox_manager.apply_fflags_json(flags_dict)
+        except Exception as e:
+            # Silent fail for pre-emptive sync to avoid spamming logs if Roblox isn't installed
+            return False, str(e)
 
     def save_history_snapshot(self, action: str, limit: int):
         """Append the current flag configuration to the history, enforcing the limit."""
@@ -155,6 +207,13 @@ class FlagManager:
                 self.all_offsets = {name: int(offset, 16) if isinstance(offset, str) else offset for name, offset in offsets.items()}
                 self.preset_flags_list = sorted(list(self.all_offsets.keys()))
                 self.offsets_loaded = True
+                
+                # Update initial status for all existing flags (fixes startup question marks)
+                with self._lock:
+                    for f in self.user_flags:
+                        # Clear 'unavailable' status for flags that now have valid discovered offsets
+                        if r_man.RobloxManager.get_offset_for_flag(f['name']):
+                            f['_status'] = None
                 
                 # Fetch official types seamlessly in background
                 threading.Thread(target=self._fetch_official_types, daemon=True).start()
