@@ -12,7 +12,19 @@ A professional, high-performance management suite designed to give you complete 
 
 ---
 
-## ✨ Showcase
+## 📑 Table of Contents
+- [✨ Showcase](#showcase)
+- [✨ Key Features](#key-features)
+- [📥 Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Setup](#setup)
+- [🎮 How to Use](#how-to-use)
+- [💬 Community & Support](#community--support)
+- [⚖️ License](#license)
+
+---
+
+## <a name="showcase"></a>✨ Showcase
 
 <details open>
   <summary><b>View Features in Action</b></summary>
@@ -37,7 +49,7 @@ A professional, high-performance management suite designed to give you complete 
 
 ---
 
-## ✨ Key Features
+## <a name="key-features"></a>✨ Key Features
 
 - **⚡ Instant Indexing**: Search through thousands of FFlags in milliseconds.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
@@ -46,31 +58,31 @@ A professional, high-performance management suite designed to give you complete 
 - **🎨 Premium Themes**: Modern, sleek interface with multiple themes (Glass, Ignite, Matrix).
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 
-## 📥 Installation
+## <a name="installation"></a>📥 Installation
 
-### Prerequisites
+### <a name="prerequisites"></a>Prerequisites
 - [Python 3.10+](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
 - **[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)** (Mandatory: Select "Desktop development with C++" workload during installation)
 
-### Setup
+### <a name="setup"></a>Setup
 1. **Clone the repository:**
-   ```bash
+```bash
    git clone https://github.com/4anti/Roblox-Fastflag-Manager.git
    cd Roblox-Fastflag-Manager
-   ```
+```
 
 2. **Install dependencies:**
-   ```bash
+```bash
    pip install -r requirements.txt
-   ```
+```
 
 3. **Run the application:**
-   ```bash
+```bash
    python main.pyw
-   ```
+```
 
-## 🎮 How to Use
+## <a name="how-to-use"></a>🎮 How to Use
 
 1. **Search**: Use the search bar to find specific FFlags or browse categories!
 2. **Presets**: Drag and drop presets, reorder them, share them!
@@ -78,12 +90,12 @@ A professional, high-performance management suite designed to give you complete 
 4. **Apply**: Click the 'Apply' button to inject settings into your Roblox client.
 
 
-## 💬 Community & Support
+## <a name="community--support"></a>💬 Community & Support
 Join our official Discord for support, sharing presets, and community discussions:
 
 [**Join the Discord Server**](https://discord.gg/ECekjAkQu7)
 
-## ⚖️ License
+## <a name="license"></a>⚖️ License
 This project is open-sourced under the MIT License. See `LICENSE` for details.
 
 ---
