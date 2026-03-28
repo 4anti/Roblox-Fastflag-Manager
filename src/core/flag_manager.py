@@ -6,7 +6,6 @@ import threading
 from src.utils.config import Config
 from src.utils.logger import log
 from src.utils.helpers import infer_type, clean_flag_name
-from src.utils.updater import update_fflags
 
 class FlagManager:
     def __init__(self):

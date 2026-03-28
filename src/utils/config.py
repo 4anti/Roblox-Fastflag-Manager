@@ -11,7 +11,7 @@ class Config:
     PRESETS_FILE = APP_DIR / "presets.json"
     HISTORY_FILE = APP_DIR / "fflags_history.json"
     LAST_VERSION_FILE = APP_DIR / "last_version.txt"
-    FFLAGS_FILE = "FFlags.h" # Local to executable/script
+    FFLAGS_FILE = APP_DIR / "FFlags.h"
 
     DEFAULT_SETTINGS = {
         "auto_apply": False,

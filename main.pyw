@@ -13,10 +13,10 @@ def main():
     try:
         # --- Silent Update Check ---
         try:
-            has_update, zip_url, new_version = check_for_updates()
-            if has_update and zip_url:
+            has_update, exe_url, new_version = check_for_updates()
+            if has_update and exe_url:
                 log(f"[*] Update available: v{new_version}. Applying silently...", (100, 255, 100))
-                perform_silent_update(zip_url, new_version)
+                perform_silent_update(exe_url, new_version)
         except Exception as update_err:
             log(f"[!] Update check skipped: {update_err}", (255, 100, 100))
 
@@ -55,41 +55,45 @@ if __name__ == "__main__":
 
         # --- Bootstrapper: Auto-install dependencies ---
         try:
-            from src.utils.updater import apply_staged_update
-            # Apply any background-downloaded updates first
-            if apply_staged_update():
-                sys.exit(0)
+            if getattr(sys, 'frozen', False):
+                # We are running as an EXE. All dependencies are already bundled.
+                pass
+            else:
+                from src.utils.updater import apply_staged_update
+                # Apply any background-downloaded updates first
+                if apply_staged_update():
+                    sys.exit(0)
 
-            import subprocess
-            import importlib.metadata
-            
-            # Packages to check (matching requirements.txt exactly)
-            required = ["requests", "pywebview", "pystray", "Pillow"]
-            missing = []
-            
-            for pkg in required:
-                try:
-                    importlib.metadata.version(pkg)
-                except importlib.metadata.PackageNotFoundError:
-                    missing.append(pkg)
-            
-            if missing:
-                # Use a simple messagebox to inform user (native win32)
-                ctypes.windll.user32.MessageBoxW(0, 
-                    f"First-time setup: Installing missing components ({', '.join(missing)}).\n\nPlease wait a moment...", 
-                    "FFlag Manager - Setup", 0x40) # 0x40 = MB_ICONINFORMATION
+                import subprocess
+                import importlib.metadata
                 
-                # Run pip install silently
-                # --no-warn-script-location and --disable-pip-version-check to reduce noise
-                subprocess.check_call([sys.executable, "-m", "pip", "install", *missing, "--quiet", "--no-warn-script-location"])
+                # Packages to check (matching requirements.txt exactly)
+                required = ["requests", "pywebview", "pystray", "Pillow"]
+                missing = []
                 
-                # Restart app to ensure all new modules are available in current process
-                # Use subprocess instead of os.execv to avoid Windows mutex race condition
-                # (os.execv spawns before the old process dies, triggering the single-instance check)
-                if mutex:
-                    ctypes.windll.kernel32.CloseHandle(mutex)
-                subprocess.Popen([sys.executable] + sys.argv)
-                sys.exit(0)
+                for pkg in required:
+                    try:
+                        importlib.metadata.version(pkg)
+                    except importlib.metadata.PackageNotFoundError:
+                        missing.append(pkg)
+                
+                if missing:
+                    # Use a simple messagebox to inform user (native win32)
+                    ctypes.windll.user32.MessageBoxW(0, 
+                        f"First-time setup: Installing missing components ({', '.join(missing)}).\n\nPlease wait a moment...", 
+                        "FFlag Manager - Setup", 0x40) # 0x40 = MB_ICONINFORMATION
+                    
+                    # Run pip install silently
+                    # --no-warn-script-location and --disable-pip-version-check to reduce noise
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", *missing, "--quiet", "--no-warn-script-location"])
+                    
+                    # Restart app to ensure all new modules are available in current process
+                    # Use subprocess instead of os.execv to avoid Windows mutex race condition
+                    # (os.execv spawns before the old process dies, triggering the single-instance check)
+                    if mutex:
+                        ctypes.windll.kernel32.CloseHandle(mutex)
+                    subprocess.Popen([sys.executable] + sys.argv)
+                    sys.exit(0)
         except Exception as boot_err:
             # If bootstrapper fails, we still try to run main() (it might just be a metadata check error)
             with open("bootstrapper_error.log", "w") as f:
