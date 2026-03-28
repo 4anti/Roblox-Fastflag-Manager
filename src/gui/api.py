@@ -27,6 +27,7 @@ class Api:
         self._init_error = None
         self.processed_pids = set()
         self.update_ready = False
+        self._last_offsets_loaded_state = False
 
         # Initialize subsystems with error recovery — UI must always load
         try:
@@ -1039,9 +1040,16 @@ class Api:
         rm = self.roblox_manager
         needs_refresh = False
         if fm:
-            needs_refresh = fm.last_apply_time > self._last_apply_time
-            if needs_refresh:
+            # Check for scanner completion (removes startup question marks)
+            if fm.offsets_loaded and not self._last_offsets_loaded_state:
+                self._last_offsets_loaded_state = True
+                needs_refresh = True
+                log("[*] Scanner finished, updating UI with recognized flags", (100, 255, 100))
+
+            # Check for manual application
+            if fm.last_apply_time > self._last_apply_time:
                 self._last_apply_time = fm.last_apply_time
+                needs_refresh = True
         return {
             'attached': bool(rm and rm.is_attached),
             'pid': (rm.pid or 0) if rm else 0,
