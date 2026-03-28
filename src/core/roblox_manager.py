@@ -315,47 +315,88 @@ class RobloxManager:
         return None
 
     @staticmethod
-    def get_roblox_version_dir():
-        """Find the latest Roblox version directory."""
+    def get_all_roblox_version_dirs():
+        """Find ALL valid Roblox version directories found on the system."""
         local = os.environ.get("LOCALAPPDATA", "")
-        versions_dir = os.path.join(local, "Roblox", "Versions")
-        if not os.path.isdir(versions_dir):
-            return None
+        
+        # STEP 1: Known Launcher Root Search
+        roots = [
+            os.path.join(local, "Roblox", "Versions"),
+            os.path.join(local, "Bloxstrap", "Versions"),
+            os.path.join(local, "Voidstrap", "RblxVersions"),
+            os.path.join(local, "Fishstrap", "Versions"),
+            os.path.join(local, "Froststrap", "Versions"),
+            os.path.join(local, "Plexity", "Versions")
+        ]
         
         candidates = []
-        for d in os.listdir(versions_dir):
-            exe = os.path.join(versions_dir, d, "RobloxPlayerBeta.exe")
-            if os.path.exists(exe):
-                candidates.append(os.path.join(versions_dir, d))
+        for vdir_root in roots:
+            if not os.path.isdir(vdir_root):
+                continue
+            for d in os.listdir(vdir_root):
+                path = os.path.join(vdir_root, d)
+                if os.path.isdir(path):
+                    # Check for executables (Beta or standard)
+                    if any(os.path.exists(os.path.join(path, f)) for f in ["RobloxPlayerBeta.exe", "RobloxPlayer.exe"]):
+                        candidates.append(path)
         
+        # Also check current running process for an active path
+        try:
+            hwnd = ctypes.windll.user32.FindWindowW(None, "Roblox")
+            if hwnd:
+                pid = ctypes.c_ulong(0)
+                ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value > 0:
+                    h_proc = _k32.OpenProcess(0x1000 | 0x0010, False, pid.value)
+                    if h_proc:
+                        exe_path = (ctypes.c_wchar * 260)()
+                        size = ctypes.c_uint(260)
+                        if ctypes.windll.kernel32.QueryFullProcessImageNameW(h_proc, 0, exe_path, ctypes.byref(size)):
+                            vdir = os.path.dirname(exe_path.value)
+                            if os.path.isdir(vdir) and vdir not in candidates:
+                                candidates.append(vdir)
+                        _k32.CloseHandle(h_proc)
+        except Exception:
+            pass
+            
+        return candidates
+
+    @staticmethod
+    def get_roblox_version_dir():
+        """Find the single best (most recent) Roblox version directory."""
+        candidates = RobloxManager.get_all_roblox_version_dirs()
         if not candidates:
             return None
+            
+        # Sort by most recently used/modified
         candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
         return candidates[0]
 
     @staticmethod
     def apply_fflags_json(flags_dict):
-        """Write FFlags to ClientAppSettings.json (standard method).
+        """Write FFlags to ClientAppSettings.json across ALL detected versions (Scatter-Sync)."""
+        vdirs = RobloxManager.get_all_roblox_version_dirs()
+        if not vdirs:
+            return False, "No Roblox version directories found"
+
+        success_count = 0
+        errors = []
         
-        This is the primary safe method. It applies ALL flags including strings,
-        but requires Roblox to be launched AFTER the file is written.
-        """
-        version_dir = RobloxManager.get_roblox_version_dir()
-        if not version_dir:
-            return False, "Cannot find Roblox version directory"
+        for vdir in vdirs:
+            settings_dir = os.path.join(vdir, "ClientSettings")
+            settings_file = os.path.join(settings_dir, "ClientAppSettings.json")
             
-        settings_dir = os.path.join(version_dir, "ClientSettings")
-        settings_file = os.path.join(settings_dir, "ClientAppSettings.json")
+            try:
+                os.makedirs(settings_dir, exist_ok=True)
+                with open(settings_file, 'w', encoding='utf-8') as f:
+                    json.dump(flags_dict, f, indent=4)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{os.path.basename(vdir)}: {e}")
         
-        try:
-            os.makedirs(settings_dir, exist_ok=True)
-            
-            with open(settings_file, 'w', encoding='utf-8') as f:
-                json.dump(flags_dict, f, indent=4)
-                
-            return True, f"Wrote {len(flags_dict)} flags to ClientAppSettings.json"
-        except Exception as e:
-            return False, f"Error writing settings: {e}"
+        if success_count > 0:
+            return True, f"Synced flags to {success_count} Roblox versions"
+        return False, f"Failed to write to any versions: {', '.join(errors)}"
 
     # ================================================================
     # Instance methods

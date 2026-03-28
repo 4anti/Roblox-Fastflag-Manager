@@ -10,6 +10,7 @@ __pycache__/
 env/
 venv/
 ENV/
+.pytest_cache/
 
 # PyInstaller / Build Folders (Crucial for clean builds)
 build/
@@ -44,3 +45,9 @@ unwanted/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Developer / Verification Scripts
+verify_*.py
+test_discovery.py
+*.tmp
+/tmp/
