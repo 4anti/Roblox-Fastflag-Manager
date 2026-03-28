@@ -293,9 +293,26 @@ class RobloxManager:
 
     @staticmethod
     def get_offset_for_flag(flag_name):
-        """Get the RVA hex offset for a specific flag name."""
+        """Get the RVA hex offset for a specific flag name.
+        Handles prefixed/unprefixed variations by normalizing to 'clean' names.
+        """
         offsets = RobloxManager.fetch_offsets()
-        return offsets.get(flag_name)
+        if not offsets:
+            return None
+            
+        # Direct match (fastest/primary)
+        if flag_name in offsets:
+            return offsets[flag_name]
+            
+        # Fuzzy match: try to find by normalized name
+        from src.utils.helpers import clean_flag_name
+        clean_target = clean_flag_name(flag_name)
+        
+        for full_name, offset in offsets.items():
+            if clean_flag_name(full_name) == clean_target:
+                return offset
+                
+        return None
 
     @staticmethod
     def get_roblox_version_dir():

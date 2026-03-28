@@ -514,7 +514,11 @@ class FlagManager:
 
         for flag in flags_snapshot:
             name = flag['name']
-            flag_type = flag.get('type', 'string')
+            
+            # Phase 3: Final JIT Type Defense (Source of truth: Name)
+            from src.utils.helpers import infer_type_from_name
+            flag_type = infer_type_from_name(name) or flag.get('type', 'string')
+            
             is_enabled = flag.get('enabled', True)
             
             # Skip string flags — can't write to fixed-size memory
