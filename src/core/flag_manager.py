@@ -156,6 +156,13 @@ class FlagManager:
                 self.preset_flags_list = sorted(list(self.all_offsets.keys()))
                 self.offsets_loaded = True
                 
+                # Update initial status for all existing flags (fixes startup question marks)
+                with self._lock:
+                    for f in self.user_flags:
+                        # Clear 'unavailable' status for flags that now have valid discovered offsets
+                        if r_man.RobloxManager.get_offset_for_flag(f['name']):
+                            f['_status'] = None
+                
                 # Fetch official types seamlessly in background
                 threading.Thread(target=self._fetch_official_types, daemon=True).start()
                 
