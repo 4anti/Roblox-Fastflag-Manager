@@ -1,28 +1,27 @@
 import os
-import shutil
 import subprocess
 import sys
 import json
 import requests
-import zipfile
-import io
 from src.utils.logger import log
 
-OUTPUT_FILE = "FFlags.h"
 VERSION_FILE = "version.json"
 GITHUB_API = "https://api.github.com/repos/4anti/Roblox-Fastflag-Manager/releases/latest"
 
 def get_current_version():
     """Read local version from version.json."""
     try:
-        with open(VERSION_FILE, "r") as f:
+        # If in EXE, version.json is bundled
+        from src.utils.helpers import get_resource_path
+        v_path = get_resource_path(VERSION_FILE)
+        with open(v_path, "r") as f:
             data = json.load(f)
             return data.get("version", "0.0.0")
     except:
         return "0.0.0"
 
 def check_for_updates():
-    """Check GitHub for a newer version. Returns (has_update, download_url, version_str)"""
+    """Check GitHub for a newer version. Returns (has_update, exe_url, version_str)"""
     try:
         response = requests.get(GITHUB_API, timeout=5)
         if response.status_code == 200:
@@ -35,89 +34,69 @@ def check_for_updates():
                 local_parts = tuple(map(int, local_version.split('.')))
                 has_update = remote_parts > local_parts
             except Exception:
-                # Fallback to simple string mismatch if tags aren't standard formatting
                 has_update = remote_version != local_version
             
             if has_update:
-                zip_url = data.get("zipball_url")
-                return True, zip_url, remote_version
+                # Look for the Setup.exe in assets (case-insensitive)
+                exe_url = None
+                for asset in data.get("assets", []):
+                    asset_name = asset.get("name", "").lower()
+                    if asset_name.endswith(".exe") and ("setup" in asset_name or "installer" in asset_name):
+                        exe_url = asset.get("browser_download_url")
+                        break
+                
+                if not exe_url:
+                    log(f"[*] Update v{remote_version} found, but no Setup.exe asset was found on GitHub.", (255, 200, 100))
+                
+                return True, exe_url, remote_version
     except Exception as e:
         log(f"[!] Update check failed: {e}", (255, 100, 100))
     return False, None, None
 
-def perform_silent_update(zip_url, new_version):
-    """Download and stage an update to be applied on next manual restart or user confirmation."""
+def perform_silent_update(exe_url, new_version):
+    """Download the Setup.exe and launch it for a one-click update."""
+    if not exe_url:
+        log("[!] Update URL not found. Manual update required.", (255, 100, 100))
+        return False
+
     try:
-        log(f"[*] Update v{new_version} found! Downloading in background...", (100, 255, 100))
-        r = requests.get(zip_url, timeout=60)
+        log(f"[*] Downloading Setup for v{new_version}...", (100, 255, 100))
+        r = requests.get(exe_url, timeout=120)
         if r.status_code != 200:
-            log(f"[!] Update download returned HTTP {r.status_code}", (255, 100, 100))
             return False
 
-        # Basic integrity: verify we got a non-trivial amount of data
-        content_length = r.headers.get('Content-Length')
-        if content_length and abs(int(content_length) - len(r.content)) > 100:
-            log(f"[!] Update download size mismatch (expected {content_length}, got {len(r.content)})", (255, 100, 100))
-            return False
-        if len(r.content) < 1024:
-            log(f"[!] Update download too small ({len(r.content)} bytes), likely corrupt", (255, 100, 100))
-            return False
-
-        # Validate ZIP before extracting
-        try:
-            z = zipfile.ZipFile(io.BytesIO(r.content))
-            if z.testzip() is not None:
-                log("[!] Update ZIP failed integrity check", (255, 100, 100))
-                return False
-        except zipfile.BadZipFile:
-            log("[!] Update download is not a valid ZIP file", (255, 100, 100))
-            return False
-
-        # Use a temporary directory for extraction
-        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "update_staged")
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        os.makedirs(temp_dir)
-
-        z.extractall(temp_dir)
+        # Save to Temp folder
+        temp_setup = os.path.join(os.environ.get("TEMP", "."), f"Setup_FFM_{new_version}.exe")
+        with open(temp_setup, "wb") as f:
+            f.write(r.content)
         
-        log(f"[+] Update v{new_version} downloaded and ready for next restart!", (100, 255, 100))
-        return True
+        log(f"[+] Launching One-Click Installer...", (100, 255, 100))
+        
+        # /VERYSILENT: Install without user interaction
+        # /SUPPRESSMSGBOXES: Don't show errors
+        # /NORESTART: Don't restart Windows
+        subprocess.Popen([temp_setup, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        
+        # We must exit immediately so the installer can overwrite FFM.exe
+        log("[*] Restarting app to apply update...", (100, 255, 100))
+        os._exit(0)
+        
     except Exception as e:
-        log(f"[!] Background update failed: {e}", (255, 100, 100))
+        log(f"[!] Update failed: {e}", (255, 100, 100))
         return False
 
 def apply_staged_update():
-    """If a staged update exists, create a batch script to apply it and restart."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    temp_dir = os.path.join(base_dir, "update_staged")
-    
-    if not os.path.exists(temp_dir):
-        return False
-        
-    try:
-        # ZIPs from GitHub usually have a root folder like 'repo-name-hash'
-        root_folder = os.path.join(temp_dir, os.listdir(temp_dir)[0])
-        
-        updater_bat = os.path.join(base_dir, "finish_update.bat")
-        with open(updater_bat, "w") as f:
-            f.write(f"@echo off\n")
-            f.write(f"timeout /t 2 /nobreak > nul\n") # Wait for app to close
-            f.write(f"xcopy /s /y /e \"{root_folder}\\*\" \"{base_dir}\\\"\n")
-            f.write(f"rd /s /q \"{temp_dir}\"\n")
-            f.write(f"start \"\" \"{sys.executable}\" \"{os.path.join(base_dir, 'main.pyw')}\"\n")
-            f.write(f"del \"%~f0\"\n") # Self delete
-
-        subprocess.Popen(["cmd", "/c", updater_bat])
-        return True
-    except Exception as e:
-        log(f"[!] Error applying staged update: {e}", (255, 100, 100))
-        return False
+    """Legacy function - not needed with Inno Setup but kept for main.pyw compatibility."""
+    return False
 
 def update_fflags():
-    """The existing local scanner logic (keep for functionality)"""
+    """Restored function for local scanning. Returns False in EXE mode as scripts aren't bundled."""
+    if getattr(sys, 'frozen', False):
+        return False
+        
     log(f"[*] Executing Local FFlag Offset Scanner...", (100, 255, 255))
     try:
+        import shutil
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         script_dir = os.path.join(base_dir, "Roblox FFlags Offset Finder")
         script_path = os.path.join(script_dir, "fflag_discovery.py")
@@ -136,7 +115,8 @@ def update_fflags():
         
         generated_file = os.path.join(script_dir, "Offsets.h")
         if os.path.exists(generated_file):
-            shutil.copy(generated_file, os.path.join(base_dir, OUTPUT_FILE))
+            from src.utils.config import Config
+            shutil.copy(generated_file, str(Config.FFLAGS_FILE))
             return True
     except Exception as e:
         log(f"[!] FFlag update failed: {e}", (255, 100, 100))

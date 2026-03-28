@@ -4,14 +4,15 @@ import webview
 import pystray
 from PIL import Image, ImageDraw
 from src.gui.api import Api
+from src.utils.helpers import get_resource_path
 
 
 class MainWindow:
     def __init__(self):
         self.api = Api()
 
-        # Path to HTML UI
-        ui_path = os.path.join(os.path.dirname(__file__), 'ui', 'index.html')
+        # Path to HTML UI using resource resolver
+        ui_path = get_resource_path(os.path.join('src', 'gui', 'ui', 'index.html'))
         
         # Create the pywebview window
         # Check launch_minimized setting for initial visibility

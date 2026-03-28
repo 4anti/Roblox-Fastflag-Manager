@@ -73,11 +73,14 @@ class Api:
         """Background thread: Check for updates every 10 minutes and stage them silently."""
         while True:
             try:
-                has_update, zip_url, remote_version = check_for_updates()
-                if has_update and zip_url:
-                    # Found update! Stage it silently
-                    if perform_silent_update(zip_url, remote_version):
-                        self.update_ready = True
+                has_update, exe_url, remote_version = check_for_updates()
+                if has_update:
+                    if exe_url:
+                        # Found update! Stage it silently
+                        if perform_silent_update(exe_url, remote_version):
+                            self.update_ready = True
+                    else:
+                        log(f"[*] Update v{remote_version} is available on GitHub, but the Installer (.exe) is missing from the release assets.", (255, 200, 100))
             except Exception as e:
                 log(f"[!] Background update loop error: {e}", (255, 100, 100))
             
