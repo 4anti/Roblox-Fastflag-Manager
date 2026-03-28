@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Roblox FFlag Manager"
-#define MyAppVersion "3.1.0"
+#define MyAppVersion "3.3.0"
 #define MyAppPublisher "4anti"
 #define MyAppURL "https://github.com/4anti/Roblox-Fastflag-Manager"
 #define MyAppExeName "FFM.exe"
