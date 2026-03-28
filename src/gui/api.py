@@ -64,6 +64,10 @@ class Api:
         # Load offsets in background thread (not on main thread!)
         threading.Thread(target=self._init_offsets, daemon=True).start()
 
+        # Pre-emptive Sync on Startup: Ensure ClientAppSettings.json is ready for browser launches
+        if self.flag_manager and self.settings.get('auto_apply', False):
+            threading.Thread(target=self.flag_manager.sync_json_to_roblox, args=(self.roblox_manager,), daemon=True).start()
+
         # Start background monitor thread
         if self.flag_manager:
             self.flag_manager.start_hotkey_listener(self.roblox_manager)
