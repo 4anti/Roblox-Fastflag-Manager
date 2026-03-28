@@ -14,7 +14,7 @@ def get_resource_path(relative_path):
 
 def infer_type(value):
     lower_value = str(value).lower().strip()
-    if lower_value in ['true', 'false']:
+    if lower_value in ['true', 'false', 'yes', 'no', '1', '0']:
         return 'bool'
     try:
         if '.' in lower_value:
@@ -33,6 +33,7 @@ _PREFIX_TYPE_MAP = [
     ('DFFlag', 'bool'),
     ('SFFlag', 'bool'),
     ('FFlag',  'bool'),
+    ('GFFlag', 'bool'),
     ('DFInt',  'int'),
     ('SFInt',  'int'),
     ('FInt',   'int'),
@@ -41,6 +42,7 @@ _PREFIX_TYPE_MAP = [
     ('DFString', 'string'),
     ('SFString', 'string'),
     ('FString',  'string'),
+    ('Debug',    'bool'),
 ]
 
 def infer_type_from_name(full_flag_name):
@@ -55,7 +57,10 @@ def infer_type_from_name(full_flag_name):
 
 
 def clean_flag_name(flag_name):
-    prefixes = ['DFFlag', 'SFFlag', 'FFlag', 'DFInt', 'SFInt', 'FInt', 'DFLog', 'FLog', 'DFString', 'SFString', 'FString']
+    prefixes = [p[0] for p in _PREFIX_TYPE_MAP]
+    
+    # Sort by length descending to match longest prefix first (e.g. DFString before DF)
+    prefixes.sort(key=len, reverse=True)
     
     for prefix in prefixes:
         if flag_name.startswith(prefix):
@@ -66,7 +71,9 @@ def clean_flag_name(flag_name):
 
 def get_flag_prefix(full_flag_name):
     """Return just the prefix portion of a flag name (e.g. 'FInt' from 'FIntSomeFlag')."""
-    prefixes = ['DFFlag', 'SFFlag', 'FFlag', 'DFInt', 'SFInt', 'FInt', 'DFLog', 'FLog', 'DFString', 'SFString', 'FString']
+    prefixes = [p[0] for p in _PREFIX_TYPE_MAP]
+    prefixes.sort(key=len, reverse=True)
+    
     for prefix in prefixes:
         if full_flag_name.startswith(prefix):
             return prefix

@@ -241,6 +241,7 @@ class Api:
         
         return [{
             'name': f['name'],
+            'display_name': clean_flag_name(f['name']),
             'value': str(f.get('value', '')),
             'type': f.get('type', 'string'),
             'status': f.get('_status', None),
@@ -249,7 +250,7 @@ class Api:
             'bind': f.get('bind', ''),
             'unapply_bind': f.get('unapply_bind', ''),
             'cycle_states': f.get('cycle_states', []),
-            'prefix': self.flag_manager.official_prefixes.get(f['name'], '')
+            'prefix': self.flag_manager.official_prefixes.get(f['name'], '') or get_flag_prefix(f['name'])
         } for f in self.flag_manager.user_flags]
 
     def validate_flag_value(self, name, value):
@@ -278,49 +279,49 @@ class Api:
         """Add a flag to user configuration with type validation."""
         if not self.flag_manager:
             return {'ok': False, 'error': 'Not ready'}
-        clean = clean_flag_name(name)
-        if any(f['name'] == clean for f in self.flag_manager.user_flags):
-            log(f"[-] Flag already added: {clean}", (255, 176, 32))
-            return {'ok': False, 'error': f'{clean} is already in your configuration'}
         
-        # Validate value against expected type
+        # We store the name EXACTLY as provided to preserve prefixes required for JSON/Memory.
+        # Duplicate checking is done using normalized (cleaned) names.
+        clean_new = clean_flag_name(name)
+        with self.flag_manager._lock:
+            if any(clean_flag_name(f['name']) == clean_new for f in self.flag_manager.user_flags):
+                log(f"[-] Flag already added: {name}", (255, 176, 32))
+                return {'ok': False, 'error': f'{name} (or a variant) is already in your configuration'}
+        
+        # Validate value against expected type (uses full name if possible)
         ok, err = self.validate_flag_value(name, value)
         if not ok:
             log(f"[-] {err}", (255, 100, 100))
             return {'ok': False, 'error': err}
+            
         # Prefer prefix-based type detection, fall back to value guessing
         flag_type = infer_type_from_name(name) or infer_type(value)
-        self.flag_manager.save_history_snapshot(f"Before adding {clean}", self.settings.get('history_limit', 30))
+        self.flag_manager.save_history_snapshot(f"Before adding {name}", self.settings.get('history_limit', 30))
         
         new_flag = {
-            'name': clean,
-            'value': value,
+            'name': name,
+            'value': str(value),
             'type': flag_type,
             'enabled': True
         }
         
         # Proactive Original Value Capture
         if self.roblox_manager and self.roblox_manager.is_attached:
-            offset = self.roblox_manager.get_offset_for_flag(clean)
+            offset = self.roblox_manager.get_offset_for_flag(name)
             if offset:
-                # Read precisely what the game has right now
                 orig = self.roblox_manager.read_flag_external(flag_type, int(offset, 16))
                 if orig is not None:
                     new_flag['original_value'] = orig
-                    log(f"[*] Captured original value for {clean}: {orig}")
+                    log(f"[*] Captured original value for {name}: {orig}")
         
         if 'original_value' not in new_flag:
-            # Fallback to hardcoded defaults or best-guess from prefix (e.g. FFlag -> false, FInt -> 0)
-            new_flag['original_value'] = get_default_value(clean)
+            new_flag['original_value'] = get_default_value(name)
 
         with self.flag_manager._lock:
-            # Check for duplicates again under lock
-            if any(f['name'] == clean for f in self.flag_manager.user_flags):
-                return {'ok': False, 'error': f'{clean} is already in your configuration'}
             self.flag_manager.user_flags.append(new_flag)
             
         self.flag_manager.save_user_flags()
-        log(f"[+] Added {clean} (type: {flag_type})")
+        log(f"[+] Added {name} (type: {flag_type})")
         if self.settings.get('auto_apply'): self.inject()
         return {'ok': True}
 
@@ -342,21 +343,21 @@ class Api:
                 if not name or val is None:
                     continue
                 
-                clean = clean_flag_name(name)
-                # Check for duplicates
-                if any(f['name'] == clean for f in self.flag_manager.user_flags):
+                clean_new = clean_flag_name(name)
+                # Check for duplicates using cleaned names
+                if any(clean_flag_name(f['name']) == clean_new for f in self.flag_manager.user_flags):
                     skipped += 1
                     continue
                 
                 # Validate value
                 ok, err = self.validate_flag_value(name, val)
                 if not ok:
-                    errors.append(f"{clean}: {err}")
+                    errors.append(f"{name}: {err}")
                     continue
                 
                 flag_type = infer_type_from_name(name) or infer_type(str(val))
                 self.flag_manager.user_flags.append({
-                    'name': clean,
+                    'name': name,
                     'value': str(val),
                     'type': flag_type,
                     'enabled': True,
@@ -801,9 +802,15 @@ class Api:
             elif isinstance(data, dict):
                 if 'name' in data and 'flags' in data:
                     name = data['name'] + ' (Imported)'
-                    flags = data['flags']
+                    # Phase 1: Auto-Correct types in complex presets
+                    flags = []
+                    for f in data['flags']:
+                        nf = dict(f)
+                        if 'name' in nf:
+                            nf['type'] = infer_type_from_name(nf['name']) or nf.get('type', 'string')
+                        flags.append(nf)
                 else:
-                    flags = [{'name': k, 'value': str(v), 'type': 'string'} for k, v in data.items()]
+                    flags = [{'name': k, 'value': str(v), 'type': infer_type_from_name(k) or infer_type(v)} for k, v in data.items()]
                     name = 'Imported Preset'
 
             if flags:
@@ -856,9 +863,17 @@ class Api:
                 # Check format
                 flags = []
                 if isinstance(data, list):
-                    flags = data
+                    # Phase 1: Auto-Correct types in list imports
+                    flags = []
+                    for f in data:
+                        if isinstance(f, dict) and 'name' in f:
+                            nf = dict(f)
+                            nf['type'] = infer_type_from_name(nf['name']) or nf.get('type', 'string')
+                            flags.append(nf)
+                        else:
+                            flags.append(f)
                 elif isinstance(data, dict):
-                    flags = [{'name': k, 'value': str(v), 'type': 'string'} for k, v in data.items()]
+                    flags = [{'name': k, 'value': str(v), 'type': infer_type_from_name(k) or infer_type(v)} for k, v in data.items()]
                 
                 if flags:
                     filename = os.path.basename(file_path).replace('.json', '')
@@ -985,6 +1000,8 @@ class Api:
         new_user_flags = []
         for pf in target['flags']:
             nf = dict(pf)
+            # Phase 2: Refresh types during application (Source of truth: Name)
+            nf['type'] = infer_type_from_name(nf['name']) or nf.get('type', 'string')
             if 'enabled' not in nf:
                 nf['enabled'] = True
             new_user_flags.append(nf)
