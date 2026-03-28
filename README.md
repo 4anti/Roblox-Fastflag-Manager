@@ -55,17 +55,28 @@ A professional, high-performance management suite designed to give you complete 
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
 - **🧩 Bindable Fastflags**: We implemented a bind system to the fastflags. It also comes with cycle binds too!
 - **🛰️ Silent Updates**: Stay current with automated code and FFlag offset updates.
-- **🎨 Premium Themes**: Modern, sleek interface with multiple themes (Glass, Ignite, Matrix).
+- **🎨 Bloxstrap-Inspired UI**: A professional and beautiful aesthetic providing a seamless user experience.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
+- **📦 1-Click Installer**: No need to mess with Python or dependencies! Simply download and install.
 
 ## <a name="installation"></a>📥 Installation
 
-### <a name="prerequisites"></a>Prerequisites
+The easiest way to get started is to use the standalone Windows installer. No Python or prior setup required!
+
+### <a name="windows-installer"></a>Windows Installer (Recommended)
+1. Go to the **Releases** page of this repository.
+2. Download the latest `FFM_Installer.exe`.
+3. Run the installer and follow the on-screen prompts.
+4. Launch the application from your desktop or start menu!
+
+### <a name="build-from-source"></a>Building from Source (For Developers)
+
+#### Prerequisites
 - [Python 3.10+](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
 - **[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)** (Mandatory: Select "Desktop development with C++" workload during installation)
 
-### <a name="setup"></a>Setup
+#### Setup
 1. **Clone the repository:**
 ```bash
    git clone https://github.com/4anti/Roblox-Fastflag-Manager.git
