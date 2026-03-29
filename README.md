@@ -62,7 +62,7 @@ Optimized for everything from high-end to low-end hardware.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 - **📦 1-Click Installer**: No need to mess with Python or dependencies! Simply download and install.
 
-## <a name="variants"></a>✨ Supported Bloxstrap & Variants List
+## <a name="variants"></a>🌿 Supported Bloxstrap & Variants List
 | Variant | Supported? |
 | :--- | :---: |
 | **Bloxstrap** | ✅ |
