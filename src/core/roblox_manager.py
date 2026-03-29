@@ -300,17 +300,22 @@ class RobloxManager:
         if not offsets:
             return None
             
+        def extract_hex(data):
+            if isinstance(data, dict):
+                return data.get('offset')
+            return data
+
         # Direct match (fastest/primary)
         if flag_name in offsets:
-            return offsets[flag_name]
+            return extract_hex(offsets[flag_name])
             
         # Fuzzy match: try to find by normalized name
         from src.utils.helpers import clean_flag_name
         clean_target = clean_flag_name(flag_name)
         
-        for full_name, offset in offsets.items():
+        for full_name, data in offsets.items():
             if clean_flag_name(full_name) == clean_target:
-                return offset
+                return extract_hex(data)
                 
         return None
 

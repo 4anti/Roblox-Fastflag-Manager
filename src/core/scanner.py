@@ -260,10 +260,15 @@ class FFlagScanner:
                     
                     if rva_offset:
                         absolute = self.read_ptr(getset + rva_offset)
+                        vtable = self.read_ptr(getset)
                         if absolute:
                             off_from_base = absolute - self.base_address
+                            v_off = vtable - self.base_address
                             if off_from_base > 0:
-                                fflags[name] = hex(off_from_base)
+                                fflags[name] = {
+                                    "offset": hex(off_from_base),
+                                    "vtable": hex(v_off)
+                                }
                 
                 next_node = self.read_ptr(curr + 0x8)
                 if not next_node or next_node == first_node:
