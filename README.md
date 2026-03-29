@@ -4,7 +4,8 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
-A professional, high-performance management suite designed to give you complete control over Roblox FastFlags. Optimized for everything from high-end rigs to low-end hardware.
+A lightweight, Open-Sourced, high-performance Fastflag Manager to give you complete control over Roblox FastFlags! 
+Optimized for everything from high-end to low-end hardware.
 
 <div align="center">
   <img src="https://i.ibb.co/JRQF7LzY/Menu-Picture-Normal-just-the-starting.png" alt="Roblox FastFlag Manager Main Interface" width="800">
@@ -54,8 +55,8 @@ A professional, high-performance management suite designed to give you complete 
 - **⚡ Instant Indexing**: Search through thousands of FFlags in milliseconds.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
 - **🧩 Bindable Fastflags**: We implemented a bind system to the fastflags. It also comes with cycle binds too!
-- **🛰️ Silent Updates**: Stay current with automated code and FFlag offset updates.
-- **🎨 Bloxstrap-Inspired UI**: A professional and beautiful aesthetic providing a seamless user experience.
+- **🛰️ Update Proof**: Stay current with automated code and FFlag offset updates.
+- **🎨 Rich UI Themes**: Beautiful aesthetic themes providing a seamless user experience.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 - **📦 1-Click Installer**: No need to mess with Python or dependencies! Simply download and install.
 
