@@ -21,6 +21,10 @@ SC_SIZE = 0xF000
 
 
 class Api:
+    def set_hotkeys_inhibited(self, inhibited):
+        if hasattr(self, 'flag_manager') and self.flag_manager:
+            self.flag_manager.set_hotkeys_inhibited(inhibited)
+
     def __init__(self):
         self._window = None  # Set after window creation
         self._last_apply_time = 0
@@ -219,13 +223,12 @@ class Api:
         chunk = source_list[offset : offset + limit]
         
         for name in chunk:
-            expected = infer_type_from_name(name)
-            if not expected and name in user_flags_dict:
-                expected = user_flags_dict[name]
-            if not expected and name in self.flag_manager.official_types:
-                expected = self.flag_manager.official_types[name]
-            if not expected:
-                expected = 'unknown'
+            # Priority: 1. Official Scanner Type, 2. Prefix Guess, 3. Value Guess (from added list)
+            expected = self.flag_manager.official_types.get(name) or \
+                       infer_type_from_name(name) or \
+                       user_flags_dict.get(name) or \
+                       'unknown'
+
             prefix = get_flag_prefix(name)
             results.append({
                 'name': name,
@@ -243,16 +246,17 @@ class Api:
             return []
         
         preset_set = set(self.flag_manager.preset_flags_list)
-        
+        # Pre-calculate clean names for faster lookup
+        clean_presets = {clean_flag_name(p): p for p in self.flag_manager.preset_flags_list}
+
         return [{
             'name': f['name'],
             'display_name': clean_flag_name(f['name']),
             'value': str(f.get('value', '')),
             'type': f.get('type', 'string'),
             'status': f.get('_status', None),
-            'is_unrecognized': f['name'] not in preset_set,
-            'enabled': f.get('enabled', True),
-            'bind': f.get('bind', ''),
+            'is_unrecognized': f['name'] not in preset_set and clean_flag_name(f['name']) not in clean_presets,
+            'enabled': f.get('enabled', True),            'bind': f.get('bind', ''),
             'unapply_bind': f.get('unapply_bind', ''),
             'cycle_states': f.get('cycle_states', []),
             'prefix': self.flag_manager.official_prefixes.get(f['name'], '') or get_flag_prefix(f['name'])
@@ -299,8 +303,10 @@ class Api:
             log(f"[-] {err}", (255, 100, 100))
             return {'ok': False, 'error': err}
             
-        # Prefer prefix-based type detection, fall back to value guessing
-        flag_type = infer_type_from_name(name) or infer_type(value)
+        # Priority: 1. Official Scanner Type, 2. Prefix Guess, 3. Value Guess
+        flag_type = self.flag_manager.official_types.get(name) or \
+                    infer_type_from_name(name) or \
+                    infer_type(value)
         self.flag_manager.save_history_snapshot(f"Before adding {name}", self.settings.get('history_limit', 30))
         
         new_flag = {
