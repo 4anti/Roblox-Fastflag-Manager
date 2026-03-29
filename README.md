@@ -53,16 +53,16 @@ Optimized for everything from high-end to low-end hardware.
 
 ## <a name="key-features"></a>✨ Key Features
 
-- **⛑️ Bloxstrap & Variants Support**: FFlag Manager configured to work with multiple straps even if you have more than one!
+- **⛑️ Bloxstrap & Variants Support**: Configured to interface with multiple bootstrappers simultaneously!
 - **⚡ Instant Indexing**: Search through thousands of FFlags in milliseconds.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
-- **🧩 Bindable Fastflags**: We implemented a bind system to the fastflags. It also comes with cycle binds too!
+- **🧩 Bindable Fastflags**: Assign keybinds to toggle or cycle specific FastFlags!
 - **🛰️ Update Proof**: Stay current with automated code and FFlag offset updates.
 - **🎨 Rich UI Themes**: Beautiful aesthetic themes providing a seamless user experience.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
-- **📦 1-Click Installer**: No need to mess with Python or dependencies! Simply download and install.
+- **📦 Standalone Installer**: Pre-compiled Windows executable available for users without a Python environment.
 
-## <a name="variants"></a>🌿 Supported Bloxstrap & Variants List
+## <a name="variants"></a>🌿 Supported Bootstrappers
 | Variant | Supported? |
 | :--- | :---: |
 | **Bloxstrap** | ✅ |
@@ -72,15 +72,15 @@ Optimized for everything from high-end to low-end hardware.
 
 
 
-## <a name="installation"></a>📥 Installation
+## <a name="installation"></a>📥 Windows Installer (Standalone)
 
 The easiest way to get started is to use the standalone Windows installer. No Python or prior setup required!
 
 ### <a name="windows-installer"></a>Windows Installer (Recommended)
-1. Go to the **Releases** page of this repository.
-2. Download the latest `FFM_Installer.exe`.
-3. Run the installer and follow the on-screen prompts.
-4. Launch the application from your desktop or start menu!
+1. Navigate to the **Releases** page of this repository.
+2. Download the latest `Installer.exe`.
+3. Run the executable and follow the setup instructions.
+4. Launch the application.
 
 ### <a name="build-from-source"></a>Building from Source (For Developers)
 
