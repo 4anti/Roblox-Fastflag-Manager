@@ -49,5 +49,6 @@ Thumbs.db
 # Developer / Verification Scripts
 verify_*.py
 test_discovery.py
+check_memory_surroundings.py
 *.tmp
 /tmp/
