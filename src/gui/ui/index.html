@@ -3500,15 +3500,10 @@
       }
 
       function cleanFlagInput(name) {
-        const prefixes = ['DFFlag', 'DFInt', 'DFString', 'DFFloat', 'FFlag', 'FInt', 'FString', 'FFloat', 'SFFlag', 'SFInt', 'SFString', 'SFFloat'];
-        let cleaned = name.trim();
-        for (const p of prefixes) {
-          if (cleaned.startsWith(p)) {
-            cleaned = cleaned.substring(p.length);
-            break;
-          }
-        }
-        return cleaned;
+        // We used to strip prefixes (DFFlag, DFInt, etc.) here.
+        // STOP doing that. Roblox JSON and memory patching REQUIRES the prefix to be present.
+        // We only trim whitespace now.
+        return name.trim();
       }
 
       // === Virtual Scroll Engine for Sidebar ===
@@ -3752,7 +3747,7 @@
             const itemHtml = `<div class="config-item${sel}${!isEnabled ? ' disabled-flag' : ''}" data-fname="${escHtml(f.name)}" data-fprefix="${escHtml(f.prefix || '')}" data-ftype="${escHtml(f.type)}" data-fbind="${escHtml(f.bind || '')}" data-funapplybind="${escHtml(f.unapply_bind || '')}" data-fcycle="${escHtml((f.cycle_states || []).join(','))}" data-fenabled="${isEnabled}" oncontextmenu="showContextMenu(event, this)" onclick="selectConfigFlag(event, '${escHtml(f.name)}', '${escHtml(f.value)}', '${escHtml(f.type)}')">
                 <div class="${dotCls}"></div>
                 <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
-                  <span class="flag-name" style="flex:0 1 auto;">${escHtml(f.name)}</span>
+                  <span class="flag-name" style="flex:0 1 auto;">${escHtml(f.display_name || f.name)}</span>
                   ${unrecHtml}
                   ${bindHtml}
                 </div>
@@ -3970,14 +3965,18 @@
         }
         const pcm = document.getElementById("preset-cm");
         if (pcm) pcm.style.display = "none";
-        
+
         const catcher = document.getElementById("cm-click-catcher");
         if (catcher) catcher.style.display = "none";
-        
+
         // Remove editing background from active flag
         document.querySelectorAll('.config-item.editing-flag').forEach(n => n.classList.remove('editing-flag'));
+
+        // Resume hotkeys
+        if (window.pywebview && pywebview.api) {
+          pywebview.api.set_hotkeys_inhibited(false);
+        }
       }
-      
       let isDraggingCM = false;
       let cmDragOffsetX = 0;
       let cmDragOffsetY = 0;
@@ -4032,6 +4031,11 @@
         ev.preventDefault();
         currentContextMenuTarget = el;
         const menu = document.getElementById("context-menu");
+
+        // Pause hotkeys while menu is open
+        if (window.pywebview && pywebview.api) {
+          pywebview.api.set_hotkeys_inhibited(true);
+        }
         
         document.querySelectorAll('.config-item.editing-flag').forEach(n => n.classList.remove('editing-flag'));
         if (el) el.classList.add('editing-flag');

@@ -25,8 +25,17 @@ class FlagManager:
         self._watchdog_thread = None
         self._hotkey_thread = None
         self._rm = None
+        self.hotkeys_inhibited = False
         
         self.load_user_flags()
+
+    def set_hotkeys_inhibited(self, inhibited):
+        with self._lock:
+            self.hotkeys_inhibited = inhibited
+            if inhibited:
+                log("[*] Hotkeys temporarily paused (Menu Open)", (150, 150, 150))
+            else:
+                log("[*] Hotkeys resumed", (150, 150, 150))
 
     def start_hotkey_listener(self, roblox_manager):
         """Start the hotkey listener immediately on app launch."""
@@ -71,7 +80,7 @@ class FlagManager:
             with self._lock:
                 self.user_flags = []
 
-    def save_user_flags(self):
+    def save_user_flags(self, skip_sync=False):
         try:
             with self._lock:
                 clean_flags = []
@@ -81,6 +90,9 @@ class FlagManager:
             with open(Config.USER_FLAGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(clean_flags, f, indent=4)
             
+            if skip_sync:
+                return True
+
             # Pre-emptive Sync: Update ClientAppSettings.json immediately
             # This ensures that browser-launches have the correct flags even before RFM detects the process.
             settings = Config.load_settings()
@@ -204,16 +216,47 @@ class FlagManager:
             # The manager's static method will spawn a suspended process and scan it automatically
             offsets = r_man.RobloxManager.fetch_offsets()
             if offsets:
-                self.all_offsets = {name: int(offset, 16) if isinstance(offset, str) else offset for name, offset in offsets.items()}
+                self.all_offsets = {}
+                self.vtable_map = {} # name -> v_offset
+                
+                # Pre-defined Rosetta Stone for types (VTable Offset -> Type)
+                # These are stable memory identifiers for the underlying C++ classes
+                VTABLE_TYPE_MAP = {
+                    0x5F595E8: 'int',    # FastInt
+                    0x5F59920: 'bool',   # FastFlag
+                    0x5F594E0: 'bool',   # DynamicFastFlag
+                    0x5F59818: 'string', # FastString
+                    0x5F593D8: 'int',    # FastLog/Metrics
+                }
+
+                for name, data in offsets.items():
+                    if isinstance(data, dict):
+                        # New Scanner Format: {"offset": "0x...", "vtable": "0x..."}
+                        off = int(data['offset'], 16)
+                        v_off = int(data['vtable'], 16)
+                        self.all_offsets[name] = off
+                        self.vtable_map[name] = v_off
+                        # Lock in the official type from memory class
+                        if v_off in VTABLE_TYPE_MAP:
+                            self.official_types[name] = VTABLE_TYPE_MAP[v_off]
+                    else:
+                        # Legacy/Cache Format: "0x..."
+                        self.all_offsets[name] = int(data, 16) if isinstance(data, str) else data
+
                 self.preset_flags_list = sorted(list(self.all_offsets.keys()))
                 self.offsets_loaded = True
                 
                 # Update initial status for all existing flags (fixes startup question marks)
                 with self._lock:
                     for f in self.user_flags:
+                        fname = f['name']
                         # Clear 'unavailable' status for flags that now have valid discovered offsets
-                        if r_man.RobloxManager.get_offset_for_flag(f['name']):
+                        if r_man.RobloxManager.get_offset_for_flag(fname):
                             f['_status'] = None
+                            # Re-sync type if it's currently 'unknown' or potentially wrong (e.g. guessed Debug as bool)
+                            official = self.official_types.get(fname)
+                            if official:
+                                f['type'] = official
                 
                 # Fetch official types seamlessly in background
                 threading.Thread(target=self._fetch_official_types, daemon=True).start()
@@ -352,8 +395,11 @@ class FlagManager:
             'KeyU': 0x55, 'KeyV': 0x56, 'KeyW': 0x57, 'KeyX': 0x58, 'KeyY': 0x59, 'KeyZ': 0x5A,
             'Digit0': 0x30, 'Digit1': 0x31, 'Digit2': 0x32, 'Digit3': 0x33, 'Digit4': 0x34,
             'Digit5': 0x35, 'Digit6': 0x36, 'Digit7': 0x37, 'Digit8': 0x38, 'Digit9': 0x39,
+            'BracketLeft': 0xDB, 'BracketRight': 0xDD, 'Semicolon': 0xBA, 'Quote': 0xDE,
+            'Comma': 0xBC, 'Period': 0xBE, 'Slash': 0xBF, 'Backslash': 0xDC,
+            'KeyĞ': 0xDB, 'KeyÜ': 0xDD, 'KeyŞ': 0xBA, 'Keyİ': 0xDE, 'KeyÖ': 0xBC, 'KeyÇ': 0xBE,
             'Insert': 0x2D, 'Delete': 0x2E, 'Home': 0x24, 'End': 0x23, 'PageUp': 0x21, 'PageDown': 0x22,
-            'MouseLeft': 0x01, 'MouseRight': 0x02, 'MouseMiddle': 0x04, 'MouseX1': 0x05, 'MouseX2': 0x06
+            'MouseMiddle': 0x04, 'MouseX1': 0x05, 'MouseX2': 0x06
         }
         key_states = {}
         last_bind_error_time = 0
@@ -361,6 +407,11 @@ class FlagManager:
         
         while self._hotkey_running:
             time.sleep(0.05)
+            
+            # Global Inhibition Check (e.g. Bind Picker or Menu is open)
+            with self._lock:
+                if self.hotkeys_inhibited:
+                    continue
             
             # 1. Identify all keys we need to monitor
             vks_to_check = set()
@@ -378,10 +429,14 @@ class FlagManager:
                 was_p = key_states.get(vk, False)
                 if is_p and not was_p:
                     just_pressed.add(vk)
+                    # Use a small log to see if keys are detected (only in console)
+                    # log(f"[*] Key detected: VK_{vk:X}", (150, 150, 150))
                 key_states[vk] = is_p
             
             if not just_pressed:
                 continue
+
+            # log(f"[*] Processing keys: {just_pressed}", (150, 150, 150))
 
             # 3. Global Safety Checks
             is_attached = self._rm and self._rm.is_attached
@@ -470,17 +525,22 @@ class FlagManager:
                                             orig_val = self._rm.read_flag_external(flag_type, offset_int)
                                             if orig_val is not None: flag['original_value'] = orig_val
                                         self._rm.open_process_for_write()
-                                        self._rm.write_flag_external(fname, flag_type, offset_int, new_val)
-                                        log(f"[HOTKEY] Toggled {fname} to {new_val}", (255,100,255))
-                                    except Exception:
-                                        pass
+                                        res, msg = self._rm.write_flag_external(fname, flag_type, offset_int, new_val)
+                                        if res:
+                                            log(f"[HOTKEY] Toggled {fname} to {new_val} (Success)", (100, 255, 100))
+                                        else:
+                                            log(f"[HOTKEY] Failed to toggle {fname}: {msg}", (255, 100, 100))
+                                    except Exception as e:
+                                        log(f"[HOTKEY] Error during toggle {fname}: {e}", (255, 100, 100))
             
             if updated_flags:
-                self.save_user_flags()
+                self.save_user_flags(skip_sync=True)
                 self.last_apply_time = time.time()
                 
             if triggered_this_cycle:
                 last_success_trigger_time = time.time()
+                # Brief sleep to prevent double-trigger from same press
+                time.sleep(0.1)
 
     # ================================================================
 
@@ -489,170 +549,175 @@ class FlagManager:
     # ================================================================
 
     def apply_flags_hybrid(self, roblox_manager):
-        with self._lock:
-            flags_snapshot = list(self.user_flags)
-            
-        if not flags_snapshot:
-            log("[-] No flags to apply", (255, 200, 100))
-            return
+        try:
+            with self._lock:
+                flags_snapshot = list(self.user_flags)
+                
+            if not flags_snapshot:
+                log("[-] No flags to apply", (255, 200, 100))
+                return
 
-        total = len(flags_snapshot)
-        
-        # === Step 1: ClientAppSettings.json (always works) ===
-        log(f"[*] Writing {total} flags to ClientAppSettings.json...", (100, 255, 255))
-        
-        flags_dict = {}
-        for flag in flags_snapshot:
-            if not flag.get('enabled', True):
-                continue
-                
-            name = flag['name']
-            val_str = str(flag['value'])
-            ftype = flag.get('type', 'string')
+            total = len(flags_snapshot)
             
-            if ftype == 'bool':
-                val = val_str.lower() in ('true', '1', 'yes')
-            elif ftype == 'int':
-                try: val = int(val_str)
-                except ValueError: val = 0
-            elif ftype == 'float':
-                try: val = float(val_str)
-                except ValueError: val = 0.0
-            else:
-                val = val_str
-                
-            flags_dict[name] = val
+            # === Step 1: ClientAppSettings.json (always works) ===
+            log(f"[*] Writing {total} flags to ClientAppSettings.json...", (100, 255, 255))
             
-        json_ok, json_msg = roblox_manager.apply_fflags_json(flags_dict)
-        
-        if json_ok:
-            log(f"[+] JSON: {json_msg}", (100, 255, 100))
+            flags_dict = {}
             for flag in flags_snapshot:
-                # If the flag is disabled, it shouldn't show as "success" (green)
                 if not flag.get('enabled', True):
-                    flag['_status'] = None
+                    continue
+                    
+                name = flag['name']
+                val_str = str(flag['value'])
+                ftype = flag.get('type', 'string')
+                
+                if ftype == 'bool':
+                    val = val_str.lower() in ('true', '1', 'yes')
+                elif ftype == 'int':
+                    try: val = int(val_str)
+                    except ValueError: val = 0
+                elif ftype == 'float':
+                    try: val = float(val_str)
+                    except ValueError: val = 0.0
                 else:
-                    flag['_status'] = 'success'
-        else:
-            log(f"[-] JSON: {json_msg}", (255, 100, 100))
-            for flag in flags_snapshot:
-                if flag.get('enabled', True):
-                    flag['_status'] = 'failed'
-                else:
-                    flag['_status'] = None
-
-        # === Step 2: Live memory writes (only if Roblox is running) ===
-        if not roblox_manager.is_attached:
-            log("[*] Roblox not running — JSON applied, will take effect on next launch.", (255, 255, 100))
-            self.flags_applied = True
-            self.last_apply_time = time.time()
-            return
-
-        if not roblox_manager.open_process_for_write():
-            log("[-] Could not open Roblox for memory writes. JSON was applied.", (255, 200, 100))
-            self.flags_applied = True
-            self.last_apply_time = time.time()
-            return
+                    val = val_str
+                    
+                flags_dict[name] = val
+                
+            json_ok, json_msg = roblox_manager.apply_fflags_json(flags_dict)
             
-        base = roblox_manager.get_roblox_base()
-        if not base:
-            log("[-] Could not resolve base address. JSON was applied.", (255, 200, 100))
-            self.flags_applied = True
-            self.last_apply_time = time.time()
-            return
-
-        mem_ok = 0
-        mem_fail = 0
-        mem_skip = 0
-        mem_reverted = 0
-        enabled_flags = [f for f in flags_snapshot if f.get('enabled', True)]
-        enabled_count = len(enabled_flags)
-        total_list_count = len(flags_snapshot)
-        failed_flags = []  # Flags that fail external writes
-        _originals_captured = False  # Track if we need to save after the loop
-
-        for flag in flags_snapshot:
-            name = flag['name']
-            
-            # Phase 3: Final JIT Type Defense (Source of truth: Name)
-            from src.utils.helpers import infer_type_from_name
-            flag_type = infer_type_from_name(name) or flag.get('type', 'string')
-            
-            is_enabled = flag.get('enabled', True)
-            
-            # Skip string flags — can't write to fixed-size memory
-            if flag_type == 'string':
-                mem_skip += 1
-                flag['_status'] = 'unavailable'
-                # log(f"[-] MEM: Skipping {name} (String flags require restart)", (200, 200, 100))
-                continue
-
-            # Look up RVA offset
-            offset_hex = roblox_manager.get_offset_for_flag(name)
-            if not offset_hex:
-                mem_skip += 1
-                flag['_status'] = 'unavailable'
-                continue
-
-            try:
-                offset_int = int(offset_hex, 16)
-            except Exception:
-                mem_skip += 1
-                continue
-
-            # Capture original value before we modify memory for the first time
-            if is_enabled and 'original_value' not in flag:
-                orig_val = roblox_manager.read_flag_external(flag_type, offset_int)
-                if orig_val is not None:
-                    flag['original_value'] = orig_val
-                    _originals_captured = True
-
-            if is_enabled:
-                value_to_write = str(flag['value'])
-                flag['_was_active'] = True
+            if json_ok:
+                log(f"[+] JSON: {json_msg}", (100, 255, 100))
+                for flag in flags_snapshot:
+                    # If the flag is disabled, it shouldn't show as "success" (green)
+                    if not flag.get('enabled', True):
+                        flag['_status'] = None
+                    else:
+                        flag['_status'] = 'success'
             else:
-                # Smart Reversion: Only write if we have an original AND we were previously active
-                if flag.get('_was_active', False) and 'original_value' in flag and flag['original_value'] is not None:
-                    value_to_write = str(flag['original_value'])
-                else:
+                log(f"[-] JSON: {json_msg}", (255, 100, 100))
+                for flag in flags_snapshot:
+                    if flag.get('enabled', True):
+                        flag['_status'] = 'failed'
+                    else:
+                        flag['_status'] = None
+
+            # === Step 2: Live memory writes (only if Roblox is running) ===
+            if not roblox_manager.is_attached:
+                log("[*] Roblox not running — JSON applied, will take effect on next launch.", (255, 255, 100))
+                self.flags_applied = True
+                self.last_apply_time = time.time()
+                return
+
+            if not roblox_manager.open_process_for_write():
+                log("[-] Could not open Roblox for memory writes. JSON was applied.", (255, 200, 100))
+                self.flags_applied = True
+                self.last_apply_time = time.time()
+                return
+                
+            base = roblox_manager.get_roblox_base()
+            if not base:
+                log("[-] Could not resolve base address. JSON was applied.", (255, 200, 100))
+                self.flags_applied = True
+                self.last_apply_time = time.time()
+                return
+
+            mem_ok = 0
+            mem_fail = 0
+            mem_skip = 0
+            mem_reverted = 0
+            enabled_flags = [f for f in flags_snapshot if f.get('enabled', True)]
+            enabled_count = len(enabled_flags)
+            total_list_count = len(flags_snapshot)
+            failed_flags = []  # Flags that fail external writes
+            _originals_captured = False  # Track if we need to save after the loop
+
+            for flag in flags_snapshot:
+                name = flag['name']
+                
+                # Phase 3: Final JIT Type Defense (Source of truth: Name)
+                from src.utils.helpers import infer_type_from_name
+                flag_type = infer_type_from_name(name) or flag.get('type', 'string')
+                
+                is_enabled = flag.get('enabled', True)
+                
+                # Skip string flags — can't write to fixed-size memory
+                if flag_type == 'string':
                     mem_skip += 1
-                    flag['_status'] = None # Clean up status if it's inactive and never touched
-                    log(f"[-] MEM: Skipping {name} (Disabled, no original value or not previously active)", (200, 200, 100))
+                    flag['_status'] = 'unavailable'
+                    # log(f"[-] MEM: Skipping {name} (String flags require restart)", (200, 200, 100))
                     continue
 
-            success, message = roblox_manager.write_flag_external(name, flag_type, offset_int, value_to_write)
+                # Look up RVA offset
+                offset_hex = roblox_manager.get_offset_for_flag(name)
+                if not offset_hex:
+                    mem_skip += 1
+                    flag['_status'] = 'unavailable'
+                    continue
 
-            if success:
-                flag['_status'] = 'success'
+                try:
+                    offset_int = int(offset_hex, 16)
+                except Exception:
+                    mem_skip += 1
+                    continue
+
+                # Capture original value before we modify memory for the first time
+                if is_enabled and 'original_value' not in flag:
+                    orig_val = roblox_manager.read_flag_external(flag_type, offset_int)
+                    if orig_val is not None:
+                        flag['original_value'] = orig_val
+                        _originals_captured = True
+
                 if is_enabled:
-                    mem_ok += 1
-                    log(f"[+] MEM: {name} = {value_to_write} {message}", (100, 255, 100))
+                    value_to_write = str(flag['value'])
+                    flag['_was_active'] = True
                 else:
-                    mem_reverted += 1
-                    flag['_was_active'] = False # RESET ONLY ON SUCCESSFUL REVERSION
-                    log(f"[+] MEM: Reversed {name} to {value_to_write} {message}", (100, 255, 100))
-            else:
-                mem_fail += 1
-                flag['_status'] = 'unavailable'
-                if is_enabled:
-                    failed_flags.append(flag)
+                    # Smart Reversion: Only write if we have an original AND we were previously active
+                    if flag.get('_was_active', False) and 'original_value' in flag and flag['original_value'] is not None:
+                        value_to_write = str(flag['original_value'])
+                    else:
+                        mem_skip += 1
+                        flag['_status'] = None # Clean up status if it's inactive and never touched
+                        log(f"[-] MEM: Skipping {name} (Disabled, no original value or not previously active)", (200, 200, 100))
+                        continue
 
-        # Persist any newly captured original values in a single write
-        if _originals_captured:
-            self.save_user_flags()
+                success, message = roblox_manager.write_flag_external(name, flag_type, offset_int, value_to_write)
 
-        # The count logic: X/Y where X is successful enabled flags, Y is total enabled flags
-        log(f"[=] Injection Result: {mem_ok}/{enabled_count} flags APPLIED. ({mem_reverted} reverted, {mem_skip} skipped).", 
-            (100, 255, 100) if mem_fail == 0 else (200, 200, 100))
-        
-        if total_list_count > enabled_count:
-            log(f"[·] Information: {total_list_count - enabled_count} flags in your list are currently DISABLED and were ignored.", (150, 150, 150))
-                
-        # Start watchdog if we have dynamic flags
-        self.start_watchdog(roblox_manager)
-        
-        self.flags_applied = True
-        self.last_apply_time = time.time()
+                if success:
+                    flag['_status'] = 'success'
+                    if is_enabled:
+                        mem_ok += 1
+                        log(f"[+] MEM: {name} = {value_to_write} {message}", (100, 255, 100))
+                    else:
+                        mem_reverted += 1
+                        flag['_was_active'] = False # RESET ONLY ON SUCCESSFUL REVERSION
+                        log(f"[+] MEM: Reversed {name} to {value_to_write} {message}", (100, 255, 100))
+                else:
+                    mem_fail += 1
+                    flag['_status'] = 'unavailable'
+                    if is_enabled:
+                        failed_flags.append(flag)
+
+            # Persist any newly captured original values in a single write
+            if _originals_captured:
+                self.save_user_flags()
+
+            # The count logic: X/Y where X is successful enabled flags, Y is total enabled flags
+            log(f"[=] Injection Result: {mem_ok}/{enabled_count} flags APPLIED. ({mem_reverted} reverted, {mem_skip} skipped).", 
+                (100, 255, 100) if mem_fail == 0 else (200, 200, 100))
+            
+            if total_list_count > enabled_count:
+                log(f"[·] Information: {total_list_count - enabled_count} flags in your list are currently DISABLED and were ignored.", (150, 150, 150))
+                    
+            # Start watchdog if we have dynamic flags
+            self.start_watchdog(roblox_manager)
+            
+            self.flags_applied = True
+            self.last_apply_time = time.time()
+        except Exception as e:
+            log(f"[-] CRITICAL ERROR in apply_flags_hybrid: {e}", (255, 50, 50))
+            import traceback
+            log(traceback.format_exc(), (255, 50, 50))
 
     def launch_and_apply(self, roblox_manager):
         """Write JSON first, then launch Roblox suspended and patch ALL flags early.
