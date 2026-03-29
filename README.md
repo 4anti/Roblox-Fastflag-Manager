@@ -16,6 +16,7 @@ Optimized for everything from high-end to low-end hardware.
 ## 📑 Table of Contents
 - [✨ Showcase](#showcase)
 - [✨ Key Features](#key-features)
+- [🌿 Supported Bloxstrap & Variants List](#variants)
 - [📥 Installation](#installation)
   - [Prerequisites](#prerequisites)
   - [Setup](#setup)
@@ -52,6 +53,7 @@ Optimized for everything from high-end to low-end hardware.
 
 ## <a name="key-features"></a>✨ Key Features
 
+- **⛑️ Bloxstrap & Variants Support**: FFlag Manager configured to work with multiple straps even if you have more than one!
 - **⚡ Instant Indexing**: Search through thousands of FFlags in milliseconds.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
 - **🧩 Bindable Fastflags**: We implemented a bind system to the fastflags. It also comes with cycle binds too!
@@ -59,6 +61,16 @@ Optimized for everything from high-end to low-end hardware.
 - **🎨 Rich UI Themes**: Beautiful aesthetic themes providing a seamless user experience.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 - **📦 1-Click Installer**: No need to mess with Python or dependencies! Simply download and install.
+
+## <a name="variants"></a>✨ Supported Bloxstrap & Variants List
+| Variant | Supported? |
+| :--- | :---: |
+| **Bloxstrap** | ✅ |
+| **Voidstrap** | ✅ |
+| **Fishstrap** | ✅ |
+| **Others~** | ✅ |
+
+
 
 ## <a name="installation"></a>📥 Installation
 
