@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.4] - 2026-04-05
+
+### Fixed
+
+- **UAC Privilege Escalation**: Restructured the background update execution logic to guarantee the Windows UAC elevation prompt accurately appears.
+- **Auto-Relaunch on Update**: Removed native silence flags in InnoSetup to ensure the application immediately re-opens automatically for the user the moment an update completes.
+
+### Changed
+
+- Streamlined internal `gitignore` repository files to ignore localized CI build artifacts.
+- Hardened pipeline checks regarding `ShellExecuteW` Windows API hooks within `updater.py`.
+
 ## [3.3.3] - 2026-04-05
 
 ### Added

@@ -25,6 +25,8 @@ dist/
 # Inno Setup / Installer Outputs
 # We ignore the installer because it's uploaded to GitHub Releases, not the repo.
 FFM_Installer.exe
+Setup_*.exe
+release_notes.txt
 Output/
 *.iss.bak
 
