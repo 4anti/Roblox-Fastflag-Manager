@@ -126,6 +126,7 @@ class Api:
             'count': len(self.flag_manager.preset_flags_list),
             'error': self._init_error,
             'update_ready': getattr(self, 'update_ready', False),
+            'pending_update': True if getattr(self, '_pending_update', None) else False,
             'version': get_current_version(),
         }
 
