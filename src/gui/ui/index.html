@@ -2667,6 +2667,18 @@
                 <span class="settings-label">Launch minimized</span>
               </div>
               
+              <div class="settings-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-auto-update"
+                    onchange="setAutoUpdate(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Auto Update (silently install updates on launch)</span>
+              </div>
+
               <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 16px;">
                 <div style="display: flex; justify-content: space-between; width: 100%;">
                   <span class="settings-label" style="margin: 0;">Configuration History Limit: <span id="history-limit-val" style="color: var(--accent); font-weight: bold;">30</span></span>
@@ -2674,6 +2686,30 @@
                 <input type="range" id="settings-history-limit" min="3" max="100" style="width: 100%; accent-color: var(--accent);" oninput="updateHistoryLimitUI(this.value)" onchange="saveHistoryLimit(this.value)" />
                 <div id="history-warning" style="display: none; color: var(--error); font-size: 11px; margin-top: 4px; font-weight: bold; background: rgba(255,50,50,0.1); padding: 6px; border-radius: 4px; border: 1px solid var(--error); width: 100%; box-sizing: border-box;">
                   &#x26A0;&#xFE0F; Warning: Making history unlimited can consume massive local storage over time!
+                </div>
+              </div>
+            </div>
+
+            <!-- Updates Section -->
+            <div class="settings-section" id="update-section" style="display: none;">
+              <div class="settings-section-title">Updates</div>
+              <div id="update-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text);">Update Available</div>
+                    <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                      <span id="update-current-ver">v...</span>
+                      <span style="color: var(--accent); margin: 0 6px;">&rarr;</span>
+                      <span id="update-new-ver" style="color: var(--accent); font-weight: 700;">v...</span>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary" id="update-now-btn" onclick="triggerUpdate()" style="padding: 8px 20px; font-size: 12px; font-weight: 700; border-radius: 8px; box-shadow: 0 0 15px var(--accent-glow);">
+                    Update Now
+                  </button>
+                </div>
+                <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+                  <div style="font-size: 11px; font-weight: 600; color: var(--text-dark); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Changelog</div>
+                  <div id="update-changelog" style="font-size: 11.5px; color: var(--text-dim); line-height: 1.7; max-height: 200px; overflow-y: auto; padding-right: 8px; white-space: pre-wrap; word-break: break-word;"></div>
                 </div>
               </div>
             </div>
@@ -2811,6 +2847,19 @@
           <button class="btn btn-primary" id="large-input-modal-ok" style="padding: 6px 20px;">Import All</button>
         </div>
       </div>
+    </div>
+
+    <!-- Update Overlay -->
+    <div id="update-overlay" style="position:fixed; inset:0; background:#040406; z-index:99998; display:none; flex-direction:column; align-items:center; justify-content:center; gap:20px; opacity:0; transition: opacity 0.5s ease-in-out;">
+      <div style="width:60px; height:60px; background:#00d4aa; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:900; color:#000; box-shadow:0 0 30px rgba(0, 212, 170, 0.4); animation: pulseLogo 1.5s infinite alternate;">FF</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <div id="update-overlay-title" style="font-size:14px; font-weight:700; color:#e2e2ec; letter-spacing:1px; text-transform:uppercase;">Downloading Update</div>
+        <div id="update-overlay-sub" style="font-size:11px; color:#8888a0;">Preparing installer...</div>
+      </div>
+      <div style="width:200px; height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; position:relative;">
+        <div id="update-overlay-bar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#00d4aa; box-shadow:0 0 10px #00d4aa; transition: width 0.3s ease;"></div>
+      </div>
+      <div id="update-overlay-percent" style="font-size:12px; color:#8888a0; font-weight:600;">0%</div>
     </div>
 
     <!-- Resizer Handles -->
@@ -3177,6 +3226,9 @@
         initResizers();
         setUITheme(currentTheme, false);
         
+        // Start checking for updates in the background
+        checkPendingUpdate();
+        
         // Setup shared listeners
         document.getElementById('edit-value').addEventListener('keypress', e => { if (e.key === 'Enter') saveFlag(); });
         document.getElementById('add-value').addEventListener('keypress', e => { if (e.key === 'Enter') addFlag(); });
@@ -3319,6 +3371,9 @@
           document.getElementById("settings-theme").checked = isLight;
           if (isLight) document.body.classList.add('light-theme');
           // Other settings
+          const autoUpdateToggle = document.getElementById("settings-auto-update");
+          if (autoUpdateToggle) autoUpdateToggle.checked = s.auto_update || false;
+
           const closeTray = document.getElementById("settings-close-tray");
           if (closeTray) closeTray.checked = s.close_to_tray || false;
           const launchMin = document.getElementById("settings-launch-min");
@@ -3338,6 +3393,15 @@
           
           // Load Layout from settings
           loadLayout(s);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function setAutoUpdate(val) {
+        try {
+          await pywebview.api.set_auto_update(val);
+          checkPendingUpdate(); // Refresh the updates section immediately when toggled
         } catch (e) {
           console.error(e);
         }
@@ -3387,6 +3451,88 @@
 
       async function setCloseTray(val) {
         try { await pywebview.api.set_close_to_tray(val); } catch (e) { console.error(e); }
+      }
+
+      async function checkPendingUpdate() {
+        try {
+          const info = await pywebview.api.get_update_info();
+          const isAuto = document.getElementById("settings-auto-update").checked;
+          const section = document.getElementById("update-section");
+          
+          if (info.available && !isAuto) {
+            document.getElementById("update-current-ver").textContent = 'v' + info.current;
+            document.getElementById("update-new-ver").textContent = 'v' + info.version;
+            
+            // Basic markdown-to-HTML for release notes
+            let htmlLog = info.changelog
+              .replace(/\n\n/g, '<br><br>')
+              .replace(/\n/g, '<br>')
+              .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+              .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+              .replace(/\[([^\]]+)\]\([^)]+\)/g, '<span style="color: var(--accent);">$1</span>')
+              .replace(/`([^`]+)`/g, '<span style="font-family: var(--font-mono); background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px;">$1</span>');
+              
+            document.getElementById("update-changelog").innerHTML = htmlLog || 'No changelog provided.';
+            section.style.display = "block";
+          } else {
+            section.style.display = "none";
+          }
+        } catch (e) {
+          console.error(e);
+        }
+        setTimeout(checkPendingUpdate, 60000); // Check again every 60s (backend only hits API every 10 mins)
+      }
+
+      async function triggerUpdate() {
+        const overlay = document.getElementById("update-overlay");
+        const percentTxt = document.getElementById("update-overlay-percent");
+        const bar = document.getElementById("update-overlay-bar");
+        const title = document.getElementById("update-overlay-title");
+        const sub = document.getElementById("update-overlay-sub");
+
+        overlay.style.display = "flex";
+        requestAnimationFrame(() => overlay.style.opacity = "1");
+
+        try {
+          const started = await pywebview.api.trigger_manual_update();
+          if (!started) {
+            alert("Error starting update.");
+            overlay.style.opacity = "0";
+            setTimeout(() => overlay.style.display = "none", 500);
+            return;
+          }
+
+          // Poll progress
+          const pollProgress = setInterval(async () => {
+            const p = await pywebview.api.get_update_progress();
+            if (p < 0) {
+              clearInterval(pollProgress);
+              title.textContent = "Update Failed";
+              title.style.color = "var(--error)";
+              sub.textContent = "Check logs for details.";
+              bar.style.background = "var(--error)";
+              percentTxt.textContent = "Error";
+              setTimeout(() => {
+                overlay.style.opacity = "0";
+                setTimeout(() => overlay.style.display = "none", 500);
+              }, 3000);
+            } else if (p >= 100) {
+              clearInterval(pollProgress);
+              title.textContent = "Launching Installer";
+              sub.textContent = "Application will restart automatically.";
+              bar.style.width = "100%";
+              percentTxt.textContent = "100%";
+            } else {
+              bar.style.width = p + "%";
+              percentTxt.textContent = p + "%";
+            }
+          }, 200);
+
+        } catch (e) {
+          console.error(e);
+          overlay.style.opacity = "0";
+          setTimeout(() => overlay.style.display = "none", 500);
+        }
       }
       async function setLaunchMinimized(val) {
         try { await pywebview.api.set_launch_minimized(val); } catch (e) { console.error(e); }
