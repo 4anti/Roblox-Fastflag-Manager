@@ -1,6 +1,6 @@
 # 🚀 Roblox FastFlag Manager
 
-![Version](https://img.shields.io/badge/version-v3.3.3-blue.svg)
+![Version](https://img.shields.io/badge/version-v3.3.4-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
@@ -58,6 +58,7 @@ Optimized for everything from high-end to low-end hardware.
 - **🛠️ Smart Presets**: Create, merge, and toggle complex configurations instantly.
 - **🧩 Bindable Fastflags**: Assign keybinds to toggle or cycle specific FastFlags!
 - **🛰️ Update Proof**: Stay current with automated code and FFlag offset updates.
+- **☘️ Manual/Auto Update System**: You can switch between auto-updates and manual update to have more control over your program!
 - **🎨 Rich UI Themes**: Beautiful aesthetic themes providing a seamless user experience.
 - **🔒 Secure Injection & Undetectable**: A reliable and trace-free deployment pipeline with stealth.
 - **📦 Standalone Installer**: Pre-compiled Windows executable available for users without a Python environment.
