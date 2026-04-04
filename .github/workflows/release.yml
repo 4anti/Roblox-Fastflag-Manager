@@ -39,9 +39,15 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
         shell: powershell
 
+      - name: Generate Release Notes
+        run: |
+          python scripts/extract_changelog.py ${{ github.ref_name }} > release_notes.txt
+        shell: bash
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: FFM_Installer.exe
+          body_path: release_notes.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

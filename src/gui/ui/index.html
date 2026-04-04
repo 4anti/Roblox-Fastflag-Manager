@@ -3333,6 +3333,16 @@
             vcDot.className = "vc-dot";
             vcDot.style.background = "var(--warning)";
             if (dotAnimateTimer) { clearInterval(dotAnimateTimer); dotAnimateTimer = null; }
+          } else if (status.pending_update) {
+            versionReady = true;
+            vcText.textContent = "Update Available!";
+            vcText.style.color = "var(--accent)";
+            vcText.style.cursor = "pointer";
+            vcText.onclick = () => { switchTab('settings'); document.getElementById("update-section").scrollIntoView({behavior: "smooth"}); };
+            vcDot.className = "vc-dot";
+            vcDot.style.background = "var(--accent)";
+            vcDot.style.boxShadow = "0 0 8px var(--accent-glow)";
+            if (dotAnimateTimer) { clearInterval(dotAnimateTimer); dotAnimateTimer = null; }
           } else if (status.ready && !status.loading) {
             versionReady = true;
             vcText.textContent = "Up-to-Date";
