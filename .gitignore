@@ -4,6 +4,11 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
+# IDE / Editor
+.vscode/
+.idea/
+.qodo/
+
 # Environments
 .env
 .venv
@@ -49,5 +54,7 @@ Thumbs.db
 # Developer / Verification Scripts
 verify_*.py
 test_discovery.py
+check_*.py
+reproduce_*.py
 *.tmp
 /tmp/
