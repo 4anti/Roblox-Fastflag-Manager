@@ -79,7 +79,10 @@ def download_update(exe_url, new_version, progress_callback=None):
                         progress_callback(downloaded, total)
 
         log(f"[+] Download complete. Launching installer...", (100, 255, 100))
-        subprocess.Popen([temp_setup, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        import ctypes
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
+        )
         return True
 
     except Exception as e:
@@ -108,7 +111,10 @@ def perform_silent_update(exe_url, new_version):
         # /VERYSILENT: Install without user interaction
         # /SUPPRESSMSGBOXES: Don't show errors
         # /NORESTART: Don't restart Windows
-        subprocess.Popen([temp_setup, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        import ctypes
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
+        )
         
         # We must exit immediately so the installer can overwrite FFM.exe
         log("[*] Restarting app to apply update...", (100, 255, 100))
