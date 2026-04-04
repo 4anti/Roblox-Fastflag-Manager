@@ -21,7 +21,7 @@ def get_current_version():
         return "0.0.0"
 
 def check_for_updates():
-    """Check GitHub for a newer version. Returns (has_update, exe_url, version_str)"""
+    """Check GitHub for a newer version. Returns (has_update, exe_url, version_str, changelog)"""
     try:
         response = requests.get(GITHUB_API, timeout=5)
         if response.status_code == 200:
@@ -48,10 +48,43 @@ def check_for_updates():
                 if not exe_url:
                     log(f"[*] Update v{remote_version} found, but no Setup.exe asset was found on GitHub.", (255, 200, 100))
                 
-                return True, exe_url, remote_version
+                return True, exe_url, remote_version, data.get("body", "")
     except Exception as e:
         log(f"[!] Update check failed: {e}", (255, 100, 100))
-    return False, None, None
+    return False, None, None, None
+
+def download_update(exe_url, new_version, progress_callback=None):
+    """Download the installer with progress reporting, then launch it."""
+    if not exe_url:
+        log("[!] Update URL not found.", (255, 100, 100))
+        return False
+
+    try:
+        log(f"[*] Downloading installer for v{new_version}...", (100, 255, 100))
+        r = requests.get(exe_url, stream=True, timeout=120)
+        if r.status_code != 200:
+            log(f"[!] Download failed: HTTP {r.status_code}", (255, 100, 100))
+            return False
+
+        total = int(r.headers.get('content-length', 0))
+        downloaded = 0
+        temp_setup = os.path.join(os.environ.get("TEMP", "."), f"Setup_FFM_{new_version}.exe")
+
+        with open(temp_setup, "wb") as f:
+            for chunk in r.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback and total > 0:
+                        progress_callback(downloaded, total)
+
+        log(f"[+] Download complete. Launching installer...", (100, 255, 100))
+        subprocess.Popen([temp_setup, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        return True
+
+    except Exception as e:
+        log(f"[!] Download failed: {e}", (255, 100, 100))
+        return False
 
 def perform_silent_update(exe_url, new_version):
     """Download the Setup.exe and launch it for a one-click update."""

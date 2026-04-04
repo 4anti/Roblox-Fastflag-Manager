@@ -23,7 +23,8 @@ class Config:
         "sidebar_collapsed": False,
         "watchdog_interval": 5.0,
         "enforce_all_flags": True,
-        "sort_mode": "custom"
+        "sort_mode": "custom",
+        "auto_update": False
     }
 
     @classmethod

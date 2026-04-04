@@ -5,7 +5,7 @@ import threading
 import ctypes
 from ctypes import wintypes
 import webview
-from src.utils.updater import check_for_updates, perform_silent_update, get_current_version, apply_staged_update
+from src.utils.updater import check_for_updates, perform_silent_update, get_current_version, apply_staged_update, download_update
 from src.utils.logger import log, get_logs
 from src.utils.config import Config
 from src.utils.helpers import infer_type, infer_type_from_name, clean_flag_name, get_flag_prefix, get_default_value
@@ -31,6 +31,8 @@ class Api:
         self._init_error = None
         self.processed_pids = set()
         self.update_ready = False
+        self._pending_update = None  # {version, exe_url, changelog}
+        self._update_progress = 0  # 0-100 for frontend polling
         self._last_offsets_loaded_state = False
 
         # Initialize subsystems with error recovery — UI must always load
@@ -79,21 +81,30 @@ class Api:
         threading.Thread(target=self._update_loop, daemon=True).start()
 
     def _update_loop(self):
-        """Background thread: Check for updates every 10 minutes and stage them silently."""
+        """Background thread: Check for updates periodically."""
         while True:
             try:
-                has_update, exe_url, remote_version = check_for_updates()
+                has_update, exe_url, remote_version, changelog = check_for_updates()
                 if has_update:
                     if exe_url:
-                        # Found update! Stage it silently
-                        if perform_silent_update(exe_url, remote_version):
-                            self.update_ready = True
+                        if self.settings.get('auto_update', False):
+                            # Auto mode: download and install silently
+                            if perform_silent_update(exe_url, remote_version):
+                                self.update_ready = True
+                        else:
+                            # Manual mode: store update info for the UI
+                            self._pending_update = {
+                                'version': remote_version,
+                                'exe_url': exe_url,
+                                'changelog': changelog or ''
+                            }
+                            log(f"[*] Update v{remote_version} available. Check Settings to install.", (100, 255, 100))
                     else:
                         log(f"[*] Update v{remote_version} is available on GitHub, but the Installer (.exe) is missing from the release assets.", (255, 200, 100))
             except Exception as e:
                 log(f"[!] Background update loop error: {e}", (255, 100, 100))
             
-            # Sleep for 10 minutes (600 seconds)
+            # Sleep for 10 minutes
             time.sleep(600)
 
     def _init_offsets(self):
@@ -132,6 +143,7 @@ class Api:
             'console_height': self.settings.get('console_height', 180),
             'sidebar_collapsed': self.settings.get('sidebar_collapsed', False),
             'sort_mode': self.settings.get('sort_mode', 'custom'),
+            'auto_update': self.settings.get('auto_update', False),
         }
 
     def set_history_limit(self, value):
@@ -170,6 +182,51 @@ class Api:
         self.settings['sort_mode'] = mode
         Config.save_settings(self.settings)
         log(f"[+] Sort Mode: {mode}")
+
+    def set_auto_update(self, value):
+        self.settings['auto_update'] = value
+        Config.save_settings(self.settings)
+        log(f"[+] Auto Update: {'ON' if value else 'OFF'}")
+
+    def get_update_info(self):
+        """Return pending update info for the frontend."""
+        if self._pending_update:
+            return {
+                'available': True,
+                'version': self._pending_update['version'],
+                'changelog': self._pending_update['changelog'],
+                'current': get_current_version()
+            }
+        return {
+            'available': False,
+            'current': get_current_version()
+        }
+
+    def get_update_progress(self):
+        """Return download progress (0-100) for the frontend overlay."""
+        return self._update_progress
+
+    def trigger_manual_update(self):
+        """User clicked 'Update Now'. Download with progress in a background thread."""
+        if not self._pending_update:
+            return False
+
+        def do_download():
+            info = self._pending_update
+            def on_progress(downloaded, total):
+                self._update_progress = int((downloaded / total) * 100)
+
+            success = download_update(info['exe_url'], info['version'], progress_callback=on_progress)
+            if success:
+                self._update_progress = 100
+                time.sleep(0.5)
+                os._exit(0)
+            else:
+                self._update_progress = -1  # Signal failure
+
+        self._update_progress = 0
+        threading.Thread(target=do_download, daemon=True).start()
+        return True
 
     def open_url(self, url):
         """Open a URL in the default system browser."""
