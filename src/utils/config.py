@@ -12,6 +12,9 @@ class Config:
     HISTORY_FILE = APP_DIR / "fflags_history.json"
     LAST_VERSION_FILE = APP_DIR / "last_version.txt"
     FFLAGS_FILE = APP_DIR / "FFlags.h"
+    # Persistent registry of all flag names known to live in either the bank or .data,
+    # keyed by the imtheo Pointer offset (which changes per Roblox build).
+    KNOWN_FLAGS_FILE = APP_DIR / "known_flags.json"
 
     DEFAULT_SETTINGS = {
         "auto_apply": False,

@@ -14,17 +14,21 @@ class SyscallManager:
         
         self.ssn_protect = self.get_ssn("NtProtectVirtualMemory")
         self.ssn_write = self.get_ssn("NtWriteVirtualMemory")
+        self.ssn_read = self.get_ssn("NtReadVirtualMemory")
         self.ssn_suspend = self.get_ssn("NtSuspendProcess")
         self.ssn_resume = self.get_ssn("NtResumeProcess")
         
-        if not all([self.ssn_protect, self.ssn_write, self.ssn_suspend, self.ssn_resume]):
+        print(f"[*] SSNs: Protect={self.ssn_protect}, Write={self.ssn_write}, Read={self.ssn_read}")
+        
+        if not all([self.ssn_protect, self.ssn_write, self.ssn_read, self.ssn_suspend, self.ssn_resume]):
             raise Exception("Failed to resolve SSNs")
 
         self.stub_memory = self.allocate_stub_memory()
         self.protect_stub = self.create_syscall_stub(self.ssn_protect, 0)
         self.write_stub = self.create_syscall_stub(self.ssn_write, 32) # Offset for next stub
-        self.suspend_stub = self.create_syscall_stub(self.ssn_suspend, 64)
-        self.resume_stub = self.create_syscall_stub(self.ssn_resume, 96)
+        self.read_stub = self.create_syscall_stub(self.ssn_read, 64)
+        self.suspend_stub = self.create_syscall_stub(self.ssn_suspend, 96)
+        self.resume_stub = self.create_syscall_stub(self.ssn_resume, 128)
 
     def get_ssn(self, func_name):
         # Configure GetProcAddress to return c_void_p to handle 64-bit addresses correctly
@@ -122,6 +126,25 @@ class SyscallManager:
         
         status = func(process_handle, ctypes.c_void_p(base_address), buffer, size, ctypes.byref(written))
         return status == 0
+
+    def nt_read_virtual_memory(self, process_handle, base_address, buffer, size):
+        # NtReadVirtualMemory(ProcessHandle, BaseAddress, Buffer, NumberOfBytesToRead, *NumberOfBytesRead)
+        
+        Prototype = ctypes.CFUNCTYPE(
+            ctypes.c_long,
+            wintypes.HANDLE,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t)
+        )
+        
+        func = Prototype(self.read_stub)
+        
+        read = ctypes.c_size_t()
+        
+        status = func(process_handle, ctypes.c_void_p(base_address), buffer, size, ctypes.byref(read))
+        return status == 0, read.value
 
     def nt_suspend_process(self, process_handle):
         # NtSuspendProcess(ProcessHandle)
