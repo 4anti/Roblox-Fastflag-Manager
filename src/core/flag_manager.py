@@ -127,6 +127,15 @@ class FlagManager:
                     continue
                     
                 name = flag['name']
+                clean = clean_flag_name(name)
+                # If we know the official prefix and the current name is missing it, prepend it.
+                # If the name ALREADY has a prefix (new architecture), use it as is.
+                prefix = self.official_prefixes.get(name) or self.official_prefixes.get(clean)
+                if prefix and not name.startswith(prefix):
+                    full_name = prefix + clean
+                else:
+                    full_name = name
+                    
                 val_str = str(flag['value'])
                 ftype = flag.get('type', 'string')
                 
@@ -141,7 +150,7 @@ class FlagManager:
                 else:
                     val = val_str
                     
-                flags_dict[name] = val
+                flags_dict[full_name] = val
             
             # This writes to the latest version directory's ClientSettings/ClientAppSettings.json
             return roblox_manager.apply_fflags_json(flags_dict)
@@ -205,90 +214,48 @@ class FlagManager:
                 return True
         return False
 
-    def load_offsets(self):
-        """Load flag offsets natively using the offline scanner. Safe to call from background thread."""
-        if self.offsets_loading:
-            return
+    def load_offsets(self, force_cdn=False):
+        """Populate the UI known-flags list from Imtheo FFlags.hpp (or disk cache)."""
+        if self.offsets_loading: return
         self.offsets_loading = True
 
         try:
-            import src.core.roblox_manager as r_man
-            # The manager's static method will spawn a suspended process and scan it automatically
-            offsets = r_man.RobloxManager.fetch_offsets()
-            if offsets:
-                self.all_offsets = {}
-                self.vtable_map = {} # name -> v_offset
-                
-                # Pre-defined Rosetta Stone for types (VTable Offset -> Type)
-                # These are stable memory identifiers for the underlying C++ classes
-                VTABLE_TYPE_MAP = {
-                    0x5F595E8: 'int',    # FastInt
-                    0x5F59920: 'bool',   # FastFlag
-                    0x5F594E0: 'bool',   # DynamicFastFlag
-                    0x5F59818: 'string', # FastString
-                    0x5F593D8: 'int',    # FastLog/Metrics
-                }
+            from src.utils.helpers import get_flag_prefix
+            from src.core import offset_loader
 
-                for name, data in offsets.items():
-                    if isinstance(data, dict):
-                        # New Scanner Format: {"offset": "0x...", "vtable": "0x..."}
-                        off = int(data['offset'], 16)
-                        v_off = int(data['vtable'], 16)
-                        self.all_offsets[name] = off
-                        self.vtable_map[name] = v_off
-                        # Lock in the official type from memory class
-                        if v_off in VTABLE_TYPE_MAP:
-                            self.official_types[name] = VTABLE_TYPE_MAP[v_off]
-                    else:
-                        # Legacy/Cache Format: "0x..."
-                        self.all_offsets[name] = int(data, 16) if isinstance(data, str) else data
+            log("[*] Loading flag definitions (Imtheo)...", (100, 255, 255))
+            known = offset_loader.load_known_flag_names()
 
-                self.preset_flags_list = sorted(list(self.all_offsets.keys()))
-                self.offsets_loaded = True
-                
-                # Update initial status for all existing flags (fixes startup question marks)
-                with self._lock:
-                    for f in self.user_flags:
-                        fname = f['name']
-                        # Clear 'unavailable' status for flags that now have valid discovered offsets
-                        if r_man.RobloxManager.get_offset_for_flag(fname):
-                            f['_status'] = None
-                            # Re-sync type if it's currently 'unknown' or potentially wrong (e.g. guessed Debug as bool)
-                            official = self.official_types.get(fname)
-                            if official:
-                                f['type'] = official
-                
-                # Fetch official types seamlessly in background
-                threading.Thread(target=self._fetch_official_types, daemon=True).start()
-                
+            for full_name, ftype in known.items():
+                self.official_types[full_name] = ftype
+                prefix = get_flag_prefix(full_name)
+                if prefix:
+                    self.official_prefixes[full_name] = prefix
+
+            self.preset_flags_list = sorted(self.official_types.keys())
+            self.offsets_loaded = True
+            if self.preset_flags_list:
+                log(f"[+] Loaded {len(self.preset_flags_list)} flags (Imtheo / cache).", (100, 255, 100))
+            else:
+                log("[!] No flag list from Imtheo or cache — UI search limited", (255, 200, 100))
+
+            # Re-sync existing user flags' types and clear stale unavailable markers.
+            # Only adopt the official type if it's a real type — never let an 'unknown'
+            # entry from the offset table overwrite the user's stored int/bool/float,
+            # because the FFlagList namespace block leaks bare (unprefixed) member names
+            # into official_types with type='unknown'.
+            with self._lock:
+                for f in self.user_flags:
+                    f['_status'] = None
+                    official = self.official_types.get(f['name'])
+                    if official and official != 'unknown':
+                        f['type'] = official
+
         except Exception as e:
-            log(f"Failed to load FFlags natively: {e}", (255, 100, 100))
+            log(f"[-] Failed to load local offsets: {e}", (255, 100, 100))
+            self.offsets_loaded = True
         finally:
             self.offsets_loading = False
-
-    def _fetch_official_types(self):
-        """Fetch the official ClientSettings to resolve exact types for unadded flags."""
-        try:
-            import urllib.request
-            import json
-            from src.utils.helpers import infer_type_from_name, clean_flag_name, get_flag_prefix
-            url = "https://clientsettingscdn.roblox.com/v1/settings/application?applicationName=PCDesktopClient"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Roblox/WinInet'})
-            with urllib.request.urlopen(req, timeout=5.0) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode('utf-8'))
-                    settings = data.get('applicationSettings', {})
-                    for full_name in settings.keys():
-                        unprefixed = clean_flag_name(full_name)
-                        ftype = infer_type_from_name(full_name)
-                        prefix = get_flag_prefix(full_name)
-                        if ftype:
-                            self.official_types[unprefixed] = ftype
-                        if prefix:
-                            self.official_prefixes[unprefixed] = prefix
-            log(f"[+] Loaded {len(self.official_types)} official flag types from CDN.")
-        except Exception as e:
-            log(f"[-] Failed to fetch official flag types: {e}", (255, 100, 100))
 
     # ================================================================
     # Watchdog Daemon for DF Flags
@@ -341,39 +308,52 @@ class FlagManager:
                 
             # Filter flags for enforcement
             if enforce_all:
-                # All enabled memory-writable flags
                 enforce_list = [f for f in self.user_flags if f.get('enabled', True) and f.get('type', 'string') != 'string']
             else:
-                # Only DF prefixed flags (legacy behavior)
                 enforce_list = [f for f in self.user_flags if str(f.get('name', '')).startswith('DF') and f.get('enabled', True)]
             
             if not enforce_list:
                 continue
                 
-            # Need to re-open for write if closed
             if not self._rm.open_process_for_write():
                 continue
+            
+            # Use cached live addresses (populated during initial Apply)
+            from src.utils.helpers import clean_flag_name
                 
             reapplied = 0
             for flag in enforce_list:
+                # Skip flags whose target page is known-unwritable (.rdata / stale).
+                # The JSON path already covers these at launch — re-trying every 5s is wasted work.
+                if flag.get('_unwritable'):
+                    continue
+
                 name = flag['name']
                 value = flag['value']
                 flag_type = flag.get('type', 'string')
-                
-                offset_hex = self._rm.get_offset_for_flag(name)
-                if not offset_hex:
+
+                # Use the live address cache from last scan
+                addr_data = self._rm.get_live_flag_address(name)
+                if not addr_data:
                     continue
-                    
-                try: offset_int = int(offset_hex, 16)
-                except ValueError: continue
+
+                # addr_data is a list (legacy multi-address shape) — now always
+                # one entry from Imtheo, but iterate to keep call shape stable.
+                write_results = []
+                for addr_entry in addr_data:
+                    abs_addr = addr_entry['abs_addr']
+                    # Prefer user's explicitly provided type to support exploit overrides (e.g. NaN int for floats)
+                    live_type = flag_type if flag_type != 'unknown' else addr_entry.get('type', 'unknown')
+
+                    success, msg = self._rm.write_flag_at_address(live_type, abs_addr, str(value))
+                    write_results.append((success, msg))
                 
-                # Write current value to memory
-                success, _ = self._rm.write_flag_external(name, flag_type, offset_int, str(value))
-                if success:
+                if any(r[0] for r in write_results):
                     reapplied += 1
+                elif all(isinstance(r[1], str) and (r[1].startswith("JSON_ONLY") or r[1].startswith("STALE_ADDR")) for r in write_results):
+                    flag['_unwritable'] = True
                     
             if reapplied > 0:
-                # Only log if it's been a while since the last log to avoid spamming
                 curr = time.time()
                 if not hasattr(self, '_last_watchdog_log') or curr - self._last_watchdog_log > 60.0:
                     log(f"[+] Watchdog re-enforced {reapplied} flags in background.", (100, 255, 100))
@@ -477,11 +457,14 @@ class FlagManager:
                             triggered_this_cycle = True
                             log(f"[HOTKEY] Un-applied {fname}", (255, 150, 150))
                             if 'original_value' in flag:
-                                offset_hex = self._rm.get_offset_for_flag(fname)
-                                if offset_hex:
+                                addr_data = self._rm.get_live_flag_address(fname)
+                                if addr_data:
                                     try:
                                         self._rm.open_process_for_write()
-                                        self._rm.write_flag_external(fname, flag_type, int(offset_hex, 16), str(flag['original_value']))
+                                        for addr_entry in addr_data:
+                                            abs_addr = addr_entry['abs_addr']
+                                            live_type = flag_type if flag_type != 'unknown' else addr_entry.get('type', 'unknown')
+                                            self._rm.write_flag_at_address(live_type, abs_addr, str(flag['original_value']))
                                     except Exception:
                                         pass
 
@@ -517,19 +500,21 @@ class FlagManager:
                             triggered_this_cycle = True
                             
                             if self._rm and self._rm.is_attached:
-                                offset_hex = self._rm.get_offset_for_flag(fname)
-                                if offset_hex:
+                                addr_data = self._rm.get_live_flag_address(fname)
+                                if addr_data:
                                     try:
-                                        offset_int = int(offset_hex, 16)
-                                        if 'original_value' not in flag:
-                                            orig_val = self._rm.read_flag_external(flag_type, offset_int)
-                                            if orig_val is not None: flag['original_value'] = orig_val
                                         self._rm.open_process_for_write()
-                                        res, msg = self._rm.write_flag_external(fname, flag_type, offset_int, new_val)
-                                        if res:
-                                            log(f"[HOTKEY] Toggled {fname} to {new_val} (Success)", (100, 255, 100))
-                                        else:
-                                            log(f"[HOTKEY] Failed to toggle {fname}: {msg}", (255, 100, 100))
+                                        for addr_entry in addr_data:
+                                            abs_addr = addr_entry['abs_addr']
+                                            live_type = flag_type if flag_type != 'unknown' else addr_entry.get('type', 'unknown')
+                                            if 'original_value' not in flag:
+                                                orig_val = self._rm.read_flag_at_address(live_type, abs_addr)
+                                                if orig_val is not None: flag['original_value'] = orig_val
+                                            res, msg = self._rm.write_flag_at_address(live_type, abs_addr, new_val)
+                                            if res:
+                                                log(f"[HOTKEY] Toggled {fname} to {new_val} (Success)", (100, 255, 100))
+                                            else:
+                                                log(f"[HOTKEY] Failed to toggle {fname}: {msg}", (255, 100, 100))
                                     except Exception as e:
                                         log(f"[HOTKEY] Error during toggle {fname}: {e}", (255, 100, 100))
             
@@ -622,88 +607,149 @@ class FlagManager:
                 self.last_apply_time = time.time()
                 return
 
+            # Live scan: find flag objects in the running process
+            from src.utils.helpers import infer_type_from_name, clean_flag_name
+            target_names = []
+            for f in flags_snapshot:
+                fname = f['name']
+                clean = clean_flag_name(fname)
+                prefix = self.official_prefixes.get(clean)
+                if prefix:
+                    target_names.append(prefix + clean)
+                else:
+                    target_names.append(fname)
+                    
+            log("[*] Scanning live Roblox process for flag objects...", (100, 255, 255))
+            # First Apply per PID does a full scan; subsequent Applies hit the
+            # cache. If any target isn't covered (e.g. user added a new flag
+            # since the last scan), force a rescan once to pick it up.
+            live_addrs = roblox_manager.scan_live_flags(target_names, force_rescan=False)
+            if live_addrs:
+                missing_targets = {clean_flag_name(n) for n in target_names} - set(live_addrs.keys())
+                if missing_targets:
+                    live_addrs = roblox_manager.scan_live_flags(target_names, force_rescan=True)
+
+            # Clear stale "unwritable" verdicts: a fresh scan may resolve a different
+            # (possibly writable) address for the same flag if the build changed.
+            for f in flags_snapshot:
+                if '_unwritable' in f:
+                    f.pop('_unwritable', None)
+
             mem_ok = 0
             mem_fail = 0
             mem_skip = 0
             mem_reverted = 0
+            mem_json_only = 0
             enabled_flags = [f for f in flags_snapshot if f.get('enabled', True)]
             enabled_count = len(enabled_flags)
             total_list_count = len(flags_snapshot)
-            failed_flags = []  # Flags that fail external writes
-            _originals_captured = False  # Track if we need to save after the loop
+            _originals_captured = False
 
             for flag in flags_snapshot:
                 name = flag['name']
-                
-                # Phase 3: Final JIT Type Defense (Source of truth: Name)
-                from src.utils.helpers import infer_type_from_name
                 flag_type = infer_type_from_name(name) or flag.get('type', 'string')
-                
                 is_enabled = flag.get('enabled', True)
                 
-                # Skip string flags — can't write to fixed-size memory
+                # Skip string flags — can't safely write to std::string in memory
                 if flag_type == 'string':
                     mem_skip += 1
-                    flag['_status'] = 'unavailable'
-                    # log(f"[-] MEM: Skipping {name} (String flags require restart)", (200, 200, 100))
+                    flag['_status'] = 'json_only' if flag.get('_status') == 'success' else 'unavailable'
                     continue
-
-                # Look up RVA offset
-                offset_hex = roblox_manager.get_offset_for_flag(name)
-                if not offset_hex:
+                
+                # Skip unknown type flags — type could not be determined
+                if flag_type == 'unknown':
                     mem_skip += 1
-                    flag['_status'] = 'unavailable'
+                    flag['_status'] = 'json_only' if flag.get('_status') == 'success' else 'unavailable'
                     continue
+                    
+                # Special fast-path for TaskSchedulerTargetFps (FPS unlocked)
+                clean = clean_flag_name(name)
+                
+                if clean == "TaskSchedulerTargetFps":
+                    if is_enabled:
+                        value_to_write = str(flag['value'])
+                        success, message = roblox_manager.write_fps_direct(int(float(value_to_write)))
+                        if success:
+                            flag['_status'] = 'success'
+                            mem_ok += 1
+                            log(f"[+] MEM: {name} = {value_to_write} (DirectPattern)", (100, 255, 100))
+                            continue
+                        else:
+                            mem_fail += 1
+                            flag['_status'] = 'failed'
+                            log(f"[-] MEM FAIL: TaskSchedulerTargetFps — {message}", (255, 100, 100))
+                            continue
 
-                try:
-                    offset_int = int(offset_hex, 16)
-                except Exception:
+                # Look up the live absolute address
+                clean = clean_flag_name(name)
+                addr_data = live_addrs.get(clean) or live_addrs.get(name)
+                if not addr_data:
                     mem_skip += 1
+                    flag['_status'] = 'json_only' if flag.get('_status') == 'success' else 'unavailable'
+                    log(f"[·] SKIP: {name} (type={flag_type}) — no live address found", (180, 180, 180))
                     continue
 
-                # Capture original value before we modify memory for the first time
-                if is_enabled and 'original_value' not in flag:
-                    orig_val = roblox_manager.read_flag_external(flag_type, offset_int)
-                    if orig_val is not None:
-                        flag['original_value'] = orig_val
-                        _originals_captured = True
+                # addr_data is a list (legacy multi-address shape). Imtheo-only
+                # produces a single entry per flag; iterate for shape stability.
+                write_results = []
+                for addr_entry in addr_data:
+                    curr_abs_addr = addr_entry['abs_addr']
+                    # Prefer user's explicitly provided type to support exploit overrides (e.g. NaN int for floats)
+                    curr_live_type = flag_type if flag_type != 'unknown' else addr_entry.get('type', 'unknown')
+                    
+                    # Capture original value before first modification
+                    if is_enabled and 'original_value' not in flag:
+                        orig_val = roblox_manager.read_flag_at_address(curr_live_type, curr_abs_addr)
+                        if orig_val is not None:
+                            flag['original_value'] = orig_val
+                            _originals_captured = True
 
-                if is_enabled:
-                    value_to_write = str(flag['value'])
-                    flag['_was_active'] = True
-                else:
-                    # Smart Reversion: Only write if we have an original AND we were previously active
-                    if flag.get('_was_active', False) and 'original_value' in flag and flag['original_value'] is not None:
-                        value_to_write = str(flag['original_value'])
+                    if is_enabled:
+                        v_write = str(flag['value'])
+                        res, msg = roblox_manager.write_flag_at_address(curr_live_type, curr_abs_addr, v_write)
+                        write_results.append((res, msg, v_write))
                     else:
-                        mem_skip += 1
-                        flag['_status'] = None # Clean up status if it's inactive and never touched
-                        log(f"[-] MEM: Skipping {name} (Disabled, no original value or not previously active)", (200, 200, 100))
-                        continue
+                        # Smart Reversion
+                        if flag.get('_was_active', False) and 'original_value' in flag and flag['original_value'] is not None:
+                            v_write = str(flag['original_value'])
+                            res, msg = roblox_manager.write_flag_at_address(curr_live_type, curr_abs_addr, v_write)
+                            write_results.append((res, msg, v_write))
+                
+                if not write_results:
+                    mem_skip += 1
+                    flag['_status'] = None
+                    continue
 
-                success, message = roblox_manager.write_flag_external(name, flag_type, offset_int, value_to_write)
+                # Success if at least one write worked
+                final_res = any(r[0] for r in write_results)
+                success_msg = next((r[1] for r in write_results if r[0]), write_results[0][1])
+                final_val = write_results[0][2]
 
-                if success:
+                if final_res:
                     flag['_status'] = 'success'
                     if is_enabled:
                         mem_ok += 1
-                        log(f"[+] MEM: {name} = {value_to_write} {message}", (100, 255, 100))
+                        flag['_was_active'] = True
+                        log(f"[+] MEM: {name} = {final_val} {success_msg}", (100, 255, 100))
                     else:
                         mem_reverted += 1
-                        flag['_was_active'] = False # RESET ONLY ON SUCCESSFUL REVERSION
-                        log(f"[+] MEM: Reversed {name} to {value_to_write} {message}", (100, 255, 100))
+                        flag['_was_active'] = False
+                        log(f"[+] MEM: Reversed {name} to {final_val} {success_msg}", (100, 255, 100))
                 else:
-                    mem_fail += 1
-                    flag['_status'] = 'unavailable'
-                    if is_enabled:
-                        failed_flags.append(flag)
+                    if any(isinstance(r[1], str) and "JSON_ONLY" in r[1] for r in write_results):
+                        mem_json_only += 1
+                        flag['_status'] = 'json_only'
+                        log(f"[·] JSON-ONLY: {name}", (180, 180, 255))
+                    else:
+                        mem_fail += 1
+                        flag['_status'] = 'failed'
+                        log(f"[-] MEM FAIL: {name} — {success_msg}", (255, 100, 100))
 
-            # Persist any newly captured original values in a single write
             if _originals_captured:
                 self.save_user_flags()
 
-            # The count logic: X/Y where X is successful enabled flags, Y is total enabled flags
-            log(f"[=] Injection Result: {mem_ok}/{enabled_count} flags APPLIED. ({mem_reverted} reverted, {mem_skip} skipped).", 
+            log(f"[=] Injection Result: {mem_ok}/{enabled_count} flags APPLIED via memory. "
+                f"({mem_json_only} JSON-only, {mem_reverted} reverted, {mem_skip} skipped, {mem_fail} failed).",
                 (100, 255, 100) if mem_fail == 0 else (200, 200, 100))
             
             if total_list_count > enabled_count:
@@ -720,10 +766,7 @@ class FlagManager:
             log(traceback.format_exc(), (255, 50, 50))
 
     def launch_and_apply(self, roblox_manager):
-        """Write JSON first, then launch Roblox suspended and patch ALL flags early.
-        
-        This bypasses Hyperion's SEC_NO_CHANGE locks by patching before init.
-        """
+        """Write JSON first, then launch Roblox and apply live memory flags."""
         if not self.user_flags:
             log("[-] No flags to apply", (255, 200, 100))
             return
@@ -758,28 +801,36 @@ class FlagManager:
         else:
             log(f"[-] JSON: {json_msg}", (255, 100, 100))
         
-        # === Step 2: Launch suspended + early patch ===
-        log(f"[*] EARLY PATCH: Launching Roblox suspended, patching active flags...", (100, 255, 255))
+        # === Step 2: Launch and apply live ===
+        log(f"[*] Launching Roblox to apply active flags...", (100, 255, 255))
         
-        # Pass ALL flags so we capture original values even for disabled ones
-        success, patched, attempted, new_pid = roblox_manager.launch_and_patch_roblox(self.user_flags)
+        success, pid, _, _ = roblox_manager.launch_and_patch_roblox(self.user_flags)
         
         if success:
-            log(f"[+] Launch & Apply complete: {patched}/{attempted} flags patched early (PID {new_pid})", (100, 255, 100))
-            # Mark all enabled flags as "was active" for smart reversion later
-            for f in self.user_flags:
-                if f.get('enabled', True):
-                    f['_was_active'] = True
+            log(f"[+] Roblox launched (PID {pid}), waiting for initialization...", (100, 255, 100))
             
-            self.flags_applied = True
-            self.last_apply_time = time.time()
-            # Persist captured original values
-            self.save_user_flags()
-            for flag in self.user_flags:
-                if flag.get('_status') != 'success' and flag.get('type', 'string') != 'string':
-                    flag['_status'] = 'json_only'
+            # Wait for Roblox to initialize its memory
+            initialized = False
+            for _ in range(15):
+                time.sleep(1.0)
+                roblox_manager.attach()
+                if roblox_manager.is_attached and roblox_manager.get_roblox_base():
+                    # Check if memory is readable yet
+                    if roblox_manager.read_memory_external(roblox_manager.get_roblox_base(), 100):
+                        initialized = True
+                        break
+                        
+            if initialized:
+                log(f"[+] Process initialized, applying live memory flags...", (100, 255, 100))
+                time.sleep(1.0)  # Give it a moment to allocate flag objects
+                self.apply_flags_hybrid(roblox_manager)
+            else:
+                log(f"[-] Could not attach to Roblox after launch", (255, 100, 100))
+                for flag in self.user_flags:
+                    if flag.get('_status') != 'success' and flag.get('type', 'string') != 'string':
+                        flag['_status'] = 'json_only'
         else:
-            log(f"[-] Early patch failed — flags are in JSON, restart Roblox manually", (255, 200, 100))
+            log(f"[-] Launch failed — flags are in JSON, restart Roblox manually", (255, 200, 100))
             for flag in self.user_flags:
                 flag['_status'] = 'json_only'
                 

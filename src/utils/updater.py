@@ -78,11 +78,29 @@ def download_update(exe_url, new_version, progress_callback=None):
                     if progress_callback and total > 0:
                         progress_callback(downloaded, total)
 
-        log(f"[+] Download complete. Launching installer...", (100, 255, 100))
-        import ctypes
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
+        file_size = os.path.getsize(temp_setup)
+        log(f"[+] Download complete ({file_size} bytes). Launching installer...", (100, 255, 100))
+
+        if file_size < 100000:
+            log(f"[!] Downloaded file is suspiciously small ({file_size} bytes). Aborting.", (255, 100, 100))
+            return False
+
+        # Write a detached batch script to launch the installer.
+        # This is the most reliable pattern for Windows self-updates:
+        # the .bat is 100% independent of Python — it survives os._exit(0).
+        bat_path = os.path.join(os.environ.get("TEMP", "."), "ffm_update_launcher.bat")
+        with open(bat_path, "w") as f:
+            f.write("@echo off\n")
+            f.write("timeout /t 2 /nobreak >nul\n")  # wait for old app to fully close
+            f.write(f'start "" "{temp_setup}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\n')
+
+        # Launch the batch script as a fully detached, hidden process
+        subprocess.Popen(
+            ["cmd.exe", "/c", bat_path],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+            close_fds=True
         )
+        log(f"[+] Update launcher queued. App will close now.", (100, 255, 100))
         return True
 
     except Exception as e:
@@ -108,13 +126,17 @@ def perform_silent_update(exe_url, new_version):
         
         log(f"[+] Launching One-Click Installer...", (100, 255, 100))
         
-        # /VERYSILENT: Install without user interaction
-        # /SUPPRESSMSGBOXES: Don't show errors
-        # /NORESTART: Don't restart Windows
         import ctypes
-        ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
+        # Use "open" NOT "runas" — Inno Setup has its own UAC manifest.
+        # "runas" silently fails from background/daemon threads (no UI context for UAC).
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "open", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
         )
+        log(f"[*] ShellExecuteW returned: {result} (>32 = success)", (100, 255, 255))
+
+        if result <= 32:
+            log(f"[!] ShellExecuteW failed with code {result}", (255, 100, 100))
+            return False
         
         # We must exit immediately so the installer can overwrite FFM.exe
         log("[*] Restarting app to apply update...", (100, 255, 100))

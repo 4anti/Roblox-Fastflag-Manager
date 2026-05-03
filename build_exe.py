@@ -2,24 +2,18 @@ import os
 import subprocess
 import sys
 import shutil
-from generate_icon import create_icon
+
 
 def build():
-    print("[*] Starting FFlag Manager Build Process...")
-    
-    # 1. CLEAN THE BUILD FOLDERS (Force fresh start)
+    print("[*] Starting FFlag Manager build...")
+
+    # 1. Clean previous build output
     for folder in ['build', 'dist']:
         if os.path.exists(folder):
             print(f"[*] Removing old {folder} folder...")
             shutil.rmtree(folder, ignore_errors=True)
 
-    # 2. Generate the icon first
-    try:
-        create_icon()
-    except Exception as e:
-        print(f"[!] Icon generation failed: {e}")
-
-    # 3. Ensure PyInstaller is installed
+    # 2. Ensure PyInstaller is installed
     try:
         import PyInstaller
     except ImportError:

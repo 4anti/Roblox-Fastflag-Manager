@@ -220,7 +220,7 @@ class Api:
             success = download_update(info['exe_url'], info['version'], progress_callback=on_progress)
             if success:
                 self._update_progress = 100
-                time.sleep(3.0)  # Give Windows COM server time to spawn the UAC prompt!
+                time.sleep(1.0)  # Brief pause to let the .bat process register before we exit
                 os._exit(0)
             else:
                 self._update_progress = -1  # Signal failure
@@ -240,21 +240,34 @@ class Api:
 
     # ─── Available Flags ───
     
+    def _refresh_search_cache(self, search_term):
+        """Unified method to refresh the search cache."""
+        search_lower = search_term.lower()
+        
+        # If term hasn't changed, don't re-calculate
+        if hasattr(self, '_search_cache_term') and self._search_cache_term == search_lower:
+            return
+            
+        combined_list = self.flag_manager.preset_flags_list
+        
+        if not search_lower:
+            self._search_cache = combined_list
+        else:
+            # Fuzzy search: match search term against either the FULL name or the CLEANED name
+            from src.utils.helpers import clean_flag_name
+            self._search_cache = [
+                name for name in combined_list 
+                if search_lower in name.lower() or search_lower in clean_flag_name(name).lower()
+            ]
+            
+        self._search_cache_term = search_lower
+
     def get_fflag_count(self, search='') -> int:
         """Get total number of discovered flags, optionally filtered by search."""
         if not self.flag_manager:
             return 0
-        if not search:
-            return len(self.flag_manager.preset_flags_list)
-        
-        # Check cache
-        search_lower = search.lower()
-        if hasattr(self, '_search_cache_term') and self._search_cache_term == search_lower:
-            return len(self._search_cache)
             
-        # Re-filter if not cached
-        self._search_cache_term = search_lower
-        self._search_cache = [name for name in self.flag_manager.preset_flags_list if search_lower in name.lower()]
+        self._refresh_search_cache(search)
         return len(self._search_cache)
 
     def get_available_flags(self, search='', offset=0, limit=300):
@@ -264,14 +277,7 @@ class Api:
             
         search_lower = search.lower()
         
-        # Ensure cache is warm
-        if not hasattr(self, '_search_cache_term') or self._search_cache_term != search_lower:
-            if not search:
-                self._search_cache = self.flag_manager.preset_flags_list
-                self._search_cache_term = ''
-            else:
-                self._search_cache = [name for name in self.flag_manager.preset_flags_list if search_lower in name.lower()]
-                self._search_cache_term = search_lower
+        self._refresh_search_cache(search)
         
         source_list = self._search_cache
         user_flags_dict = {f['name']: f.get('type', 'unknown') for f in self.flag_manager.user_flags}
@@ -302,7 +308,7 @@ class Api:
         """Return list of user's configured flags."""
         if not self.flag_manager:
             return []
-        
+
         preset_set = set(self.flag_manager.preset_flags_list)
         # Pre-calculate clean names for faster lookup
         clean_presets = {clean_flag_name(p): p for p in self.flag_manager.preset_flags_list}
@@ -313,7 +319,9 @@ class Api:
             'value': str(f.get('value', '')),
             'type': f.get('type', 'string'),
             'status': f.get('_status', None),
-            'is_unrecognized': f['name'] not in preset_set and clean_flag_name(f['name']) not in clean_presets,
+            'is_unrecognized': f['name'] not in preset_set 
+                               and clean_flag_name(f['name']) not in clean_presets,
+            'is_known': f['name'] in preset_set or clean_flag_name(f['name']) in clean_presets,
             'enabled': f.get('enabled', True),            'bind': f.get('bind', ''),
             'unapply_bind': f.get('unapply_bind', ''),
             'cycle_states': f.get('cycle_states', []),
@@ -376,9 +384,9 @@ class Api:
         
         # Proactive Original Value Capture
         if self.roblox_manager and self.roblox_manager.is_attached:
-            offset = self.roblox_manager.get_offset_for_flag(name)
-            if offset:
-                orig = self.roblox_manager.read_flag_external(flag_type, int(offset, 16))
+            addr_data = self.roblox_manager.get_live_flag_address(name)
+            if addr_data:
+                orig = self.roblox_manager.read_flag_at_address(flag_type, addr_data['abs_addr'])
                 if orig is not None:
                     new_flag['original_value'] = orig
                     log(f"[*] Captured original value for {name}: {orig}")
@@ -675,6 +683,11 @@ class Api:
         if not self.flag_manager or not self.roblox_manager:
             log("[-] Not ready", (255, 100, 100))
             return
+        if getattr(self, '_is_applying', False):
+            log("[-] Busy applying flags, please wait...", (255, 200, 100))
+            return
+            
+        self._is_applying = True
         def do_inject():
             try:
                 # Try to attach (not required — JSON works without Roblox running)
@@ -682,9 +695,22 @@ class Api:
                 log("[*] Applying flags (hybrid: JSON + live memory)...", (100, 255, 255))
                 self.flag_manager.apply_flags_hybrid(self.roblox_manager)
             except Exception as e:
-                log(f"[-] CRITICAL CRASH in apply thread: {e}", (255, 50, 50))
+                log(f"[-] CRITICAL CRASH in apply logic: {e}", (255, 50, 50))
                 import traceback
                 traceback.print_exc()
+            finally:
+                self._is_applying = False
+                if self._window:
+                    self._window.evaluate_js("""
+                        var btn = document.getElementById('inject-btn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Apply Flags';
+                        }
+                        if (typeof refreshConfig === 'function') refreshConfig();
+                    """)
+                    
+        import threading
         threading.Thread(target=do_inject, daemon=True).start()
 
     def launch_and_apply(self):
@@ -692,14 +718,31 @@ class Api:
         if not self.flag_manager or not self.roblox_manager:
             log("[-] Not ready", (255, 100, 100))
             return
+        if getattr(self, '_is_applying', False):
+            log("[-] Busy applying flags, please wait...", (255, 200, 100))
+            return
+            
+        self._is_applying = True
         def do_launch():
             try:
                 log("[*] Launch & Apply: JSON + early patching...", (100, 255, 255))
                 self.flag_manager.launch_and_apply(self.roblox_manager)
             except Exception as e:
-                log(f"[-] CRITICAL CRASH in launch thread: {e}", (255, 50, 50))
+                log(f"[-] CRITICAL CRASH in launch logic: {e}", (255, 50, 50))
                 import traceback
                 traceback.print_exc()
+            finally:
+                self._is_applying = False
+                if self._window:
+                    self._window.evaluate_js("""
+                        var btn = document.getElementById('inject-btn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Apply Flags';
+                        }
+                        if (typeof refreshConfig === 'function') refreshConfig();
+                    """)
+                    
         threading.Thread(target=do_launch, daemon=True).start()
 
     def reapply_flags(self):
@@ -707,6 +750,11 @@ class Api:
         if not self.flag_manager or not self.roblox_manager:
             log("[-] Not ready", (255, 100, 100))
             return
+        if getattr(self, '_is_applying', False):
+            log("[-] Busy applying flags, please wait...", (255, 200, 100))
+            return
+            
+        self._is_applying = True
         def do_reapply():
             try:
                 # Kill existing Roblox
@@ -728,6 +776,18 @@ class Api:
                 log(f"[-] CRASH in reapply: {e}", (255, 50, 50))
                 import traceback
                 traceback.print_exc()
+            finally:
+                self._is_applying = False
+                if self._window:
+                    self._window.evaluate_js("""
+                        var btn = document.getElementById('inject-btn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = 'Apply Flags';
+                        }
+                        if (typeof refreshConfig === 'function') refreshConfig();
+                    """)
+                    
         threading.Thread(target=do_reapply, daemon=True).start()
 
     def import_flags(self):
@@ -912,6 +972,62 @@ class Api:
         except Exception as e:
             log(f"[-] Panic revert failed: {e}", (255, 50, 50))
             return False
+
+    def rescan_offsets(self):
+        """Force a deep memory scan to refresh all FFlag memory locations."""
+        if not self.roblox_manager:
+            return
+            
+        try:
+            log("[*] Manually triggering deep memory scan...", (100, 255, 255))
+            
+            # Nuclear Reset: Delete local vault and flush memory cache
+            from src.utils.config import Config
+            if Config.KNOWN_FLAGS_FILE.exists():
+                try:
+                    Config.KNOWN_FLAGS_FILE.unlink()
+                    log("[*] Local Vault file deleted.", (180, 180, 180))
+                except Exception as e:
+                    log(f"[!] Failed to delete vault file: {e}", (255, 150, 150))
+            
+            self.roblox_manager.clear_bank_cache()
+            
+            # Clear preset list (CDN data) to ensure a blank slate
+            if self.flag_manager:
+                self.flag_manager.official_types = {}
+                self.flag_manager.official_prefixes = {}
+                self.flag_manager.preset_flags_list = []
+                # Clear search UI cache
+                if hasattr(self, '_search_cache_term'):
+                    del self._search_cache_term
+                log("[*] Official CDN cache cleared.", (180, 180, 180))
+            
+            if not self.roblox_manager.is_attached:
+                self.roblox_manager.attach()
+            if not self.roblox_manager.is_attached:
+                log("[-] Scan Failed: Roblox is not running.", (255, 100, 100))
+                return
+            # Build target list from user flags for the rescan
+            target_names = []
+            if self.flag_manager:
+                from src.utils.helpers import clean_flag_name, get_flag_prefix
+                for f in self.flag_manager.user_flags:
+                    fname = f['name']
+                    clean = clean_flag_name(fname)
+                    prefix = self.flag_manager.official_prefixes.get(clean)
+                    target_names.append(prefix + clean if prefix else fname)
+            live_addrs = self.roblox_manager.scan_live_flags(target_names or None, force_rescan=True)
+            if live_addrs:
+                log(f"[+] Scan Complete: Found {len(live_addrs)} FFlag locations.", (100, 255, 100))
+                # Force search UI to refresh with new vault data
+                if hasattr(self, '_search_cache_term'):
+                    del self._search_cache_term
+            else:
+                log("[-] Scan Failed: No flag addresses found.", (255, 100, 100))
+        except Exception as e:
+            log(f"[-] Scan Error: {e}", (255, 100, 100))
+            import traceback
+            traceback.print_exc()
 
     # ─── Presets ───
 
