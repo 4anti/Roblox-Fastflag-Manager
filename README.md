@@ -133,19 +133,6 @@ created on first run.
 └── .github/workflows/    # CI: build EXE + Inno Setup installer on tag push
 ```
 
-## Updates
-
-The app checks GitHub Releases for newer versions every 10 minutes.
-
-- **Manual mode** (default): a notification appears in the Settings tab;
-  the user starts the download.
-- **Automatic mode** (opt-in): the installer is downloaded and run
-  silently in the background.
-
-Both modes use `FFM_Installer.exe` from the latest GitHub Release. Tags
-matching `v*` trigger the build/release workflow defined in
-`.github/workflows/release.yml`.
-
 ## Community
 
 [Discord server](https://discord.gg/ECekjAkQu7) — support, preset
