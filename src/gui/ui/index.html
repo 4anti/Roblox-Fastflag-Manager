@@ -1184,12 +1184,9 @@
         background: var(--text-dark);
         flex-shrink: 0;
       }
-      .config-item .flag-dot.success {
-        background: var(--success);
-      }
-      .config-item .flag-dot.error {
-        background: var(--error);
-      }
+      .config-item .flag-dot.success { background: var(--success); box-shadow: 0 0 8px rgba(74,222,128,0.4); }
+      .config-item .flag-dot.error { background: var(--error); box-shadow: 0 0 8px rgba(248,113,113,0.4); }
+      .config-item .flag-dot.json-only { background: var(--warning); box-shadow: 0 0 8px rgba(251,191,36,0.4); }
       .config-item .flag-name {
         flex: 1;
         font-size: 12px;
@@ -2723,6 +2720,18 @@
                   Execute Panic Revert
                 </button>
               </div>
+
+              <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                <span class="settings-label" style="font-weight: 600; color: var(--accent);">Offset Database</span>
+                <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Force a deep memory scan to refresh all FFlag memory locations. Use if injection fails.</span>
+                <button class="btn btn-primary" style="padding: 8px 16px; width: 100%; border-radius: 8px;" onclick="showConfirmModal('Rescan Offsets', 'This will launch Roblox silently in the background to scrape new memory addresses. This handles game updates. Proceed?', async () => { 
+                  document.getElementById('applied-count-val').textContent = 'Scanning...';
+                  await pywebview.api.rescan_offsets(); 
+                  if (typeof refreshConfig === 'function') refreshConfig();
+                })">
+                  Rescan FFlag Offsets
+                </button>
+              </div>
             </div>
 
             <div class="settings-section">
@@ -3878,18 +3887,27 @@
 
           for (const f of flags) {
             const sel = selectedConfigFlags.includes(f.name) ? " selected" : "";
-            const isUnavail = f.status === "unavailable";
+            const isUnavail = f.status === "unavailable" || f.status === "json_only" || f.status === "failed";
             const isEnabled = f.enabled !== false;
             
+            const isJsonOnly = f.status === "json_only";
             const dotCls =
               f.status === "success"
                 ? "flag-dot success"
-                : (f.status === "failed" || isUnavail)
-                  ? "flag-dot error"
-                  : "flag-dot";
+                : isJsonOnly
+                  ? "flag-dot json-only"
+                  : (f.status === "failed" || isUnavail)
+                    ? "flag-dot error"
+                    : "flag-dot";
                   
-            const unrecHtml = f.is_unrecognized 
-              ? `<span class="unrecognized-badge" title="FastFlag couldn't be found inside the scanned list">?</span>`
+            // is_known === false  -> we have a scanned cache and this name is NOT in it
+            //                        (Roblox renamed/removed the flag)
+            // is_known === true   -> name IS in scanned cache (suppress the "?")
+            // is_known === null   -> no cache yet, fall back to preset-based heuristic
+            const showUnrecognized = (f.is_known === false)
+              || (f.is_known === null && f.is_unrecognized);
+            const unrecHtml = showUnrecognized
+              ? `<span class="unrecognized-badge" title="${f.is_known === false ? 'Flag not present in current Roblox build (renamed or removed)' : "FastFlag couldn't be found inside the scanned list"}">?</span>`
               : '';
               
             let bindHtml = '';
@@ -3900,8 +3918,9 @@
               bindHtml += `<span class="bind-badge" title="Un-Apply Bind" style="background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.4); color: var(--error);">UN-APPLY: ${escHtml(f.unapply_bind)}</span>`;
             }
               
+            const tooltipText = isJsonOnly ? ' title="Applied to JSON. Restart Roblox to take effect."' : '';
             const itemHtml = `<div class="config-item${sel}${!isEnabled ? ' disabled-flag' : ''}" data-fname="${escHtml(f.name)}" data-fprefix="${escHtml(f.prefix || '')}" data-ftype="${escHtml(f.type)}" data-fbind="${escHtml(f.bind || '')}" data-funapplybind="${escHtml(f.unapply_bind || '')}" data-fcycle="${escHtml((f.cycle_states || []).join(','))}" data-fenabled="${isEnabled}" oncontextmenu="showContextMenu(event, this)" onclick="selectConfigFlag(event, '${escHtml(f.name)}', '${escHtml(f.value)}', '${escHtml(f.type)}')">
-                <div class="${dotCls}"></div>
+                <div class="${dotCls}"${tooltipText}></div>
                 <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
                   <span class="flag-name" style="flex:0 1 auto;">${escHtml(f.display_name || f.name)}</span>
                   ${unrecHtml}
@@ -4205,6 +4224,7 @@
         const fenabled = el.getAttribute("data-fenabled") === 'true';
         
         const isLive = el.querySelector(".flag-dot.success") !== null;
+        const isJsonOnly = el.querySelector(".flag-dot.json-only") !== null;
         const isString = ftype === 'string';
         
         let html = `
@@ -4227,12 +4247,12 @@
           </div>
         `;
 
-        // String flags are the only ones we don't support mid-game yet
-        if (isString) {
+        // String flags or lacking active live memory patch
+        if (isString || isJsonOnly) {
           html += `
             <div class="cm-card" style="padding: 8px; border-style: dashed; background: transparent; opacity: 0.6;">
               <div class="cm-label" style="display:flex; gap:6px; align-items:center;">
-                <span style="font-size:14px;">\u26A0\uFE0F</span> String Flag (Restart Required)
+                <span style="font-size:14px;">\u26A0\uFE0F</span> Restart Required (JSON Only)
               </div>
             </div>
           `;
@@ -4499,12 +4519,9 @@
           document.getElementById("inject-btn").disabled = true;
           document.getElementById("inject-btn").textContent = "Applying...";
           await pywebview.api.inject();
-          setTimeout(() => {
-            document.getElementById("inject-btn").disabled = false;
-            document.getElementById("inject-btn").textContent = "Apply Flags";
-          }, 2000);
         } catch (e) {
           console.error(e);
+          // Backend should handle it, but fallback just in case
           document.getElementById("inject-btn").disabled = false;
           document.getElementById("inject-btn").textContent = "Apply Flags";
         }

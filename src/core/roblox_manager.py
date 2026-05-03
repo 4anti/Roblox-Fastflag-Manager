@@ -7,9 +7,9 @@ import threading
 import ctypes
 import ctypes.wintypes as wintypes
 import json
+import re
 import urllib.request
 from src.utils.logger import log
-import src.core.scanner as scanner
 
 # ================================================================
 # ctypes function prototypes — MUST be defined before first call
@@ -100,6 +100,7 @@ class MEMORY_BASIC_INFORMATION(ctypes.Structure):
         ("BaseAddress", ctypes.c_void_p),
         ("AllocationBase", ctypes.c_void_p),
         ("AllocationProtect", wintypes.DWORD),
+        ("PartitionId", wintypes.WORD),
         ("RegionSize", ctypes.c_size_t),
         ("State", wintypes.DWORD),
         ("Protect", wintypes.DWORD),
@@ -110,9 +111,12 @@ _k32.VirtualQueryEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.POINTER
 _k32.VirtualQueryEx.restype = ctypes.c_size_t
 
 # ================================================================
-# Offsets Caching
+# Per-session caches
 # ================================================================
-_cached_offsets = None
+
+# Live flag address cache (per-session, invalidated on PID change)
+_live_flag_cache = {}      # {clean_name: [{"abs_addr": int, "full_name": str, "type": str}, ...]}
+_live_flag_cache_pid = None  # PID this cache is valid for
 
 # ================================================================
 # Windows structures
@@ -154,7 +158,11 @@ PROCESS_VM_READ = 0x0010
 PROCESS_VM_WRITE = 0x0020
 PROCESS_VM_OPERATION = 0x0008
 PROCESS_QUERY_INFORMATION = 0x0400
-PROCESS_ACCESS = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+# Hyperion bypass: full QUERY_INFORMATION (0x400) is denied, but the 0x38 mask
+# (VM_OPERATION | VM_READ | VM_WRITE) survives. Matches the test_unstickforce_v4 reference.
+PROCESS_ACCESS_STEALTH = PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+PROCESS_ACCESS = PROCESS_ACCESS_STEALTH
 
 PAGE_READWRITE = 0x04
 CREATE_SUSPENDED = 0x00000004
@@ -193,131 +201,6 @@ class PROCESS_BASIC_INFORMATION(ctypes.Structure):
 
 class RobloxManager:
     """Manages Roblox process attachment, memory read/write, and JSON flag application."""
-
-    @staticmethod
-    def fetch_offsets(force_rescan=False):
-        """Fetch pre-computed FFlag RVA offsets from local memory scanner."""
-        global _cached_offsets
-        if _cached_offsets is not None and not force_rescan:
-            return _cached_offsets
-            
-        version_dir = RobloxManager.get_roblox_version_dir()
-        if not version_dir:
-            log("[-] Cannot find Roblox version directory.", (255, 100, 100))
-            return {}
-            
-        version = os.path.basename(version_dir)
-        cache_file = scanner.get_cache_file(version)
-        
-        if not force_rescan and os.path.exists(cache_file):
-            try:
-                with open(cache_file, 'r') as f:
-                    offsets = json.load(f)
-                _cached_offsets = offsets
-                size = len(offsets)
-                log(f"[+] Loaded {size} offsets from local cache ({version})", (100, 255, 100))
-                return offsets
-            except Exception as e:
-                log(f"[-] Local cache corrupt, rescanning... ({e})", (200, 200, 100))
-                
-        # Execute Native Memory Scan
-        try:
-            log("[*] [Scanner] Spawning Roblox offline to scrape RVAs...", (200, 200, 100))
-            exe_path = os.path.join(version_dir, "RobloxPlayerBeta.exe")
-            si = STARTUPINFOW()
-            si.cb = ctypes.sizeof(STARTUPINFOW)
-            si.dwFlags = 0x00000001 | 0x00000800 # STARTF_USESHOWWINDOW | STARTF_FORCEOFFFEEDBACK
-            si.wShowWindow = 0 # SW_HIDE
-            pi = PROCESS_INFORMATION()
-            
-            # Combine CREATE_NO_WINDOW with a background priority class to reduce impact
-            # 0x08000000 = CREATE_NO_WINDOW
-            # 0x00000040 = IDLE_PRIORITY_CLASS
-            creation_flags = 0x08000000 | 0x00000040
-            
-            success = _k32.CreateProcessW(
-                exe_path, None, None, None, False,
-                creation_flags, None, version_dir,
-                ctypes.byref(si), ctypes.byref(pi)
-            )
-            if not success:
-                log("[-] [Scanner] Failed to spawn process.", (255, 100, 100))
-                return {}
-                
-            log("[*] [Scanner] Waiting for Hyperion to unpack .text section...", (200, 200, 100))
-            
-            pbi = PROCESS_BASIC_INFORMATION()
-            ret_len = ctypes.c_ulong(0)
-            _ntdll.NtQueryInformationProcess(pi.hProcess, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), ctypes.byref(ret_len))
-            
-            base_buf = ctypes.create_string_buffer(8)
-            bytes_read = ctypes.c_size_t(0)
-            _ntdll.NtReadVirtualMemory(pi.hProcess, ctypes.c_void_p(pbi.PebBaseAddress + 0x10), base_buf, 8, ctypes.byref(bytes_read))
-            image_base = struct.unpack("<Q", base_buf.raw[:8])[0]
-            
-            s = scanner.FFlagScanner(pi.hProcess, image_base)
-            
-            # Poll until .text section is readable (no longer PAGE_NOACCESS)
-            unpacked = False
-            for _ in range(15):
-                s.parse_pe_headers()
-                text_sec = s.sections.get(".text")
-                if text_sec:
-                    mbi = MEMORY_BASIC_INFORMATION()
-                    _k32.VirtualQueryEx(pi.hProcess, ctypes.c_void_p(text_sec["addr"]), ctypes.byref(mbi), ctypes.sizeof(mbi))
-                    if mbi.Protect != 1: # 1 == PAGE_NOACCESS
-                        unpacked = True
-                        break
-                time.sleep(1.0)
-                
-            if not unpacked:
-                log("[-] [Scanner] Timed out waiting for Hyperion unpack.", (255, 100, 100))
-                _k32.TerminateProcess(pi.hProcess, 0)
-                return {}
-                
-            offsets = s.dump_fflags()
-            
-            _k32.TerminateProcess(pi.hProcess, 0)
-            _k32.CloseHandle(pi.hThread)
-            _k32.CloseHandle(pi.hProcess)
-            
-            if offsets:
-                with open(cache_file, 'w') as f:
-                    json.dump(offsets, f)
-                _cached_offsets = offsets
-                return offsets
-        except Exception as e:
-            log(f"[-] [Scanner] Failed natively: {e}", (255, 100, 100))
-            
-        return {}
-
-    @staticmethod
-    def get_offset_for_flag(flag_name):
-        """Get the RVA hex offset for a specific flag name.
-        Handles prefixed/unprefixed variations by normalizing to 'clean' names.
-        """
-        offsets = RobloxManager.fetch_offsets()
-        if not offsets:
-            return None
-            
-        def extract_hex(data):
-            if isinstance(data, dict):
-                return data.get('offset')
-            return data
-
-        # Direct match (fastest/primary)
-        if flag_name in offsets:
-            return extract_hex(offsets[flag_name])
-            
-        # Fuzzy match: try to find by normalized name
-        from src.utils.helpers import clean_flag_name
-        clean_target = clean_flag_name(flag_name)
-        
-        for full_name, data in offsets.items():
-            if clean_flag_name(full_name) == clean_target:
-                return extract_hex(data)
-                
-        return None
 
     @staticmethod
     def get_all_roblox_version_dirs():
@@ -378,6 +261,13 @@ class RobloxManager:
         return candidates[0]
 
     @staticmethod
+    def get_roblox_version_string():
+        """Get the unique version string (e.g. version-a1b2c3...) of the current Roblox install."""
+        vdir = RobloxManager.get_roblox_version_dir()
+        if not vdir: return "unknown"
+        return os.path.basename(vdir)
+
+    @staticmethod
     def apply_fflags_json(flags_dict):
         """Write FFlags to ClientAppSettings.json across ALL detected versions (Scatter-Sync)."""
         vdirs = RobloxManager.get_all_roblox_version_dirs()
@@ -407,13 +297,25 @@ class RobloxManager:
     # Instance methods
     # ================================================================
 
-    def __init__(self):
-        self.pid = None
+    def __init__(self, pid=None):
+        self.pid = pid
+        self._h_process = None  # HANDLE (pointer-sized)
+        self._base_address = None
+        self._version_dir = None
         self.is_attached = False
         self.attach_time = 0
         self.base_address = 0
-        self._h_process = None  # HANDLE (pointer-sized)
         self._lock = threading.Lock()
+        # Stealth-syscall stub for Hyperion bypass on .data writes. Without
+        # FlogBank's heap fallback, every write hits the (often locked) .data
+        # arena, so this is now load-bearing — auto-init and let it stay None
+        # only if stub construction fails on this host.
+        try:
+            from src.core.syscall_manager import SyscallManager
+            self.syscall_manager = SyscallManager()
+        except Exception as e:
+            log(f"[!] SyscallManager init failed: {e} — falling back to standard NtWrite", (255, 200, 100))
+            self.syscall_manager = None
 
     def kill_roblox(self):
         """Kill all running Roblox processes."""
@@ -503,6 +405,7 @@ class RobloxManager:
         self.is_attached = False
         self.attach_time = 0
         self.base_address = 0
+        self.invalidate_live_cache()
 
     def _close_handle(self):
         """Safely close the process handle."""
@@ -513,39 +416,37 @@ class RobloxManager:
                 pass
             self._h_process = None
 
-    def find_pattern(self, pattern, module_name="RobloxPlayerBeta.exe"):
-        if not self._h_process and not self.attach():
+
+    def find_pattern(self, pattern_str, scan_size=None):
+        """Find a byte pattern in the Roblox module."""
+        if not self._h_process or not self.get_roblox_base():
             return None
-            
-        import re
-        
-        # Get module base and size
-        if not self.base_address:
-            # Simple fallback if base_address is not yet resolved
-            return None
-            
-        # We'll scan a reasonable chunk of the .text / .data section
-        # For simplicity in this implementation, scan first 100MB
-        scan_size = 100 * 1024 * 1024
-        data = self.read_memory_external(self.base_address, scan_size)
-        if not data:
-            return None
-            
-        # Convert hex pattern to regex
-        regex_pattern = b""
-        for part in pattern.split():
-            if part == "??":
-                regex_pattern += b"."
+
+        base = self.get_roblox_base()
+        if scan_size is None:
+            scan_size = 150 * 1024 * 1024
+
+        pattern_parts = pattern_str.split()
+        re_pat = b""
+        for p in pattern_parts:
+            if p == "??":
+                re_pat += b"."
             else:
-                regex_pattern += re.escape(bytes.fromhex(part))
-        
-        match = re.search(regex_pattern, data)
-        if match:
-            return self.base_address + match.start()
+                re_pat += re.escape(bytes.fromhex(p))
+        regex = re.compile(re_pat, re.DOTALL)
+
+        chunk_size = 10 * 1024 * 1024
+        for offset in range(0, scan_size, chunk_size - 128):
+            data = self.read_memory_external(base + offset, chunk_size)
+            if not data:
+                continue
+            match = regex.search(data)
+            if match:
+                return base + offset + match.start()
         return None
 
     def write_memory_external(self, addr, data):
-        """Write raw bytes to a target address in the Roblox process."""
+        """Write raw bytes to a target address in the Roblox process with robust safety."""
         if not self._h_process:
             if not self.open_process_for_write():
                 return False, "Cannot open process"
@@ -554,38 +455,31 @@ class RobloxManager:
         buf = ctypes.create_string_buffer(data)
         bytes_written = ctypes.c_size_t(0)
         
-        # Try NtWriteVirtualMemory first
+        # 1. Try Stealth NtWrite first
         status = _ntdll.NtWriteVirtualMemory(
             self._h_process, ctypes.c_void_p(addr),
-            buf, ctypes.c_size_t(size), ctypes.byref(bytes_written)
+            ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bytes_written)
         )
         
         if status == 0 and bytes_written.value == size:
             return True, f"OK|NtWrite (0x{addr:X})"
         
-        # Fallback: VirtualProtectEx + WriteProcessMemory
+        # 2. Fallback: VirtualProtectEx + WriteProcessMemory
         old_protect = wintypes.DWORD(0)
-        vp_ok = _k32.VirtualProtectEx(
-            self._h_process, ctypes.c_void_p(addr),
-            ctypes.c_size_t(size), PAGE_READWRITE, ctypes.byref(old_protect)
-        )
-        
-        if vp_ok:
-            wpm_bytes = ctypes.c_size_t(0)
+        # Use 0x40 (PAGE_EXECUTE_READWRITE) to be absolutely sure we can write
+        if _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), 0x40, ctypes.byref(old_protect)):
             success = _k32.WriteProcessMemory(
                 self._h_process, ctypes.c_void_p(addr),
-                buf, ctypes.c_size_t(size), ctypes.byref(wpm_bytes)
+                ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bytes_written)
             )
             # Restore original protection
-            restored = wintypes.DWORD(0)
-            _k32.VirtualProtectEx(
-                self._h_process, ctypes.c_void_p(addr),
-                ctypes.c_size_t(size), old_protect.value, ctypes.byref(restored)
-            )
-            if success and wpm_bytes.value == size:
+            _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), old_protect, ctypes.byref(wintypes.DWORD(0)))
+            
+            if success and bytes_written.value == size:
                 return True, f"OK|VP+WPM (0x{addr:X})"
         
-        return False, f"Write failed at 0x{addr:X}"
+        err = ctypes.get_last_error()
+        return False, f"ERR|NtStatus:0x{status:X}|WinErr:{err} (0x{addr:X})"
 
     def write_fps_direct(self, value):
         """Directly overwrite the TaskScheduler target FPS singleton."""
@@ -624,200 +518,356 @@ class RobloxManager:
 
     # ================================================================
 
-    def open_process_for_write(self):
-        """Open Roblox process with VM read/write/operation permissions."""
+    def open_process_for_write(self, write_access=True):
+        """Open Roblox process with the Hyperion-bypass mask (0x38).
+
+        Hyperion blocks OpenProcess for masks containing PROCESS_QUERY_INFORMATION
+        (0x400). The 0x38 mask (VM_OPERATION | VM_READ | VM_WRITE) survives and is
+        what test_unstickforce_v4 uses. Read-only callers fall back further to 0x10.
+        """
         if not self.pid:
             return False
-        
+
         if self._h_process:
-            return True  # Already open
-        
-        handle = _k32.OpenProcess(PROCESS_ACCESS, False, self.pid)
+            return True
+
+        if write_access:
+            ladder = [PROCESS_ACCESS_STEALTH, PROCESS_ACCESS_STEALTH | PROCESS_QUERY_LIMITED_INFORMATION]
+        else:
+            ladder = [PROCESS_VM_READ, PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION]
+
+        handle = None
+        last_err = 0
+        for access in ladder:
+            handle = _k32.OpenProcess(access, False, self.pid)
+            if handle:
+                break
+            last_err = ctypes.get_last_error()
+
         if not handle:
-            err = ctypes.get_last_error()
-            log(f"[-] OpenProcess failed (err {err})", (255, 100, 100))
+            log(f"[-] OpenProcess failed (err {last_err})", (255, 100, 100))
             return False
-        
+
         self._h_process = handle
         return True
 
     def get_roblox_base(self):
-        """Get the base address of RobloxPlayerBeta.exe using PEB traversal to bypass module hiding."""
+        """Get the base address of RobloxPlayerBeta.exe.
+
+        Tries PEB traversal first (works when handle has QUERY_LIMITED_INFORMATION),
+        then falls back to a Toolhelp32 module walk which only needs the PID.
+        Toolhelp32 is the path that survives the Hyperion 0x38-only handle.
+        """
         if self.base_address:
             return self.base_address
-        
+
         if not self._h_process:
             if not self.open_process_for_write():
-                return 0
-                
-        try:
-            pbi = PROCESS_BASIC_INFORMATION()
-            ret_len = ctypes.c_ulong(0)
-            status = _ntdll.NtQueryInformationProcess(
-                self._h_process, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), ctypes.byref(ret_len)
-            )
-            
-            if status == 0 and pbi.PebBaseAddress:
-                base_buf = ctypes.create_string_buffer(8)
-                bytes_read = ctypes.c_size_t(0)
-                # Read ImageBaseAddress from PEB (offset 0x10 on x64)
-                success = _ntdll.NtReadVirtualMemory(
-                    self._h_process, ctypes.c_void_p(pbi.PebBaseAddress + 0x10), 
-                    base_buf, 8, ctypes.byref(bytes_read)
+                # PEB read needs a handle but Toolhelp32 doesn't — keep going.
+                pass
+
+        # Path A: PEB traversal (only works if handle includes QUERY_LIMITED_INFORMATION)
+        if self._h_process:
+            try:
+                pbi = PROCESS_BASIC_INFORMATION()
+                ret_len = ctypes.c_ulong(0)
+                status = _ntdll.NtQueryInformationProcess(
+                    self._h_process, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), ctypes.byref(ret_len)
                 )
-                if success == 0 and bytes_read.value == 8:
-                    self.base_address = struct.unpack("<Q", base_buf.raw[:8])[0]
-                    log(f"[+] Roblox base (PEB): 0x{self.base_address:X}", (100, 255, 100))
-                    return self.base_address
-                    
-            log(f"[-] PEB Query failed (status 0x{status:X})", (255, 100, 100))
+                if status == 0 and pbi.PebBaseAddress:
+                    base_buf = ctypes.create_string_buffer(8)
+                    bytes_read = ctypes.c_size_t(0)
+                    rd = _ntdll.NtReadVirtualMemory(
+                        self._h_process, ctypes.c_void_p(pbi.PebBaseAddress + 0x10),
+                        base_buf, 8, ctypes.byref(bytes_read)
+                    )
+                    if rd == 0 and bytes_read.value == 8:
+                        self.base_address = struct.unpack("<Q", base_buf.raw[:8])[0]
+                        log(f"[+] Roblox base (PEB): 0x{self.base_address:X}", (100, 255, 100))
+                        return self.base_address
+            except Exception:
+                pass
+
+        # Path B: Toolhelp32 module enumeration (PID-only, survives 0x38 handle)
+        try:
+            snap = _k32.CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, self.pid)
+            if snap and snap != INVALID_HANDLE:
+                me = MODULEENTRY32W()
+                me.dwSize = ctypes.sizeof(MODULEENTRY32W)
+                if _k32.Module32FirstW(snap, ctypes.byref(me)):
+                    while True:
+                        if me.szModule.lower() == "robloxplayerbeta.exe":
+                            self.base_address = ctypes.cast(me.modBaseAddr, ctypes.c_void_p).value or 0
+                            _k32.CloseHandle(snap)
+                            log(f"[+] Roblox base (Toolhelp32): 0x{self.base_address:X}", (100, 255, 100))
+                            return self.base_address
+                        if not _k32.Module32NextW(snap, ctypes.byref(me)):
+                            break
+                _k32.CloseHandle(snap)
         except Exception as e:
             log(f"[-] get_roblox_base error: {e}", (255, 100, 100))
-            
+
+        log("[-] Could not resolve Roblox base address", (255, 100, 100))
         return 0
-
-    def write_flag_external(self, flag_name, flag_type, offset, value):
-        if not self._h_process:
-            if not self.open_process_for_write():
-                return False, "Cannot open process"
-        
-        base = self.get_roblox_base()
-        if not base:
-            return False, "Cannot find base address"
-        
-        addr = base + offset
-        
-        # Prepare the value bytes based on type using Safer Encoding Pipeline rules
-        if flag_type == "bool":
-            # Force precisely 1 byte
-            val = str(value).lower() in ("true", "1", "yes")
-            data = struct.pack("<B", 1 if val else 0)
-            size = 1
-        elif flag_type == "int":
-            # Strict clamping
-            try:
-                v = int(value)
-                v = max(-2147483648, min(2147483647, v))
-                data = struct.pack("<i", v)
-                size = 4
-            except (ValueError, struct.error):
-                return False, f"Invalid int value: {value}"
-        elif flag_type == "float":
-            # Roblox uses 8-byte doubles for decimal points
-            try:
-                data = struct.pack("<d", float(value))
-                size = 8
-            except (ValueError, struct.error):
-                return False, f"Invalid float value: {value}"
-        elif flag_type == "string":
-            # Strictly encode to 255 max + null padding for fixed buffer writes
-            try:
-                enc = str(value).encode('utf-8')[:255]
-                data = enc + b'\x00'
-                size = len(data)
-            except Exception:
-                return False, f"Invalid string formatting: {value}"
-        else:
-            return False, f"Unsupported memory write type: {flag_type}"
-        
-        buf = ctypes.create_string_buffer(data)
-        bytes_written = ctypes.c_size_t(0)
-        
-        # Method 1: NtWriteVirtualMemory (works on .data sections, no protection change)
-        status = _ntdll.NtWriteVirtualMemory(
-            self._h_process, ctypes.c_void_p(addr),
-            buf, ctypes.c_size_t(size), ctypes.byref(bytes_written)
-        )
-        
-        if status == 0 and bytes_written.value == size:
-            return True, f"OK|NtWrite (0x{addr:X})"
-        
-        # Method 2: VirtualProtectEx → WriteProcessMemory → Restore
-        old_protect = wintypes.DWORD(0)
-        vp_ok = _k32.VirtualProtectEx(
-            self._h_process, ctypes.c_void_p(addr),
-            ctypes.c_size_t(size), PAGE_READWRITE, ctypes.byref(old_protect)
-        )
-        
-        if vp_ok:
-            wpm_bytes = ctypes.c_size_t(0)
-            success = _k32.WriteProcessMemory(
-                self._h_process, ctypes.c_void_p(addr),
-                buf, ctypes.c_size_t(size), ctypes.byref(wpm_bytes)
-            )
-            
-            # Restore original protection
-            restored = wintypes.DWORD(0)
-            _k32.VirtualProtectEx(
-                self._h_process, ctypes.c_void_p(addr),
-                ctypes.c_size_t(size), old_protect.value, ctypes.byref(restored)
-            )
-            
-            if success and wpm_bytes.value == size:
-                return True, f"OK|VP+WPM (0x{addr:X})"
-            else:
-                err = ctypes.get_last_error()
-                return False, f"WPM failed after VirtualProtect (err: {err})"
-        
-        # VirtualProtectEx failed — section is locked, flag is covered by JSON
-        return False, f"JSON-only (live write unavailable)"
-
-    def read_flag_external(self, flag_type, offset):
-        """Read a flag's original value from Roblox memory externally."""
-        if not self._h_process:
-            if not self.open_process_for_write(): return None
-        base = self.get_roblox_base()
-        if not base: return None
-        
-        addr = base + offset
-        
-        if flag_type == "bool":
-            size = 1
-        elif flag_type in ("int", "float"):
-            size = 4 if flag_type == "int" else 8
-        elif flag_type == "string":
-            size = 255
-        else:
-            return None
-            
-        buf = ctypes.create_string_buffer(size)
-        bytes_read = ctypes.c_size_t(0)
-        
-        status = _ntdll.NtReadVirtualMemory(
-            self._h_process, ctypes.c_void_p(addr),
-            buf, ctypes.c_size_t(size), ctypes.byref(bytes_read)
-        )
-        
-        if status == 0 and bytes_read.value > 0:
-            if flag_type == "bool":
-                return "true" if struct.unpack("<B", buf.raw[:1])[0] != 0 else "false"
-            elif flag_type == "int":
-                return str(struct.unpack("<i", buf.raw[:4])[0])
-            elif flag_type == "float":
-                return str(round(struct.unpack("<d", buf.raw[:8])[0], 4))
-            elif flag_type == "string":
-                return buf.value.split(b'\x00')[0].decode('utf-8', errors='ignore')
-        return None
 
     def read_memory_external(self, addr, size):
         """Read memory from Roblox process. Returns bytes or None."""
         if not self._h_process:
             if not self.open_process_for_write():
                 return None
-                
+
         buf = ctypes.create_string_buffer(size)
         bytes_read = ctypes.c_size_t(0)
-        
+
         status = _ntdll.NtReadVirtualMemory(
             self._h_process, ctypes.c_void_p(addr),
             buf, ctypes.c_size_t(size), ctypes.byref(bytes_read)
         )
-        
+
         if status == 0 and bytes_read.value > 0:
             return buf.raw[:bytes_read.value]
         return None
 
+    def query_region(self, addr):
+        """Query the memory region containing addr. Returns dict with state/protect/type/region keys, or None.
+
+        Used to classify a target address before/after a failed write so we can decide
+        whether the page is in .rdata (read-only image), .data (writable image), or heap.
+        """
+        if not self._h_process:
+            if not self.open_process_for_write():
+                return None
+        mbi = MEMORY_BASIC_INFORMATION()
+        ret = _k32.VirtualQueryEx(self._h_process, ctypes.c_void_p(addr), ctypes.byref(mbi), ctypes.sizeof(mbi))
+        if not ret:
+            return None
+        return {
+            "base": mbi.BaseAddress or 0,
+            "alloc_base": mbi.AllocationBase or 0,
+            "size": mbi.RegionSize,
+            "state": mbi.State,        # 0x1000 = COMMIT, 0x2000 = RESERVE, 0x10000 = FREE
+            "protect": mbi.Protect,    # 0x02 RO, 0x04 RW, 0x20 ERX, 0x40 ERW, 0x80 EWC
+            "type": mbi.Type,          # 0x1000000 IMAGE, 0x40000 MAPPED, 0x20000 PRIVATE
+        }
+
+    def is_writable_protect(self, protect):
+        """True if the protection allows direct write without VirtualProtect."""
+        # PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY
+        return bool(protect & 0xCC)  # 0x04 | 0x08 | 0x40 | 0x80
+
+    # ================================================================
+    # Live Memory Injection (scans the running process directly)
+    # ================================================================
+
+    def clear_bank_cache(self):
+        """Flush the per-session live-flag address cache.
+
+        Name kept for back-compat with existing callers; FlogBank itself was
+        removed in the imtheo-only refactor.
+        """
+        global _live_flag_cache, _live_flag_cache_pid
+        _live_flag_cache = {}
+        _live_flag_cache_pid = None
+        log("[*] Live flag address cache flushed.", (180, 180, 180))
+
+    def scan_live_flags(self, target_names: list[str] | None = None, force_rescan: bool = False) -> dict[str, list[dict]]:
+        """Resolve live flag addresses purely from Imtheo's RVA map (+ disk cache).
+
+        Imtheo-only after the FlogBank removal: every entry is a single
+        ``base + RVA`` address in the .data arena. Hyperion-locked pages will
+        return False from ``write_flag_at_address`` and the JSON path covers
+        them.
+        """
+        global _live_flag_cache, _live_flag_cache_pid
+        if not force_rescan and _live_flag_cache_pid == self.pid and _live_flag_cache:
+            return _live_flag_cache
+
+        if not self.is_attached:
+            return {}
+        base = self.get_roblox_base()
+        if not base:
+            return {}
+
+        from src.utils.helpers import clean_flag_name
+        clean_targets = {clean_flag_name(n) for n in target_names} if target_names else None
+
+        flag_offsets, _ = self._fetch_offset_sources(clean_targets)
+
+        live_addrs: dict[str, list[dict]] = {}
+        for clean, data in flag_offsets.items():
+            live_addrs[clean] = [{
+                "abs_addr": data["abs_addr"],
+                "full_name": data["full_name"],
+                "type": data["type"],
+                "source": "imtheo",
+            }]
+
+        log(f"[+] Live scan resolved {len(live_addrs)} flags via Imtheo RVAs",
+            (100, 255, 100))
+
+        if live_addrs:
+            _live_flag_cache = live_addrs
+            _live_flag_cache_pid = self.pid
+
+        return live_addrs
+
+    def _fetch_offset_sources(self, clean_targets=None):
+        """Resolve flag RVAs + FFlagList struct offsets via offset_loader.
+
+        Imtheo FFlags.hpp is the sole offset source (+ disk cache on failure).
+        """
+        from src.core import offset_loader
+        base = self.get_roblox_base()
+        if not base:
+            return {}, {}
+        return offset_loader.load_offsets(
+            base_addr=base,
+            build_version=RobloxManager.get_roblox_version_string(),
+            user_flag_clean_names=clean_targets,
+        )
+
+    def get_live_flag_address(self, flag_name):
+        """Get the cached live absolute address for a specific flag."""
+        global _live_flag_cache, _live_flag_cache_pid
+        
+        if _live_flag_cache_pid != self.pid or not _live_flag_cache:
+            return None
+        
+        from src.utils.helpers import clean_flag_name
+        clean = clean_flag_name(flag_name)
+        data = _live_flag_cache.get(clean) or _live_flag_cache.get(flag_name)
+        return data
+
+    def write_flag_at_address(self, flag_type, abs_addr, value):
+        """Write a typed value at an absolute process address (no base offset).
+
+        Returns (success: bool, message: str). On unwritable image pages (.rdata
+        protected by Hyperion), returns (False, "JSON_ONLY|...") so the caller
+        can downgrade the log level — the JSON path already covers those flags.
+        """
+        if not self._h_process:
+            return False, "No process handle"
+
+        # Pack value based on type
+        if flag_type == "bool":
+            val = str(value).lower() in ("true", "1", "yes")
+            data = struct.pack("<B", 1 if val else 0)
+        elif flag_type == "int":
+            try:
+                v = int(value)
+                v = max(-2147483648, min(2147483647, v))
+                data = struct.pack("<i", v)
+            except (ValueError, struct.error):
+                return False, f"Invalid int: {value}"
+        elif flag_type == "float":
+            try:
+                # Roblox FFloat is single-precision (4 bytes). Writing 8 bytes here
+                # overwrites the next field in the descriptor struct (desc+0xc4..0xc7),
+                # corrupting it. Engine reads the corruption on game join → silent exit.
+                data = struct.pack("<f", float(value))
+            except (ValueError, struct.error):
+                return False, f"Invalid float: {value}"
+        else:
+            return False, f"Unsupported type for memory write: {flag_type}"
+
+        size = len(data)
+        buf = ctypes.create_string_buffer(data)
+        bw = ctypes.c_size_t(0)
+
+        # 1. Standard ntdll write
+        status = _ntdll.NtWriteVirtualMemory(
+            self._h_process, ctypes.c_void_p(abs_addr),
+            ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bw)
+        )
+        last_status = status
+        if status == 0 and bw.value == size:
+            return True, f"OK|NtWrite (0x{abs_addr:X})"
+
+        # 2. VirtualProtectEx + WriteProcessMemory, try RW then ERW
+        for new_prot in (0x04, 0x40):
+            old_protect = wintypes.DWORD(0)
+            if not _k32.VirtualProtectEx(
+                self._h_process, ctypes.c_void_p(abs_addr),
+                ctypes.c_size_t(size), new_prot, ctypes.byref(old_protect)
+            ):
+                continue
+            wpm_bw = ctypes.c_size_t(0)
+            ok = _k32.WriteProcessMemory(
+                self._h_process, ctypes.c_void_p(abs_addr),
+                ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(wpm_bw)
+            )
+            restored = wintypes.DWORD(0)
+            _k32.VirtualProtectEx(
+                self._h_process, ctypes.c_void_p(abs_addr),
+                ctypes.c_size_t(size), old_protect.value, ctypes.byref(restored)
+            )
+            if ok and wpm_bw.value == size:
+                return True, f"OK|VP+WPM({hex(new_prot)}) (0x{abs_addr:X})"
+
+        # All paths failed — classify the region so the caller can decide what to do.
+        info = self.query_region(abs_addr)
+        if info is None:
+            return False, f"Write failed at 0x{abs_addr:X} (NtStatus: 0x{last_status & 0xFFFFFFFF:08X}, region unknown)"
+
+        IMAGE = 0x1000000
+        MAPPED = 0x40000          # MEM_MAPPED — file-backed section (Hyperion uses this for protected flag storage)
+        COMMIT = 0x1000
+        PROTECT_NOACCESS = 0x01
+        PROTECT_READONLY = 0x02
+        PROTECT_EXECUTE_READ = 0x20
+        # Anything that includes WRITE access:
+        WRITE_BITS = 0x04 | 0x08 | 0x40 | 0x80
+
+        if info["state"] != COMMIT or info["protect"] == PROTECT_NOACCESS:
+            return False, f"STALE_ADDR|state=0x{info['state']:X} protect=0x{info['protect']:02X} (0x{abs_addr:X})"
+
+        # Read-only page in either image (.rdata) OR mapped section (Hyperion's locked
+        # FFlag arena maps as MEM_MAPPED with PAGE_READONLY). Both are unwritable; the
+        # JSON path covers these flags at engine startup, so this is expected.
+        if info["protect"] in (PROTECT_READONLY, PROTECT_EXECUTE_READ) or not (info["protect"] & WRITE_BITS):
+            kind = ".rdata" if info["type"] == IMAGE else ("mapped-locked" if info["type"] == MAPPED else f"type=0x{info['type']:X}")
+            return False, f"JSON_ONLY|{kind} (0x{abs_addr:X}, protect=0x{info['protect']:02X})"
+
+        return False, f"Write failed at 0x{abs_addr:X} (NtStatus: 0x{last_status & 0xFFFFFFFF:08X}, protect=0x{info['protect']:02X}, type=0x{info['type']:X})"
+
+    def read_flag_at_address(self, flag_type, abs_addr):
+        """Read a flag's current value from an absolute process address."""
+        if not self._h_process:
+            return None
+        
+        if flag_type == "bool":
+            size = 1
+        elif flag_type == "int":
+            size = 4
+        elif flag_type == "float":
+            size = 4  # Roblox FFloat is single-precision
+        else:
+            return None
+
+        buf = ctypes.create_string_buffer(size)
+        bytes_read = ctypes.c_size_t(0)
+        status = _ntdll.NtReadVirtualMemory(
+            self._h_process, ctypes.c_void_p(abs_addr),
+            buf, ctypes.c_size_t(size), ctypes.byref(bytes_read)
+        )
+
+        if status == 0 and bytes_read.value == size:
+            if flag_type == "bool":
+                return "true" if struct.unpack("<B", buf.raw[:1])[0] != 0 else "false"
+            elif flag_type == "int":
+                return str(struct.unpack("<i", buf.raw[:4])[0])
+            elif flag_type == "float":
+                return str(round(struct.unpack("<f", buf.raw[:4])[0], 4))
+        return None
+
+    def invalidate_live_cache(self):
+        """Clear all per-PID caches (call when Roblox restarts and PID changes)."""
+        global _live_flag_cache, _live_flag_cache_pid
+        _live_flag_cache = {}
+        _live_flag_cache_pid = None
+
     def launch_and_patch_roblox(self, flags_list):
+        """Launch Roblox normally. Early patching is removed because flags are heap-allocated."""
         # Find the exe
         version_dir = RobloxManager.get_roblox_version_dir()
         if not version_dir:
@@ -828,180 +878,27 @@ class RobloxManager:
         if not os.path.exists(exe_path):
             log(f"[-] Roblox executable not found at {exe_path}", (255, 100, 100))
             return False, 0, 0, 0
+            
+        log("[*] Launching Roblox...", (100, 255, 255))
         
-        # Fetch offsets (needed to know RVAs)
-        offsets = RobloxManager.fetch_offsets()
-        if not offsets:
-            log("[-] No offsets available for early patching", (255, 100, 100))
-            return False, 0, 0, 0
-        
-        log(f"[*] Launching Roblox suspended for early patching...", (100, 255, 255))
-        
-        # Setup structures
         si = STARTUPINFOW()
         si.cb = ctypes.sizeof(STARTUPINFOW)
         pi = PROCESS_INFORMATION()
         
-        # Create the process suspended
         success = _k32.CreateProcessW(
             exe_path, None, None, None, False,
-            CREATE_SUSPENDED, None, version_dir,
+            0, None, version_dir,
             ctypes.byref(si), ctypes.byref(pi)
         )
         
-        if not success:
-            err = ctypes.get_last_error()
-            log(f"[-] CreateProcessW failed (err: {err})", (255, 100, 100))
-            return False, 0, 0, 0
-        
-        new_pid = pi.dwProcessId
-        h_process = pi.hProcess
-        h_thread = pi.hThread
-        log(f"[+] Roblox spawned suspended (PID {new_pid})", (100, 255, 100))
-        
-        # Read PEB to get ImageBaseAddress
-        pbi = PROCESS_BASIC_INFORMATION()
-        ret_len = ctypes.c_ulong(0)
-        status = _ntdll.NtQueryInformationProcess(
-            h_process, 0,  # ProcessBasicInformation
-            ctypes.byref(pbi), ctypes.sizeof(pbi), ctypes.byref(ret_len)
-        )
-        
-        if status != 0:
-            log(f"[-] NtQueryInformationProcess failed (0x{status & 0xFFFFFFFF:08X})", (255, 100, 100))
-            _k32.ResumeThread(h_thread)
-            _k32.CloseHandle(h_thread)
-            _k32.CloseHandle(h_process)
-            return False, 0, 0, new_pid
-        
-        peb_addr = pbi.PebBaseAddress
-        
-        # Read ImageBaseAddress from PEB (at offset 0x10 on x64)
-        # PEB layout: at +0x10 is ImageBaseAddress (PVOID)
-        base_buf = ctypes.create_string_buffer(8)
-        bytes_read = ctypes.c_size_t(0)
-        peb_image_base_offset = peb_addr + 0x10
-        
-        status = _ntdll.NtReadVirtualMemory(
-            h_process, ctypes.c_void_p(peb_image_base_offset),
-            base_buf, ctypes.c_size_t(8), ctypes.byref(bytes_read)
-        )
-        
-        if status != 0 or bytes_read.value < 8:
-            log(f"[-] Failed to read ImageBaseAddress from PEB", (255, 100, 100))
-            _k32.ResumeThread(h_thread)
-            _k32.CloseHandle(h_thread)
-            _k32.CloseHandle(h_process)
-            return False, 0, 0, new_pid
-        
-        image_base = struct.unpack("<Q", base_buf.raw[:8])[0]
-        log(f"[+] Image base: 0x{image_base:X}", (100, 255, 100))
-        
-        # Now patch all flags
-        patched = 0
-        attempted = 0
-        
-        for flag in flags_list:
-            name = flag['name']
-            value = flag['value']
-            flag_type = flag.get('type', 'string')
+        if success:
+            log(f"[+] Roblox launched (PID {pi.dwProcessId})", (100, 255, 100))
+            _k32.CloseHandle(pi.hThread)
+            _k32.CloseHandle(pi.hProcess)
+            self.pid = pi.dwProcessId
+            return True, pi.dwProcessId, 0, 0
             
-            # Skip string flags
-            if flag_type == 'string':
-                continue
-            
-            offset_hex = offsets.get(name)
-            if not offset_hex:
-                continue
-            
-            try:
-                offset_int = int(offset_hex, 16)
-            except Exception:
-                continue
-            
-            attempted += 1
-            addr = image_base + offset_int
-            
-            # Pack the value
-            if flag_type == "bool":
-                val = str(value).lower() in ("true", "1", "yes")
-                data = struct.pack("<B", 1 if val else 0)
-                size = 1
-            elif flag_type == "int":
-                try:
-                    data = struct.pack("<i", int(value))
-                    size = 4
-                except (ValueError, struct.error):
-                    continue
-            elif flag_type == "float":
-                try:
-                    data = struct.pack("<d", float(value))
-                    size = 8
-                except (ValueError, struct.error):
-                    continue
-            else:
-                continue
-            
-            # Capture original value before we patch it
-            if 'original_value' not in flag:
-                orig_buf = ctypes.create_string_buffer(size)
-                r_bw = ctypes.c_size_t(0)
-                r_status = _ntdll.NtReadVirtualMemory(
-                    h_process, ctypes.c_void_p(addr),
-                    orig_buf, ctypes.c_size_t(size), ctypes.byref(r_bw)
-                )
-                if r_status == 0 and r_bw.value == size:
-                    if flag_type == "bool":
-                        flag['original_value'] = "true" if struct.unpack("<B", orig_buf.raw[:1])[0] != 0 else "false"
-                    elif flag_type == "int":
-                        flag['original_value'] = str(struct.unpack("<i", orig_buf.raw[:4])[0])
-                    elif flag_type == "float":
-                        flag['original_value'] = str(round(struct.unpack("<d", orig_buf.raw[:8])[0], 4))
-
-            # ONLY PATCH IF ENABLED
-            isEnabled = flag.get('enabled', True)
-            if not isEnabled:
-                continue
-
-            buf = ctypes.create_string_buffer(data)
-            bw = ctypes.c_size_t(0)
-            
-            w_status = _ntdll.NtWriteVirtualMemory(
-                h_process, ctypes.c_void_p(addr),
-                buf, ctypes.c_size_t(size), ctypes.byref(bw)
-            )
-            
-            if w_status == 0 and bw.value == size:
-                patched += 1
-                flag['_status'] = 'success'
-            else:
-                # Try WriteProcessMemory as fallback
-                wpm_bw = ctypes.c_size_t(0)
-                wpm_ok = _k32.WriteProcessMemory(
-                    h_process, ctypes.c_void_p(addr),
-                    buf, ctypes.c_size_t(size), ctypes.byref(wpm_bw)
-                )
-                if wpm_ok and wpm_bw.value == size:
-                    patched += 1
-                    flag['_status'] = 'success'
-                else:
-                    log(f"[·] Early patch failed: {name} (0x{w_status & 0xFFFFFFFF:08X})", (200, 200, 100))
-        
-        log(f"[+] Early patch: {patched}/{attempted} flags written before Hyperion", (100, 255, 100))
-        
-        # Resume the process
-        _k32.ResumeThread(h_thread)
-        self.attach_time = time.time()
-        log(f"[+] Roblox resumed (PID {new_pid})", (100, 255, 100))
-        
-        # Close handles for thread (we keep process handle for attaching)
-        _k32.CloseHandle(h_thread)
-        
-        # Auto-attach to the new process
-        self.pid = new_pid
-        self.is_attached = True
-        self._h_process = h_process
-        self.base_address = image_base
-        
-        return True, patched, attempted, new_pid
+        err = ctypes.get_last_error()
+        log(f"[-] Launch failed (err: {err})", (255, 100, 100))
+        return False, 0, 0, 0
 
