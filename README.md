@@ -23,7 +23,7 @@
 
 ---
 
-<div align="center">
+<div>
 
 ## 📑 Table of Contents
 
@@ -33,24 +33,24 @@
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="showcase"></a>✨ Showcase
 
 </div>
 
 <details open>
-  <summary align="center"><b>View Features in Action</b></summary>
+  <summary><b>View Features in Action</b></summary>
   <br>
-  <div align="center">
+  <div>
     <table border="0">
       <tr>
-        <td align="center" valign="top">
+        <td valign="top">
           <img src="https://i.ibb.co/CNKnS9b/Menu-pic-2-with-white-matrix-theme.png" alt="Matrix Theme" width="450"><br>
           <b>🎨 Dynamic Themes</b><br>
           <i>Personalize your experience with themes like White Matrix.</i>
         </td>
-        <td align="center" valign="top">
+        <td valign="top">
           <img src="https://i.ibb.co/XkJtMs8r/right-click-menu-pic.png" alt="Context Menu" width="450"><br>
           <b>⚡ Advanced Controls</b><br>
           <i>Powerful right-click menus for rapid flag management and offsets.</i>
@@ -62,7 +62,7 @@
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="key-features"></a>✨ Key Features
 
@@ -82,7 +82,7 @@
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="variants"></a>🌿 Supported Bootstrappers
 
@@ -97,7 +97,7 @@
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="installation"></a>📥 Installation
 
@@ -110,7 +110,7 @@
 
 </div>
 
-<div align="center">
+<div>
 
 ### <a name="build-from-source"></a>Building from Source (For Developers)
 
@@ -127,7 +127,7 @@ python main.pyw
 
 ---
 
-<div align="center">
+<div">
 
 ## <a name="how-to-use"></a>🎮 How to Use
 
@@ -142,7 +142,7 @@ python main.pyw
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="community--support"></a>💬 Community & Support
 
@@ -154,7 +154,7 @@ Join the official Discord for support, preset sharing, and community discussion.
 
 ---
 
-<div align="center">
+<div>
 
 ## <a name="license"></a>⚖️ License
 
