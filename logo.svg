@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 600 200" width="600" height="200" version="1.1" id="svg32" xmlns="http://www.w3.org/2000/svg">
+  <defs id="defs10">
+    <linearGradient id="linearGradient298">
+      <stop style="stop-color:#3a3fdd;stop-opacity:1;" offset="0" id="stop298"/>
+      <stop style="stop-color:#5155e1;stop-opacity:0.85581398;" offset="1" id="stop299"/>
+    </linearGradient>
+    <linearGradient id="linearGradient293" x1="0.080664687" y1="-0.27231953" x2="0.91933525" y2="0.27231953" gradientUnits="objectBoundingBox" spreadMethod="pad">
+      <stop offset="0" style="stop-color:#595cd9;stop-opacity:1;" id="stop291"/>
+      <stop offset="1" style="stop-color:#c2c2f0;stop-opacity:1;" id="stop292"/>
+    </linearGradient>
+    <linearGradient id="linearGradient290" x1="0.080664687" y1="-0.27231953" x2="0.91933525" y2="0.27231953" gradientUnits="objectBoundingBox" spreadMethod="pad">
+      <stop offset="0" style="stop-color:#7B61FF" id="stop288"/>
+      <stop offset="0.5" style="stop-color:#FF61DC" id="stop289"/>
+      <stop offset="1" style="stop-color:#8972ff;stop-opacity:1;" id="stop290"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0" style="stop-color:#0d1117;stop-opacity:1" id="stop1"/>
+      <stop offset="1" style="stop-color:#161b22;stop-opacity:1" id="stop2"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0.080664687" y1="-0.27231953" x2="0.91933525" y2="0.27231953" href="#linearGradient290">
+      <stop offset="0" style="stop-color:#7B61FF" id="stop3"/>
+      <stop offset="0.5" style="stop-color:#FF61DC" id="stop4"/>
+      <stop offset="1" style="stop-color:#7B61FF" id="stop5"/>
+    </linearGradient>
+    <filter id="softGlow" x="-0.012563878" y="-0.059382548" width="1.0251278" height="1.1187651">
+      <feGaussianBlur stdDeviation="1.1917586" result="blur" id="feGaussianBlur8"/>
+      <feMerge id="feMerge10">
+        <feMergeNode in="blur" id="feMergeNode9"/>
+        <feMergeNode in="SourceGraphic" id="feMergeNode10"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="linearGradient291" x1="83.1437" y1="97.188835" x2="198.40102" y2="155.91537" gradientTransform="matrix(2.0780168,0,0,0.48122807,19.269022,-22.276394)" gradientUnits="userSpaceOnUse" href="#linearGradient293"/>
+    <filter id="softGlow-4" x="-0.012499962" y="-0.059382548" width="1.0249999" height="1.1187651">
+      <feGaussianBlur stdDeviation="1.1917586" result="blur" id="feGaussianBlur8-8"/>
+      <feMerge id="feMerge10-8">
+        <feMergeNode in="blur" id="feMergeNode9-2"/>
+        <feMergeNode in="SourceGraphic" id="feMergeNode10-4"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="linearGradient9" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.0780168,0,0,0.48122807,19.021944,27.397391)" x1="83.1437" y1="97.188835" x2="198.40102" y2="155.91537" href="#linearGradient293"/>
+    <linearGradient id="linearGradient299" x1="41.51738" y1="53.793629" x2="123.4401" y2="148.03494" gradientUnits="userSpaceOnUse" href="#linearGradient298"/>
+  </defs>
+  <rect width="600" height="200" rx="16" fill="url(#bgGrad)" id="rect10"/>
+  <rect x="1" y="1" width="598" height="198" rx="15" fill="none" stroke="url(#accentGrad)" stroke-width="1.5" opacity="0.6" id="rect11"/>
+  <circle cx="28" cy="22" r="5" fill="#FF5F56" id="circle11"/>
+  <circle cx="46" cy="22" r="5" fill="#FFBD2E" id="circle12"/>
+  <circle cx="64" cy="22" r="5" fill="#27C93F" id="circle13"/>
+  <text x="300" y="19.75" text-anchor="middle" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="11px" fill="#8b949e" id="text13" style="fill: rgb(195, 200, 205); fill-opacity: 1; white-space: pre;">FFM — v3.3.5</text>
+  <text x="179.26903" y="82.723602" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace" font-size="52px" font-weight="bold" fill="url(#accentGrad)" filter="url(#softGlow)" letter-spacing="3" id="text24" style="font-style: normal; font-variant: normal; font-weight: bold; font-stretch: normal; font-family: Arial; opacity: 1; mix-blend-mode: normal; fill: url(&quot;#linearGradient291&quot;); filter: url(&quot;#softGlow&quot;); white-space: pre;" transform="matrix(1.047962,0,0,1.047962,-30.262558,18.474377)">FastFlag<animate attributeName="letter-spacing" values="-20px;3px" dur="1s" fill="freeze" keyTimes="0; 1" calcMode="spline" keySplines="0.85 0 0.15 1"/><animate attributeName="opacity" values="0;0;1" begin="0s" dur="1s" fill="freeze" keyTimes="0; 0.39203; 1" calcMode="spline" keySplines="0.55 0 1 0.45; 0.12 0 0.39 0"/></text>
+  <text x="179.02194" y="132.39738" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace" font-size="52px" font-weight="bold" fill="url(#accentGrad)" filter="url(#softGlow)" letter-spacing="3" id="text24-5" style="font-style: normal; font-variant: normal; font-weight: bold; font-stretch: normal; font-family: Arial; mix-blend-mode: normal; fill: url(&quot;#linearGradient9&quot;); filter: url(&quot;#softGlow-4&quot;); white-space: pre;" transform="matrix(0.63388987,0,0,0.63388987,45.092682,53.457219)">Manager<animate attributeName="opacity" values="0;0;1" dur="1.81s" fill="freeze" keyTimes="0; 0.57311; 1" calcMode="spline" keySplines="0 0 1 1; 0.12 0 0.39 0"/><animate attributeName="letter-spacing" values="-30px;-30px;3px" dur="1.8s" fill="freeze" keyTimes="0; 0.43487; 1" calcMode="spline" keySplines="0 0 1 1; 0.66 0.01 0 1"/></text>
+  <text x="171.71875" y="183.46875" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace" font-size="12px" fill="#8b949e" letter-spacing="1" id="text26" style="fill: rgb(213, 217, 220); fill-opacity: 1; white-space: pre;">All-in-One FastFlag Manager Tool</text>
+  <rect x="530" y="135" width="12" height="20" fill="#00FF88" opacity="0.8" id="rect26">
+    <animate attributeName="opacity" values="0.8;0;0.8" dur="1.2s" repeatCount="indefinite"/>
+  </rect>
+  <text x="540" y="60" font-family="monospace" font-size="10" fill="#00FF88" opacity="0.15" id="text29" style="opacity: 0.660436; white-space: pre;">01101</text>
+  <text x="545" y="75" font-family="monospace" font-size="10" fill="#00FF88" opacity="0.12" id="text30" style="opacity: 0.579439; white-space: pre;">10010</text>
+  <text x="548" y="90" font-family="monospace" font-size="10" fill="#00FF88" opacity="0.09" id="text31" style="opacity: 0.395639; white-space: pre;">11001</text>
+  <text x="542" y="105" font-family="monospace" font-size="10" fill="#00FF88" opacity="0.06" id="text32" style="opacity: 0.417445; white-space: pre;">01110</text>
+  <rect style="opacity:1;fill:url(#linearGradient299);fill-opacity:1;stroke-width:1.65632" id="rect36" width="124.87101" height="117.10701" x="20.043255" y="42.360802" rx="10.531682" ry="8.0875006"/>
+  <text style="font-style: normal; font-variant: normal; font-weight: bold; font-stretch: normal; font-size: 88.5588px; font-family: Arial; text-align: start; writing-mode: lr-tb; direction: ltr; text-anchor: start; opacity: 1; mix-blend-mode: normal; fill: rgb(18, 18, 18); fill-opacity: 1; stroke-width: 2.472; stroke-dasharray: none; paint-order: markers; white-space: pre;" x="28.851809" y="134.55907" id="text37"><tspan id="tspan37" x="28.851809" y="134.55907" style="fill:#121212;fill-opacity:1;stroke-width:2.472;stroke-dasharray:none;paint-order:markers fill stroke">FF</tspan></text>
+</svg>
