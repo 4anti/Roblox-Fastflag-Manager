@@ -23,13 +23,16 @@
 
 ---
 
-<div>
-
 ## 📑 Table of Contents
 
-[✨ Showcase](#showcase) · [✨ Key Features](#key-features) · [🌿 Supported Bootstrappers](#variants) · [📥 Installation](#installation) · [🎮 How to Use](#how-to-use) · [💬 Community](#community--support) · [⚖️ License](#license)
+- [✨ Showcase](#showcase) 
+- [✨ Key Features](#key-features) 
+- [🌿 Supported Bootstrappers](#variants) 
+- [📥 Installation](#installation) 
+- [🎮 How to Use](#how-to-use) 
+- [💬 Community](#community--support) 
+- [⚖️ License](#license)
 
-</div>
 
 ---
 
