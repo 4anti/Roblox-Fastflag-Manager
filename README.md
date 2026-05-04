@@ -25,14 +25,13 @@
 
 ## 📑 Table of Contents
 
-- [✨ Showcase](#showcase) 
-- [✨ Key Features](#key-features) 
-- [🌿 Supported Bootstrappers](#variants) 
-- [📥 Installation](#installation) 
-- [🎮 How to Use](#how-to-use) 
-- [💬 Community](#community--support) 
+- [✨ Showcase](#showcase)
+- [✨ Key Features](#key-features)
+- [🌿 Supported Bootstrappers](#variants)
+- [📥 Installation](#installation)
+- [🎮 How to Use](#how-to-use)
+- [💬 Community](#community--support)
 - [⚖️ License](#license)
-
 
 ---
 
@@ -130,7 +129,7 @@ python main.pyw
 
 ---
 
-<div">
+<div>
 
 ## <a name="how-to-use"></a>🎮 How to Use
 

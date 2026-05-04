@@ -114,7 +114,8 @@ scratch/
 unwanted/
 dump/
 plans/
-scripts/
+scripts/*
+!scripts/update_version.py
 fflag_apply_testing/
 fflag_offset_testing/
 *.tmp
