@@ -30,7 +30,7 @@
 - [🌿 Supported Bootstrappers](#variants)
 - [📥 Installation](#installation)
 - [🎮 How to Use](#how-to-use)
-- [💬 Community](#community--support)
+- [💬 Discord Server](#community--support)
 - [⚖️ License](#license)
 
 ---
@@ -146,7 +146,7 @@ python main.pyw
 
 <div>
 
-## <a name="community--support"></a>💬 Community & Support
+## <a name="community--support"></a>💬 Discord Community & Support
 
 Join the official Discord for support, preset sharing, and community discussion.
 
