@@ -293,6 +293,37 @@ class RobloxManager:
             return True, f"Synced flags to {success_count} Roblox versions"
         return False, f"Failed to write to any versions: {', '.join(errors)}"
 
+    @staticmethod
+    def clear_fflags_json():
+        """Overwrite ClientAppSettings.json with {} across ALL detected versions.
+
+        Used when FFM is not actively applying flags (app exit, Roblox exit,
+        auto_apply disabled while Roblox is closed) so a subsequent Roblox
+        launch starts with no leftover overrides.
+        """
+        vdirs = RobloxManager.get_all_roblox_version_dirs()
+        if not vdirs:
+            return False, "No Roblox version directories found"
+
+        success_count = 0
+        errors = []
+
+        for vdir in vdirs:
+            settings_dir = os.path.join(vdir, "ClientSettings")
+            settings_file = os.path.join(settings_dir, "ClientAppSettings.json")
+
+            try:
+                os.makedirs(settings_dir, exist_ok=True)
+                with open(settings_file, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{os.path.basename(vdir)}: {e}")
+
+        if success_count > 0:
+            return True, f"Cleared ClientAppSettings.json in {success_count} Roblox versions"
+        return False, f"Failed to clear any versions: {', '.join(errors)}"
+
     # ================================================================
     # Instance methods
     # ================================================================

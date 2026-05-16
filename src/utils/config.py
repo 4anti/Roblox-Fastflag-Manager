@@ -27,7 +27,8 @@ class Config:
         "watchdog_interval": 5.0,
         "enforce_all_flags": True,
         "sort_mode": "custom",
-        "auto_update": False
+        "auto_update": False,
+        "auto_clear_json": True
     }
 
     @classmethod

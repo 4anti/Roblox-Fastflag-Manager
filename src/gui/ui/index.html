@@ -2676,6 +2676,18 @@
                 <span class="settings-label">Auto Update (silently install updates on launch)</span>
               </div>
 
+              <div class="settings-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="settings-auto-clear-json"
+                    onchange="setAutoClearJson(this.checked)"
+                  />
+                  <div class="toggle-slider"></div>
+                </label>
+                <span class="settings-label">Clear allowed FFlags on exit / when Roblox closes</span>
+              </div>
+
               <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 16px;">
                 <div style="display: flex; justify-content: space-between; width: 100%;">
                   <span class="settings-label" style="margin: 0;">Configuration History Limit: <span id="history-limit-val" style="color: var(--accent); font-weight: bold;">30</span></span>
@@ -2708,29 +2720,6 @@
                   <div style="font-size: 11px; font-weight: 600; color: var(--text-dark); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Changelog</div>
                   <div id="update-changelog" style="font-size: 11.5px; color: var(--text-dim); line-height: 1.7; max-height: 200px; overflow-y: auto; padding-right: 8px; white-space: pre-wrap; word-break: break-word;"></div>
                 </div>
-              </div>
-            </div>
-
-            <div class="settings-section">
-              <div class="settings-section-title">Safety & Reset</div>
-              <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-                <span class="settings-label" style="font-weight: 600; color: var(--error);">Emergency Revert</span>
-                <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Instantly disable all custom flags and revert live game memory tracking.</span>
-                <button class="btn btn-danger" style="padding: 8px 16px; width: 100%; border-radius: 8px;" onclick="showConfirmModal('Panic Revert', 'This will disable ALL active flags and restore Roblox memory limits/defaults immediately. Proceed?', async () => { await pywebview.api.panic_revert(); showHistory(); })">
-                  Execute Panic Revert
-                </button>
-              </div>
-
-              <div class="settings-row" style="flex-direction: column; align-items: flex-start; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
-                <span class="settings-label" style="font-weight: 600; color: var(--accent);">Offset Database</span>
-                <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Force a deep memory scan to refresh all FFlag memory locations. Use if injection fails.</span>
-                <button class="btn btn-primary" style="padding: 8px 16px; width: 100%; border-radius: 8px;" onclick="showConfirmModal('Rescan Offsets', 'This will launch Roblox silently in the background to scrape new memory addresses. This handles game updates. Proceed?', async () => { 
-                  document.getElementById('applied-count-val').textContent = 'Scanning...';
-                  await pywebview.api.rescan_offsets(); 
-                  if (typeof refreshConfig === 'function') refreshConfig();
-                })">
-                  Rescan FFlag Offsets
-                </button>
               </div>
             </div>
 
@@ -3393,6 +3382,9 @@
           const autoUpdateToggle = document.getElementById("settings-auto-update");
           if (autoUpdateToggle) autoUpdateToggle.checked = s.auto_update || false;
 
+          const autoClearJsonToggle = document.getElementById("settings-auto-clear-json");
+          if (autoClearJsonToggle) autoClearJsonToggle.checked = s.auto_clear_json !== false;
+
           const closeTray = document.getElementById("settings-close-tray");
           if (closeTray) closeTray.checked = s.close_to_tray || false;
           const launchMin = document.getElementById("settings-launch-min");
@@ -3421,6 +3413,14 @@
         try {
           await pywebview.api.set_auto_update(val);
           checkPendingUpdate(); // Refresh the updates section immediately when toggled
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function setAutoClearJson(val) {
+        try {
+          await pywebview.api.set_auto_clear_json(val);
         } catch (e) {
           console.error(e);
         }

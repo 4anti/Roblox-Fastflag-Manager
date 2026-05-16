@@ -34,6 +34,9 @@ class Api:
         self._pending_update = None  # {version, exe_url, changelog}
         self._update_progress = 0  # 0-100 for frontend polling
         self._last_offsets_loaded_state = False
+        # Tracks previous monitor-loop iteration's Roblox pid so we can fire
+        # auto-clear exactly once on the running -> not-running transition.
+        self._last_seen_roblox_pid = None
 
         # Initialize subsystems with error recovery — UI must always load
         try:
@@ -160,6 +163,36 @@ class Api:
         self.settings['auto_apply'] = value
         Config.save_settings(self.settings)
         log(f"[+] Auto Apply: {'ON' if value else 'OFF'}")
+        # If user turned auto_apply OFF while Roblox isn't running, wipe any
+        # leftover flags from disk so the next launch starts clean.
+        if not value and self.settings.get('auto_clear_json', True):
+            rm = getattr(self, 'roblox_manager', None)
+            if not rm or not rm.is_attached:
+                self.clear_clientapp_json()
+
+    def set_auto_clear_json(self, value):
+        self.settings['auto_clear_json'] = value
+        Config.save_settings(self.settings)
+        log(f"[+] Auto-clear ClientAppSettings: {'ON' if value else 'OFF'}")
+
+    def clear_clientapp_json(self):
+        """Wipe ClientAppSettings.json across all Roblox version dirs.
+
+        Caller is responsible for honoring the auto_clear_json setting; this
+        method itself always clears so it can also serve as a manual reset.
+        """
+        if not self.roblox_manager:
+            return False
+        try:
+            ok, msg = self.roblox_manager.clear_fflags_json()
+            if ok:
+                log(f"[+] {msg}", (180, 220, 180))
+            else:
+                log(f"[!] Clear ClientAppSettings: {msg}", (255, 200, 100))
+            return ok
+        except Exception as e:
+            log(f"[!] Clear ClientAppSettings failed: {e}", (255, 100, 100))
+            return False
 
     def set_theme(self, theme):
         self.settings['theme'] = theme
@@ -959,76 +992,6 @@ class Api:
         except Exception as e:
             log(f"[-] Restart failed: {e}", (255, 100, 100))
 
-    def panic_revert(self):
-        if not self.flag_manager: return False
-        try:
-            log("[!] PANIC REVERT INITIATED! Disabling all custom flags.", (255, 50, 50))
-            with self.flag_manager._lock:
-                for f in self.flag_manager.user_flags:
-                    f['enabled'] = False
-            self.flag_manager.save_user_flags()
-            self.flag_manager.apply_flags_hybrid(self.roblox_manager)
-            return True
-        except Exception as e:
-            log(f"[-] Panic revert failed: {e}", (255, 50, 50))
-            return False
-
-    def rescan_offsets(self):
-        """Force a deep memory scan to refresh all FFlag memory locations."""
-        if not self.roblox_manager:
-            return
-            
-        try:
-            log("[*] Manually triggering deep memory scan...", (100, 255, 255))
-            
-            # Nuclear Reset: Delete local vault and flush memory cache
-            from src.utils.config import Config
-            if Config.KNOWN_FLAGS_FILE.exists():
-                try:
-                    Config.KNOWN_FLAGS_FILE.unlink()
-                    log("[*] Local Vault file deleted.", (180, 180, 180))
-                except Exception as e:
-                    log(f"[!] Failed to delete vault file: {e}", (255, 150, 150))
-            
-            self.roblox_manager.clear_bank_cache()
-            
-            # Clear preset list (CDN data) to ensure a blank slate
-            if self.flag_manager:
-                self.flag_manager.official_types = {}
-                self.flag_manager.official_prefixes = {}
-                self.flag_manager.preset_flags_list = []
-                # Clear search UI cache
-                if hasattr(self, '_search_cache_term'):
-                    del self._search_cache_term
-                log("[*] Official CDN cache cleared.", (180, 180, 180))
-            
-            if not self.roblox_manager.is_attached:
-                self.roblox_manager.attach()
-            if not self.roblox_manager.is_attached:
-                log("[-] Scan Failed: Roblox is not running.", (255, 100, 100))
-                return
-            # Build target list from user flags for the rescan
-            target_names = []
-            if self.flag_manager:
-                from src.utils.helpers import clean_flag_name, get_flag_prefix
-                for f in self.flag_manager.user_flags:
-                    fname = f['name']
-                    clean = clean_flag_name(fname)
-                    prefix = self.flag_manager.official_prefixes.get(clean)
-                    target_names.append(prefix + clean if prefix else fname)
-            live_addrs = self.roblox_manager.scan_live_flags(target_names or None, force_rescan=True)
-            if live_addrs:
-                log(f"[+] Scan Complete: Found {len(live_addrs)} FFlag locations.", (100, 255, 100))
-                # Force search UI to refresh with new vault data
-                if hasattr(self, '_search_cache_term'):
-                    del self._search_cache_term
-            else:
-                log("[-] Scan Failed: No flag addresses found.", (255, 100, 100))
-        except Exception as e:
-            log(f"[-] Scan Error: {e}", (255, 100, 100))
-            import traceback
-            traceback.print_exc()
-
     # ─── Presets ───
 
     def get_presets(self):
@@ -1392,6 +1355,11 @@ class Api:
         """Full application exit (from UI or Tray)."""
         log("[*] Closing application...", (255, 100, 100))
         self.save_window_state()
+        if self.settings.get('auto_clear_json', True):
+            try:
+                self.clear_clientapp_json()
+            except Exception:
+                pass
         if hasattr(self, '_app'):
             self._app.exit_app()
         elif self._window:
@@ -1421,7 +1389,11 @@ class Api:
                     else:
                         # Just attach to update status
                         self.roblox_manager.attach()
+                    self._last_seen_roblox_pid = pid
                 else:
+                    # One-shot Roblox-exit transition: only fire the clear when
+                    # we go from "saw a pid last tick" -> "no pid this tick".
+                    just_exited = self._last_seen_roblox_pid is not None
                     self.roblox_manager.reset()
                     self.flag_manager.flags_applied = False
                     # Clear statuses
@@ -1431,6 +1403,13 @@ class Api:
                                 f['_status'] = None
                     # Clean up old PIDs to prevent unbounded growth
                     self.processed_pids.clear()
+                    self._last_seen_roblox_pid = None
+                    if just_exited and self.settings.get('auto_clear_json', True):
+                        log("[*] Roblox closed — clearing ClientAppSettings.json", (180, 200, 180))
+                        try:
+                            self.clear_clientapp_json()
+                        except Exception:
+                            pass
             except Exception as e:
                 log(f"[!] Monitor error: {e}", (255, 100, 100))
                 time.sleep(5)  # Back off on error

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.6] - 2026-05-16
+
+### Added
+
+- "Clear allowed FFlags on exit / when Roblox closes" toggle in
+  Settings (default ON for new installs). When enabled, FFM
+  overwrites `ClientAppSettings.json` with `{}` across every
+  detected Roblox version directory in three situations:
+  - the app exits (UI exit button or tray Exit),
+  - Auto Apply is turned OFF while Roblox is not running, and
+  - the running Roblox process exits (one-shot transition
+    detected by the background monitor).
+  This ensures no leftover allowed FFlags take effect on the next
+  Roblox launch when FFM isn't actively applying.
+- `RobloxManager.clear_fflags_json()` helper that mirrors the
+  existing scatter-sync write path used by `apply_fflags_json`.
+
+### Removed
+
+- "Emergency Revert" / "Execute Panic Revert" button and the
+  underlying `panic_revert` API method. Restoring the original
+  values of arbitrary FFlags requires a complete defaults table,
+  which FFM does not have, so the button could not honour its
+  promise. The new auto-clear toggle is the supported kill-switch.
+- "Rescan FFlag Offsets" button (and its `rescan_offsets` API
+  method). FFM has sourced offsets from Imtheo since 3.3.5, so the
+  user-facing rescan no longer reflects how the app actually
+  discovers flag locations. The Settings → Safety & Reset section
+  is removed as a result. Internal scanning helpers used by the
+  normal apply flow are unchanged.
+
 ## [3.3.5] - 2026-05-03
 
 ### Added
