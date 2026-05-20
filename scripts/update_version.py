@@ -11,6 +11,7 @@ The GitHub Actions release workflow calls this with the tag-derived version.
 
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -18,6 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "version.json"
 SVG_FILE = ROOT / "logo.svg"
 README_FILE = ROOT / "README.md"
+MIRROR_FFLAGS = ROOT / "data" / "FFlags.hpp"
+BUNDLED_BASELINE = ROOT / "src" / "data" / "FFlags_baseline.hpp"
 
 
 def read_version() -> str:
@@ -37,6 +40,24 @@ def patch_svg(version: str) -> bool:
     if updated == text:
         return False
     SVG_FILE.write_text(updated, encoding="utf-8")
+    return True
+
+
+def refresh_baseline() -> bool:
+    """Copy the freshest mirrored FFlags.hpp into the bundled baseline so
+    each release ships with up-to-date offsets even if a user has no network.
+    Returns True if the baseline file was changed.
+    """
+    if not MIRROR_FFLAGS.is_file():
+        return False
+    BUNDLED_BASELINE.parent.mkdir(parents=True, exist_ok=True)
+    if BUNDLED_BASELINE.is_file():
+        try:
+            if BUNDLED_BASELINE.read_bytes() == MIRROR_FFLAGS.read_bytes():
+                return False
+        except OSError:
+            pass
+    shutil.copy2(MIRROR_FFLAGS, BUNDLED_BASELINE)
     return True
 
 
@@ -64,9 +85,11 @@ def main() -> None:
 
     svg_changed = patch_svg(version)
     readme_changed = patch_readme(version)
+    baseline_changed = refresh_baseline()
 
-    print(f"  logo.svg  -> {'updated' if svg_changed else 'no change'}")
-    print(f"  README.md -> {'updated' if readme_changed else 'no change'}")
+    print(f"  logo.svg                 -> {'updated' if svg_changed else 'no change'}")
+    print(f"  README.md                -> {'updated' if readme_changed else 'no change'}")
+    print(f"  src/data/FFlags_baseline -> {'updated' if baseline_changed else 'no change'}")
 
 
 if __name__ == "__main__":

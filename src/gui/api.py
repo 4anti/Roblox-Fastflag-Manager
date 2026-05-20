@@ -123,6 +123,14 @@ class Api:
         """Return loading state for the frontend."""
         if not self.flag_manager:
             return {'ready': False, 'error': self._init_error or 'FlagManager not available'}
+        offset_source = None
+        baseline_stale = False
+        try:
+            from src.core import offset_loader
+            offset_source = offset_loader.last_source_id()
+            baseline_stale = offset_loader.is_baseline_stale()
+        except Exception:
+            pass
         return {
             'ready': self.flag_manager.offsets_loaded,
             'loading': self.flag_manager.offsets_loading,
@@ -131,6 +139,8 @@ class Api:
             'update_ready': getattr(self, 'update_ready', False),
             'pending_update': True if getattr(self, '_pending_update', None) else False,
             'version': get_current_version(),
+            'offset_source': offset_source,
+            'baseline_stale': baseline_stale,
         }
 
     # ─── Settings ───
@@ -148,6 +158,7 @@ class Api:
             'sidebar_collapsed': self.settings.get('sidebar_collapsed', False),
             'sort_mode': self.settings.get('sort_mode', 'custom'),
             'auto_update': self.settings.get('auto_update', False),
+            'promo_dismissed': self.settings.get('promo_dismissed', False),
         }
 
     def set_history_limit(self, value):
@@ -221,6 +232,10 @@ class Api:
         self.settings['auto_update'] = value
         Config.save_settings(self.settings)
         log(f"[+] Auto Update: {'ON' if value else 'OFF'}")
+
+    def set_promo_dismissed(self, value):
+        self.settings['promo_dismissed'] = bool(value)
+        Config.save_settings(self.settings)
 
     def get_update_info(self):
         """Return pending update info for the frontend."""

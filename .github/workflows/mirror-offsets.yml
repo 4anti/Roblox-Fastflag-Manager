@@ -1,0 +1,122 @@
+name: Mirror Offsets
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'   # ~every 6 hours; offset minute reduces collisions
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch FFlags.hpp (dev.imtheo -> imtheo -> workers.dev)
+        run: |
+          mkdir -p data
+          UA="FFM-Mirror/1.0"
+          SOURCES=(
+            "https://dev.imtheo.lol/Offsets/FFlags.hpp"
+            "https://imtheo.lol/Offsets/FFlags.hpp"
+            "https://offsets.ntgetwritewatch.workers.dev/FFlags.hpp"
+          )
+          ok=0
+          for url in "${SOURCES[@]}"; do
+            echo "Trying $url ..."
+            if curl -fsSL --max-time 30 -A "$UA" -o data/FFlags.hpp.new "$url"; then
+              # Sanity check: must contain FFlagOffsets (both formats have it).
+              # Either Format A (nested namespace FFlagList) or Format B (flat
+              # uintptr_t FFlagList) is acceptable.
+              if grep -q "namespace FFlagOffsets" data/FFlags.hpp.new \
+                 && { grep -q "namespace FFlagList" data/FFlags.hpp.new \
+                      || grep -q "uintptr_t\s\+FFlagList" data/FFlags.hpp.new; }; then
+                echo "OK from $url ($(wc -c < data/FFlags.hpp.new) bytes)"
+                mv data/FFlags.hpp.new data/FFlags.hpp
+                ok=1
+                break
+              else
+                echo "WARN: response from $url failed sanity check"
+                rm -f data/FFlags.hpp.new
+              fi
+            else
+              echo "WARN: curl failed for $url"
+            fi
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "ERROR: all sources failed"
+            exit 1
+          fi
+
+      - name: Fetch FFlags.json (dev.imtheo -> imtheo -> workers.dev)
+        run: |
+          UA="FFM-Mirror/1.0"
+          SOURCES=(
+            "https://dev.imtheo.lol/Offsets/FFlags.json"
+            "https://imtheo.lol/Offsets/FFlags.json"
+            "https://offsets.ntgetwritewatch.workers.dev/FFlags.json"
+          )
+          ok=0
+          for url in "${SOURCES[@]}"; do
+            echo "Trying $url ..."
+            if curl -fsSL --max-time 30 -A "$UA" -o data/FFlags.json.new "$url"; then
+              # Sanity check: must be valid JSON and contain "Total Offsets".
+              if python3 -c "import json,sys; d=json.load(open('data/FFlags.json.new')); assert isinstance(d.get('Total Offsets'), int)"; then
+                echo "OK from $url ($(wc -c < data/FFlags.json.new) bytes)"
+                mv data/FFlags.json.new data/FFlags.json
+                ok=1
+                break
+              else
+                echo "WARN: response from $url failed sanity check"
+                rm -f data/FFlags.json.new
+              fi
+            else
+              echo "WARN: curl failed for $url"
+            fi
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "WARN: all JSON sources failed; skipping badge update"
+          fi
+
+      - name: Generate Shields endpoint badge JSON
+        run: |
+          if [ ! -f data/FFlags.json ]; then
+            echo "No FFlags.json; skipping badge generation."
+            exit 0
+          fi
+          mkdir -p badges
+          python3 - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("data/FFlags.json").read_text())
+          n = int(data["Total Offsets"])
+          message = f"{n // 1000}k+" if n >= 1000 else str(n)
+          badge = {
+              "schemaVersion": 1,
+              "label": "Modifiable FFlags",
+              "message": message,
+              "color": "blue",
+              "cacheSeconds": 900,
+          }
+          pathlib.Path("badges/fflags.json").write_text(
+              json.dumps(badge, indent=2) + "\n"
+          )
+          print(f"Wrote badges/fflags.json: {message} (raw {n})")
+          PY
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/FFlags.hpp data/FFlags.json badges/fflags.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No change since last run."
+          else
+            git commit -m "chore(mirror): refresh offsets + badge [skip ci]"
+            git push origin main
+          fi

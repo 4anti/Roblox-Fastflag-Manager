@@ -1435,6 +1435,35 @@
         border-color: var(--border-light);
         color: #fff;
       }
+      .light-theme .btn-subtle:hover:not(:disabled) {
+        color: var(--text);
+      }
+      .light-theme .btn-discord-purple:hover:not(:disabled) {
+        color: var(--purple-hover) !important;
+      }
+
+      .btn-square {
+        flex: 1;
+        height: 80px;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        border-radius: 12px !important;
+        text-align: center;
+        transition: all 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+      }
+      .btn-square:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important;
+      }
+      .btn-square svg {
+        width: 28px;
+        height: 28px;
+        opacity: 0.9;
+      }
 
       .btn-danger {
         background: rgba(248, 113, 113, 0.1);
@@ -1717,6 +1746,121 @@
         padding: 12px 16px;
         background: var(--bg-elevated);
         border-top: 1px solid var(--border);
+      }
+
+      /* === Community Promo Modal === */
+      .promo-modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7);
+        z-index: 10001; /* Above input modals */
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        animation: fadeIn 0.2s ease-out;
+      }
+      .promo-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 16px;
+        width: 380px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 26px 24px 20px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+        animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .promo-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -0.4px;
+        margin-bottom: 8px;
+      }
+      .promo-body {
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.5;
+        margin-bottom: 20px;
+      }
+      .promo-actions {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        width: 100%;
+      }
+      .promo-actions .btn {
+        flex: 1 1 130px;
+        min-width: 0;
+        height: auto !important;
+        min-height: 82px;
+        gap: 7px !important;
+        padding: 13px 10px;
+      }
+      .promo-actions .btn svg { width: 24px; height: 24px; }
+      .promo-btn-label {
+        font-weight: 800;
+        font-size: 13px;
+        line-height: 1.1;
+      }
+      .promo-close {
+        margin-top: 16px;
+        padding: 9px 16px;
+        width: 100%;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        background: var(--bg-elevated);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .promo-close:hover:not(:disabled) { background: var(--bg-hover); }
+      .promo-close:disabled { opacity: 0.55; cursor: not-allowed; }
+      .promo-dismiss {
+        margin-top: 10px;
+        background: none;
+        border: none;
+        color: var(--text-dark);
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+      }
+      .promo-dismiss:hover:not(:disabled) { opacity: 1; }
+      .promo-dismiss:disabled { opacity: 0.35; cursor: not-allowed; text-decoration: none; }
+      .promo-stars {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 13px;
+        margin-bottom: 14px;
+        border-radius: 999px;
+        background: rgba(255, 209, 102, 0.12);
+        border: 1px solid rgba(255, 209, 102, 0.32);
+        color: #ffd166;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+      .promo-stars b { color: #ffe08a; font-weight: 800; }
+      .promo-star-icon { width: 13px; height: 13px; flex-shrink: 0; }
+      /* One-shot shake that settles into the lifted state (no infinite loop). */
+      @keyframes promoBtnPop {
+        0%   { transform: translateY(0) rotate(0deg) scale(1); }
+        30%  { transform: translateY(-5px) rotate(-2deg) scale(1.03); }
+        55%  { transform: translateY(-3px) rotate(1.6deg) scale(1.02); }
+        80%  { transform: translateY(-5px) rotate(-0.8deg) scale(1.02); }
+        100% { transform: translateY(-4px) rotate(0deg) scale(1.02); }
+      }
+      .promo-actions .btn:hover {
+        animation: promoBtnPop 0.45s ease-out forwards;
       }
 
       /* === Premium Input Modal === */
@@ -2756,23 +2900,28 @@
               <div style="font-size: 11.5px; color: var(--text-dim); line-height: 1.8; padding: 4px 0;">
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; background: var(--bg-card); padding: 16px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
                   <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; font-weight: 900; box-shadow: 0 0 20px var(--accent-glow); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">4</div>
+                    <div id="about-avatar-wrap" style="width: 40px; height: 40px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; font-weight: 900; box-shadow: 0 0 20px var(--accent-glow); text-shadow: 0 1px 2px rgba(0,0,0,0.2); overflow: hidden; flex-shrink: 0;">
+                      <span id="about-avatar-fallback">4</span>
+                      <img id="about-avatar-img" alt="4anti" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: none;" />
+                    </div>
                     <div style="flex: 1;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong style="color: var(--text); font-size: 14px;">Developed by 4anti</strong>
                         <span id="about-version" style="color: var(--accent); font-weight: 800; font-size: 12px;">v...</span>
                       </div>
-                      <div style="font-size: 11px; color: var(--text-dark); margin-top: -2px;">Professional FastFlag Management Suite</div>
+                      <div style="font-size: 11px; color: var(--text-dark); margin-top: -2px;">Made with ❤️</div>
                     </div>
                   </div>
 
-                  <div style="display: flex; gap: 8px; margin-top: 4px;">
-                    <button class="btn btn-subtle" onclick="pywebview.api.open_url('https://github.com/4anti/Roblox-Fastflag-Manager')" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px; background: var(--bg-elevated);">
-                      GitHub Source
-                    </button>
-                    <button class="btn btn-subtle" onclick="pywebview.api.open_url('https://discord.gg/ECekjAkQu7')" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px; background: rgba(124, 92, 252, 0.08); border-color: rgba(124, 92, 252, 0.2); color: var(--purple-hover);">
-                      Discord Server
-                    </button>
+                  <div style="display: flex; gap: 12px; margin-top: 4px;">
+                   <button class="btn btn-subtle btn-square" onclick="pywebview.api.open_url('https://github.com/4anti/Roblox-Fastflag-Manager')" style="background: var(--bg-elevated);">
+                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.43.372.82 1.102.82 2.222 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                     <span>GitHub Source</span>
+                   </button>
+                   <button class="btn btn-subtle btn-square btn-discord-purple" onclick="pywebview.api.open_url('https://discord.gg/ECekjAkQu7')" style="background: rgba(124, 92, 252, 0.08); border-color: rgba(124, 92, 252, 0.2); color: var(--purple-hover);">
+                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1971.3728.2914a.077.077 0 01-.0066.1278 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+                     <span>Discord Server</span>
+                   </button>
                   </div>
                 </div>
 
@@ -2815,6 +2964,32 @@
           <button class="btn btn-subtle" style="padding: 6px 16px;" onclick="closeConfirmModal()">Cancel</button>
           <button class="btn btn-subtle" style="padding: 6px 16px; background: rgba(255, 100, 100, 0.15); color: var(--error); border-color: rgba(255, 100, 100, 0.3);" id="confirm-ok-btn">Confirm</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Community Promo Modal (backdrop intentionally non-dismissable) -->
+    <div class="promo-modal" id="promo-modal">
+      <div class="promo-content">
+        <div class="promo-stars" id="promo-stars">
+          <svg class="promo-star-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .587l3.668 7.431 8.2 1.192-5.934 5.787 1.401 8.169L12 18.896l-7.335 3.857 1.401-8.169L.132 9.21l8.2-1.192z"/></svg>
+          <span id="promo-stars-text">Loading stars…</span>
+        </div>
+        <div class="promo-title">Enjoying FFlag Manager?</div>
+        <div class="promo-body">
+          GitHub stars keeps the project alive! Join the Discord for FFlags/Problems!
+        </div>
+        <div class="promo-actions">
+          <button class="btn btn-subtle btn-square" onclick="pywebview.api.open_url('https://github.com/4anti/Roblox-Fastflag-Manager')" style="background: rgba(0, 212, 170, 0.1); border-color: rgba(0, 212, 170, 0.3); color: var(--accent);">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.43.372.82 1.102.82 2.222 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            <span class="promo-btn-label">Star on GitHub</span>
+          </button>
+          <button class="btn btn-subtle btn-square btn-discord-purple" onclick="pywebview.api.open_url('https://discord.gg/ECekjAkQu7')" style="background: rgba(124, 92, 252, 0.08); border-color: rgba(124, 92, 252, 0.2); color: var(--purple-hover);">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1971.3728.2914a.077.077 0 01-.0066.1278 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+            <span class="promo-btn-label">Join Discord</span>
+          </button>
+        </div>
+        <button class="promo-close" id="promo-close-btn" disabled onclick="closePromoModal()">Close (5)</button>
+        <button class="promo-dismiss" id="promo-dismiss-btn" disabled onclick="promoDontShowAgain()">Don't show again</button>
       </div>
     </div>
 
@@ -3256,6 +3431,10 @@
         const totalElapsed = Date.now() - startTime;
         const remaining = Math.max(0, minTotalTime - totalElapsed);
         setTimeout(hideLoadingScreen, remaining);
+
+        // Show the community promo once the loading screen is gone,
+        // unless the user has chosen "Don't show again".
+        setTimeout(() => { if (!promoDismissed) showPromoModal(); }, remaining + 700);
       });
 
       let currentSortMode = 'custom';
@@ -3266,6 +3445,27 @@
          }
          refreshConfig();
       }
+
+      (function loadGithubAvatar() {
+        const username = '4anti';
+        fetch('https://api.github.com/users/' + username, { headers: { 'Accept': 'application/vnd.github+json' } })
+          .then(r => r.ok ? r.json() : Promise.reject(r.status))
+          .then(data => {
+            if (!data || !data.avatar_url) return;
+            const img = document.getElementById('about-avatar-img');
+            const fb = document.getElementById('about-avatar-fallback');
+            const wrap = document.getElementById('about-avatar-wrap');
+            if (!img) return;
+            img.onload = () => {
+              if (fb) fb.style.display = 'none';
+              img.style.display = 'block';
+              if (wrap) wrap.style.background = 'transparent';
+            };
+            img.onerror = () => { img.style.display = 'none'; };
+            img.src = data.avatar_url;
+          })
+          .catch(() => {});
+      })();
 
       // === Version Checker ===
       let initialFlagsLoaded = false;
@@ -3367,6 +3567,7 @@
       async function loadSettings() {
         try {
           const s = await pywebview.api.get_settings();
+          promoDismissed = s.promo_dismissed === true;
           document.getElementById("auto-apply-toggle").checked = s.auto_apply;
           document.getElementById("settings-auto-apply").checked = s.auto_apply;
           // UI Theme
@@ -3618,6 +3819,128 @@
       }
 
       let pendingConfirmAction = null;
+
+      // === Community Promo Modal ===
+      let promoDismissed = false;
+      let promoCountdownTimer = null;
+
+      function showPromoModal() {
+        const modal = document.getElementById("promo-modal");
+        const closeBtn = document.getElementById("promo-close-btn");
+        const dismissBtn = document.getElementById("promo-dismiss-btn");
+        if (!modal || !closeBtn || !dismissBtn) return;
+
+        // Lock both dismiss paths and run a 5s countdown so the text is read.
+        let remaining = 5;
+        closeBtn.disabled = true;
+        dismissBtn.disabled = true;
+        closeBtn.textContent = "Close (" + remaining + ")";
+        modal.style.display = "flex";
+
+        clearInterval(promoCountdownTimer);
+        promoCountdownTimer = setInterval(() => {
+          remaining--;
+          if (remaining > 0) {
+            closeBtn.textContent = "Close (" + remaining + ")";
+          } else {
+            clearInterval(promoCountdownTimer);
+            promoCountdownTimer = null;
+            closeBtn.textContent = "Close";
+            closeBtn.disabled = false;
+            dismissBtn.disabled = false;
+          }
+        }, 1000);
+
+        // Make it enjoyable: live star count + a confetti burst.
+        fetchPromoStars();
+        launchPromoConfetti();
+      }
+
+      async function fetchPromoStars() {
+        const el = document.getElementById("promo-stars-text");
+        if (!el) return;
+        try {
+          const r = await fetch("https://api.github.com/repos/4anti/Roblox-Fastflag-Manager", { headers: { "Accept": "application/vnd.github+json" } });
+          if (!r.ok) throw new Error(r.status);
+          const data = await r.json();
+          const count = data && data.stargazers_count;
+          if (typeof count === "number") {
+            el.innerHTML = "Currently at <b>" + count.toLocaleString() + "</b> stars!";
+          } else {
+            el.textContent = "Star us on GitHub!";
+          }
+        } catch (e) {
+          el.textContent = "Star us on GitHub!";
+        }
+      }
+
+      function launchPromoConfetti() {
+        const old = document.getElementById("promo-confetti");
+        if (old) old.remove();
+        const canvas = document.createElement("canvas");
+        canvas.id = "promo-confetti";
+        canvas.style.cssText = "position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:10002;";
+        document.body.appendChild(canvas);
+
+        const ctx = canvas.getContext("2d");
+        const W = canvas.width = window.innerWidth;
+        const H = canvas.height = window.innerHeight;
+        const colors = ["#00d4aa", "#7c5cfc", "#ffd166", "#ff6b6b", "#4dabf7", "#ffffff"];
+        const parts = [];
+        for (let i = 0; i < 150; i++) {
+          parts.push({
+            x: Math.random() * W,
+            y: Math.random() * -H,
+            w: 6 + Math.random() * 6,
+            h: 8 + Math.random() * 8,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rot: Math.random() * Math.PI * 2,
+            vr: (Math.random() - 0.5) * 0.3,
+            vy: 2 + Math.random() * 3,
+            vx: (Math.random() - 0.5) * 1.5,
+            sway: Math.random() * Math.PI * 2
+          });
+        }
+
+        const start = performance.now();
+        const DURATION = 3500;
+        function frame(now) {
+          const elapsed = now - start;
+          ctx.clearRect(0, 0, W, H);
+          let alive = false;
+          for (const p of parts) {
+            p.y += p.vy;
+            p.sway += 0.05;
+            p.x += p.vx + Math.sin(p.sway) * 0.6;
+            p.rot += p.vr;
+            if (p.y < H + 20) alive = true;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.globalAlpha = elapsed > DURATION - 700 ? Math.max(0, (DURATION - elapsed) / 700) : 1;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+          }
+          if (elapsed < DURATION && alive) {
+            requestAnimationFrame(frame);
+          } else {
+            canvas.remove();
+          }
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function closePromoModal() {
+        const modal = document.getElementById("promo-modal");
+        if (modal) modal.style.display = "none";
+      }
+
+      function promoDontShowAgain() {
+        promoDismissed = true;
+        try { pywebview.api.set_promo_dismissed(true); } catch (e) {}
+        closePromoModal();
+      }
 
       function showConfirmModal(title, message, onConfirm) {
         document.getElementById("confirm-title").textContent = title;

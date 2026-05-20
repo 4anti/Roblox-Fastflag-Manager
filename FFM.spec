@@ -5,7 +5,7 @@ a = Analysis(
     ['main.pyw'],
     pathex=[],
     binaries=[],
-    datas=[('src/gui/ui', 'src/gui/ui'), ('version.json', '.')],
+    datas=[('src/gui/ui', 'src/gui/ui'), ('version.json', '.'), ('src/data', 'src/data')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

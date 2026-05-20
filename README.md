@@ -4,9 +4,10 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v3.3.5-blue.svg)
+![Version](https://img.shields.io/badge/version-v3.3.7-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+![Modifiable FFlags](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F4anti%2FRoblox-Fastflag-Manager%2Fmain%2Fbadges%2Ffflags.json)
 
 </div>
 
@@ -31,6 +32,7 @@
 - [📥 Installation](#installation)
 - [🎮 How to Use](#how-to-use)
 - [💬 Discord Server](#community--support)
+- [⭐ Star History](#star-history)
 - [⚖️ License](#license)
 
 ---
@@ -151,6 +153,22 @@ python main.pyw
 Join the official Discord for support, preset sharing, and community discussion.
 
 [**Join the Discord Server →**](https://discord.gg/ECekjAkQu7)
+
+</div>
+
+---
+
+<div>
+
+## <a name="star-history"></a>⭐ Star History
+
+<a href="https://www.star-history.com/?repos=4anti%2FRoblox-Fastflag-Manager&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&legend=top-left" />
+ </picture>
+</a>
 
 </div>
 

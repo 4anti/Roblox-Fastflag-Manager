@@ -67,6 +67,10 @@ Offsets.h
 recovered_offsets.json
 static_recovered.json
 working_offsets_*.json
+
+# Intentionally-tracked baselines (override the FFlags.hpp ignore above)
+!data/FFlags.hpp
+!src/data/FFlags_baseline.hpp
 final_resolved_offsets.json
 discovered_offsets.txt
 discovery_log.txt

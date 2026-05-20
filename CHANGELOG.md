@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.7] - 2026-05-20
+
+### Added
+
+- Six-source offset fallback chain so users behind antivirus SSL
+  interception, corporate firewalls, or with imtheo.lol temporarily
+  unreachable can still load offsets. Order:
+  1. imtheo.lol via Python requests
+  2. imtheo.lol via system `curl.exe` (Windows native SSL / schannel)
+  3. GitHub mirror via Python requests
+  4. GitHub mirror via `curl.exe`
+  5. Disk cache (`~/.FFlagManager/offsets_cache.json`)
+  6. Bundled baseline (shipped inside the .exe — guaranteed to work
+     even on first run with no network)
+- `data/FFlags.hpp` GitHub mirror, auto-refreshed every ~6 hours by a
+  new `.github/workflows/mirror-offsets.yml` workflow.
+- `src/data/FFlags_baseline.hpp` shipped with every installer build;
+  refreshed at release time by `scripts/update_version.py`.
+- Captive-portal / proxy-error rejection: a fetched body must parse to
+  >=500 flags AND a valid `FFlagList.Pointer` before being accepted,
+  preventing AV intercept HTML from poisoning the disk cache.
+- Per-source startup telemetry line (`[OK] Offsets source: <id>, ...`)
+  plus `offset_source` and `baseline_stale` fields on the loading
+  status API for the UI to surface.
+
+### Changed
+
+- Cache file relocated from the install directory (`Program Files\...`)
+  to `~/.FFlagManager/offsets_cache.json`. The old in-repo location was
+  not writable by non-admin processes after Inno install, which
+  silently disabled the cache fallback for many users. One-shot
+  migration copies the old file forward on first run.
+- Cache writes are now atomic (write-to-tmp + `os.replace`) so a crash
+  mid-write cannot corrupt the cache.
+- Cleaner error messages: long `HTTPSConnectionPool(...)` tracebacks
+  are replaced with short per-source `[!] host via path: reason` lines.
+- Redesigned GitHub and Discord buttons in Settings > About with SVG
+  icons (Octocat and Discord mark) in a tall card-style layout.
+- Developer avatar in About section now fetches the real GitHub profile
+  picture, falling back to the static "4" if offline.
+
+### Fixed
+
+- White-on-white hover bug affecting all subtle buttons in light theme
+  (text and SVG icons were invisible on hover).
+
 ## [3.3.6] - 2026-05-16
 
 ### Added

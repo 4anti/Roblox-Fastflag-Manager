@@ -35,6 +35,7 @@ def build():
         f"--icon={icon_file}",
         f"--add-data=src/gui/ui{separator}src/gui/ui",
         f"--add-data=version.json{separator}.",
+        f"--add-data=src/data{separator}src/data",
         "--name=FFM",
         "--noconfirm",
         "--clean",

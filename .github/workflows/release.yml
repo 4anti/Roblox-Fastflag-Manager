@@ -68,10 +68,23 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
         shell: powershell
 
+      - name: Extract changelog for this version
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          # Extract the section between ## [VERSION] and the next ## [
+          BODY=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$BODY" ]; then
+            BODY="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details."
+          fi
+          # Write to file to avoid escaping issues
+          echo "$BODY" > release_body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: FFM_Installer.exe
-          generate_release_notes: true
+          body_path: release_body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
