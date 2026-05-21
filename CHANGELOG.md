@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`offset_sources.py`) and the `mirror-offsets.yml` GitHub Action
   (both the `.hpp` and `.json` chains).
 
+### Fixed
+
+- AOB scanner robustness: `find_pattern` now walks committed, readable
+  memory regions via `VirtualQueryEx` and tolerates partial reads
+  (`STATUS_PARTIAL_COPY`) instead of skipping an entire 10 MB chunk
+  whenever a single page in it is unreadable. The old all-or-nothing
+  read silently skipped large spans of the (Hyperion-protected) Roblox
+  image, which could make valid signatures unfindable. Adds a `[scan]`
+  coverage log line (regions scanned / read failures) to distinguish a
+  genuinely-absent pattern from a scan foiled by unreadable memory.
+
 ## [3.3.7] - 2026-05-20
 
 ### Added

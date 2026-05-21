@@ -449,13 +449,23 @@ class RobloxManager:
 
 
     def find_pattern(self, pattern_str, scan_size=None):
-        """Find a byte pattern in the Roblox module."""
+        """Find a byte pattern (AOB) in the Roblox module.
+
+        Walks committed, readable memory regions via VirtualQueryEx instead of
+        reading blind fixed-size chunks. The old approach read 10 MB chunks and
+        skipped an ENTIRE chunk whenever any page in it was unreadable — and the
+        Hyperion-protected image is full of guard/unmapped pages, so large spans
+        (potentially containing the target pattern) were silently never scanned.
+        Region-walking + partial-read tolerance makes the scan robust, and the
+        summary log line reports coverage so a real 'not found' can be told
+        apart from a scan that was foiled by unreadable memory.
+        """
         if not self._h_process or not self.get_roblox_base():
             return None
 
         base = self.get_roblox_base()
         if scan_size is None:
-            scan_size = 150 * 1024 * 1024
+            scan_size = 300 * 1024 * 1024  # generous upper bound over the image
 
         pattern_parts = pattern_str.split()
         re_pat = b""
@@ -465,15 +475,67 @@ class RobloxManager:
             else:
                 re_pat += re.escape(bytes.fromhex(p))
         regex = re.compile(re_pat, re.DOTALL)
+        pat_len = max(1, len(pattern_parts))
 
-        chunk_size = 10 * 1024 * 1024
-        for offset in range(0, scan_size, chunk_size - 128):
-            data = self.read_memory_external(base + offset, chunk_size)
-            if not data:
+        PAGE = 0x1000
+        chunk_size = 4 * 1024 * 1024
+        end = base + scan_size
+
+        regions_seen = 0
+        regions_readable = 0
+        read_fails = 0
+
+        cursor = base
+        while cursor < end:
+            region = self.query_region(cursor)
+            if not region:
+                break
+            regions_seen += 1
+            r_base = region.get("base") or cursor
+            r_size = region.get("size") or 0
+            if r_size <= 0:
+                cursor = r_base + PAGE
                 continue
-            match = regex.search(data)
-            if match:
-                return base + offset + match.start()
+            nxt = r_base + r_size
+
+            # Readable = committed (0x1000) and neither PAGE_NOACCESS (0x01)
+            # nor PAGE_GUARD (0x100).
+            committed = region.get("state") == 0x1000
+            protect = region.get("protect") or 0
+            readable = committed and not (protect & 0x101)
+
+            if readable:
+                regions_readable += 1
+                carry = b""
+                carry_addr = r_base
+                off = 0
+                while off < r_size:
+                    want = min(chunk_size, r_size - off)
+                    data = self.read_memory_external(r_base + off, want, allow_partial=True)
+                    if not data:
+                        read_fails += 1
+                        off += PAGE          # skip the unreadable page, keep scanning
+                        carry = b""
+                        carry_addr = r_base + off
+                        continue
+                    window = carry + data
+                    m = regex.search(window)
+                    if m:
+                        return carry_addr + m.start()
+                    # Carry trailing (pat_len-1) bytes so a pattern straddling a
+                    # chunk boundary is still matched on the next iteration.
+                    if pat_len > 1:
+                        carry = window[-(pat_len - 1):]
+                        carry_addr = (r_base + off + len(data)) - len(carry)
+                    else:
+                        carry = b""
+                        carry_addr = r_base + off + len(data)
+                    off += len(data)
+
+            cursor = nxt
+
+        log(f"[scan] find_pattern: regions={regions_seen} readable={regions_readable} "
+            f"read_fails={read_fails} -> NOT FOUND", (180, 180, 180))
         return None
 
     def write_memory_external(self, addr, data):
@@ -641,8 +703,14 @@ class RobloxManager:
         log("[-] Could not resolve Roblox base address", (255, 100, 100))
         return 0
 
-    def read_memory_external(self, addr, size):
-        """Read memory from Roblox process. Returns bytes or None."""
+    def read_memory_external(self, addr, size, allow_partial=False):
+        """Read memory from Roblox process. Returns bytes or None.
+
+        allow_partial: when True, also accept STATUS_PARTIAL_COPY (0x8000000D)
+        and return the bytes copied before the first unreadable page. Used by
+        AOB scanning so a single guard/unmapped page mid-range doesn't blind
+        the whole read. Default False keeps strict all-or-nothing semantics for
+        callers that need an exact-size read (e.g. pointer/struct reads)."""
         if not self._h_process:
             if not self.open_process_for_write():
                 return None
@@ -655,7 +723,9 @@ class RobloxManager:
             buf, ctypes.c_size_t(size), ctypes.byref(bytes_read)
         )
 
-        if status == 0 and bytes_read.value > 0:
+        if bytes_read.value > 0 and (
+            status == 0 or (allow_partial and (status & 0xFFFFFFFF) == 0x8000000D)
+        ):
             return buf.raw[:bytes_read.value]
         return None
 
