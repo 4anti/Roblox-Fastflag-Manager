@@ -478,9 +478,21 @@ class FlagManager:
                             flag['value'] = new_val
                             updated_flags = True
                             triggered_this_cycle = True
-                            if self._rm:
-                                log(f"[HOTKEY] TaskSchedulerTargetFps -> {new_val}", (100, 255, 255))
-                                self._rm.write_fps_direct(int(new_val))
+                            if self._rm and self._rm.is_attached:
+                                addr_data = self._rm.get_live_flag_address(fname)
+                                if addr_data:
+                                    try:
+                                        self._rm.open_process_for_write()
+                                        for addr_entry in addr_data:
+                                            abs_addr = addr_entry['abs_addr']
+                                            live_type = flag_type if flag_type != 'unknown' else addr_entry.get('type', 'unknown')
+                                            res, msg = self._rm.write_flag_at_address(live_type, abs_addr, new_val)
+                                            if res:
+                                                log(f"[HOTKEY] TaskSchedulerTargetFps -> {new_val}", (100, 255, 255))
+                                            else:
+                                                log(f"[HOTKEY] Failed TaskSchedulerTargetFps: {msg}", (255, 100, 100))
+                                    except Exception as e:
+                                        log(f"[HOTKEY] Error TaskSchedulerTargetFps: {e}", (255, 100, 100))
                         else:
                             cycle_states = flag.get('cycle_states', [])
                             if cycle_states:
@@ -662,23 +674,16 @@ class FlagManager:
                     flag['_status'] = 'json_only' if flag.get('_status') == 'success' else 'unavailable'
                     continue
                     
-                # Special fast-path for TaskSchedulerTargetFps (FPS unlocked)
+                # TaskSchedulerTargetFps is written via the normal RVA path below
+                # (base + its dumped offset), same as every other int flag — that
+                # static write controls the FPS cap (verified in-game: 10 -> 10 FPS).
+                # The old write_fps_direct() AOB hook was removed: its byte
+                # signature is stale on current Hyperion builds, so it always
+                # failed ("Pattern not found") and falsely marked this WORKING
+                # flag as failed/Unavailable.
                 clean = clean_flag_name(name)
                 
-                if clean == "TaskSchedulerTargetFps":
-                    if is_enabled:
-                        value_to_write = str(flag['value'])
-                        success, message = roblox_manager.write_fps_direct(int(float(value_to_write)))
-                        if success:
-                            flag['_status'] = 'success'
-                            mem_ok += 1
-                            log(f"[+] MEM: {name} = {value_to_write} (DirectPattern)", (100, 255, 100))
-                            continue
-                        else:
-                            mem_fail += 1
-                            flag['_status'] = 'failed'
-                            log(f"[-] MEM FAIL: TaskSchedulerTargetFps — {message}", (255, 100, 100))
-                            continue
+                # (write_fps_direct AOB special-case removed — see note above)
 
                 # Look up the live absolute address
                 clean = clean_flag_name(name)

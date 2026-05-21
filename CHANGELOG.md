@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image, which could make valid signatures unfindable. Adds a `[scan]`
   coverage log line (regions scanned / read failures) to distinguish a
   genuinely-absent pattern from a scan foiled by unreadable memory.
+- FPS unlock (`TaskSchedulerTargetFps`) applies again. It now writes the
+  flag's dumped offset via the normal live-memory path (a dynamic value
+  Roblox re-reads at runtime) instead of a hardcoded byte-pattern hook whose
+  signature went stale on current (Hyperion) builds. The stale hook made the
+  flag wrongly show as "failed / Unavailable" even though the value is
+  writable and takes effect. Note: the JSON FFlag method for FPS no longer
+  works on current Roblox — FFM applies this one via memory.
 
 ## [3.3.7] - 2026-05-20
 
