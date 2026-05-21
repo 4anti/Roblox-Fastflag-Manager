@@ -18,13 +18,13 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fetch FFlags.hpp (dev.imtheo -> imtheo -> workers.dev)
+      - name: Fetch FFlags.hpp (dev.imtheo -> offsets.imtheo -> workers.dev)
         run: |
           mkdir -p data
           UA="FFM-Mirror/1.0"
           SOURCES=(
             "https://dev.imtheo.lol/Offsets/FFlags.hpp"
-            "https://imtheo.lol/Offsets/FFlags.hpp"
+            "https://offsets.imtheo.lol/FFlags.hpp"
             "https://offsets.ntgetwritewatch.workers.dev/FFlags.hpp"
           )
           ok=0
@@ -54,12 +54,12 @@ jobs:
             exit 1
           fi
 
-      - name: Fetch FFlags.json (dev.imtheo -> imtheo -> workers.dev)
+      - name: Fetch FFlags.json (dev.imtheo -> offsets.imtheo -> workers.dev)
         run: |
           UA="FFM-Mirror/1.0"
           SOURCES=(
             "https://dev.imtheo.lol/Offsets/FFlags.json"
-            "https://imtheo.lol/Offsets/FFlags.json"
+            "https://offsets.imtheo.lol/FFlags.json"
             "https://offsets.ntgetwritewatch.workers.dev/FFlags.json"
           )
           ok=0

@@ -1,10 +1,12 @@
 """Centralized FFlag offset loader with multi-source fallback chain.
 
-Sources tried in order (first valid wins):
-  1. imtheo.lol via Python requests
-  2. imtheo.lol via system curl.exe   (bypasses AV SSL interception)
-  3. GitHub mirror via Python requests
-  4. GitHub mirror via curl.exe
+Sources tried in order (first valid wins). Each network URL is attempted
+via Python requests first, then via system curl.exe (bypasses AV SSL
+interception):
+  1. dev.imtheo.lol      (preferred — latest dumper)
+  2. offsets.imtheo.lol  (stable mirror — same format/content as dev)
+  3. offsets.ntgetwritewatch.workers.dev (alt mirror — Format B)
+  4. GitHub mirror (data/FFlags.hpp)
   5. Disk cache (~/.FFlagManager/offsets_cache.json)
   6. Bundled baseline shipped with the .exe
 

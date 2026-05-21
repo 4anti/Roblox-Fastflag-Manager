@@ -32,7 +32,7 @@ SRC_BUNDLED = "bundled_baseline"
 
 # URLs — primary sources (different hosts, all serve FFlag offsets)
 IMTHEO_DEV_FFLAGS_HPP = "https://dev.imtheo.lol/Offsets/FFlags.hpp"   # preferred (latest dumper)
-IMTHEO_FFLAGS_HPP = "https://imtheo.lol/Offsets/FFlags.hpp"           # legacy (same format as dev)
+IMTHEO_FFLAGS_HPP = "https://offsets.imtheo.lol/FFlags.hpp"          # current stable mirror (same format/content as dev)
 WORKERS_DEV_FFLAGS_HPP = "https://offsets.ntgetwritewatch.workers.dev/FFlags.hpp"  # alt mirror (different format, no version embed)
 
 # Our own GitHub mirror — last resort before disk/bundled
