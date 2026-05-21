@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flag wrongly show as "failed / Unavailable" even though the value is
   writable and takes effect. Note: the JSON FFlag method for FPS no longer
   works on current Roblox — FFM applies this one via memory.
+- Mirror workflow no longer commits truncated/stub offset dumps. When the
+  upstream dumper serves a near-empty file mid-Roblox-update (only the 3
+  `FFlagList` struct offsets), the auto-refresh used to accept it — nuking
+  `data/FFlags.hpp` and collapsing the README badge to "3". The fetch now
+  requires >=500 offsets, the badge is derived from the committed `.hpp`
+  (not the JSON, which some mirrors don't provide a count for), and
+  `update_version.py` refuses to bundle a <500-offset baseline at release.
 
 ## [3.3.7] - 2026-05-20
 

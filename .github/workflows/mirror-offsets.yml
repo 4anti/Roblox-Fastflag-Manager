@@ -31,18 +31,23 @@ jobs:
           for url in "${SOURCES[@]}"; do
             echo "Trying $url ..."
             if curl -fsSL --max-time 30 -A "$UA" -o data/FFlags.hpp.new "$url"; then
-              # Sanity check: must contain FFlagOffsets (both formats have it).
-              # Either Format A (nested namespace FFlagList) or Format B (flat
-              # uintptr_t FFlagList) is acceptable.
-              if grep -q "namespace FFlagOffsets" data/FFlags.hpp.new \
+              # Sanity check: must contain FFlagOffsets (both formats have it),
+              # a FFlagList struct (Format A nested or Format B flat), AND a sane
+              # number of offsets. The offset-count guard rejects truncated/stub
+              # dumps — e.g. a broken dumper mid-Roblox-update returning only the
+              # 3 FFlagList struct offsets — which would otherwise nuke the mirror
+              # and collapse the badge to "3".
+              count=$(grep -c "uintptr_t" data/FFlags.hpp.new || echo 0)
+              if [ "$count" -ge 500 ] \
+                 && grep -q "namespace FFlagOffsets" data/FFlags.hpp.new \
                  && { grep -q "namespace FFlagList" data/FFlags.hpp.new \
                       || grep -q "uintptr_t\s\+FFlagList" data/FFlags.hpp.new; }; then
-                echo "OK from $url ($(wc -c < data/FFlags.hpp.new) bytes)"
+                echo "OK from $url ($(wc -c < data/FFlags.hpp.new) bytes, $count offsets)"
                 mv data/FFlags.hpp.new data/FFlags.hpp
                 ok=1
                 break
               else
-                echo "WARN: response from $url failed sanity check"
+                echo "WARN: response from $url failed sanity check ($count offsets)"
                 rm -f data/FFlags.hpp.new
               fi
             else
@@ -66,8 +71,10 @@ jobs:
           for url in "${SOURCES[@]}"; do
             echo "Trying $url ..."
             if curl -fsSL --max-time 30 -A "$UA" -o data/FFlags.json.new "$url"; then
-              # Sanity check: must be valid JSON and contain "Total Offsets".
-              if python3 -c "import json,sys; d=json.load(open('data/FFlags.json.new')); assert isinstance(d.get('Total Offsets'), int)"; then
+              # Sanity check: valid JSON with a sane "Total Offsets" count
+              # (>=500). Rejects stub dumps (e.g. "Total Offsets": 3) served by a
+              # broken dumper mid-Roblox-update.
+              if python3 -c "import json,sys; d=json.load(open('data/FFlags.json.new')); n=d.get('Total Offsets'); assert isinstance(n, int) and n >= 500"; then
                 echo "OK from $url ($(wc -c < data/FFlags.json.new) bytes)"
                 mv data/FFlags.json.new data/FFlags.json
                 ok=1
@@ -86,15 +93,23 @@ jobs:
 
       - name: Generate Shields endpoint badge JSON
         run: |
-          if [ ! -f data/FFlags.json ]; then
-            echo "No FFlags.json; skipping badge generation."
+          if [ ! -f data/FFlags.hpp ]; then
+            echo "No FFlags.hpp; skipping badge generation."
             exit 0
           fi
           mkdir -p badges
           python3 - <<'PY'
-          import json, pathlib
-          data = json.loads(pathlib.Path("data/FFlags.json").read_text())
-          n = int(data["Total Offsets"])
+          import json, re, pathlib
+          text = pathlib.Path("data/FFlags.hpp").read_text(errors="ignore")
+          # Derive the count from the committed HPP (source of truth) rather than
+          # FFlags.json — workers.dev's JSON has no "Total Offsets" key, and the
+          # HPP is already offset-count-validated by the fetch step above.
+          total = len(re.findall(r"uintptr_t\s+\w+\s*=", text))
+          # Subtract the FFlagList struct members (Format A nested block) so the
+          # badge reflects modifiable flags, not internal struct offsets.
+          m = re.search(r"namespace FFlagList\s*\{(.*?)\}", text, re.S)
+          struct = len(re.findall(r"uintptr_t\s+\w+\s*=", m.group(1))) if m else 0
+          n = max(total - struct, 0)
           message = f"{n // 1000}k+" if n >= 1000 else str(n)
           badge = {
               "schemaVersion": 1,
@@ -106,7 +121,7 @@ jobs:
           pathlib.Path("badges/fflags.json").write_text(
               json.dumps(badge, indent=2) + "\n"
           )
-          print(f"Wrote badges/fflags.json: {message} (raw {n})")
+          print(f"Wrote badges/fflags.json: {message} (flags {n}, total {total}, struct {struct})")
           PY
 
       - name: Commit if changed

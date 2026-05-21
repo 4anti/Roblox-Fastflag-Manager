@@ -50,6 +50,17 @@ def refresh_baseline() -> bool:
     """
     if not MIRROR_FFLAGS.is_file():
         return False
+    # Guard against shipping a truncated/stub mirror (e.g. a broken dumper that
+    # returned only the 3 FFlagList struct offsets mid-Roblox-update). Refuse to
+    # overwrite the bundled baseline with a near-empty file.
+    try:
+        offset_count = MIRROR_FFLAGS.read_text(errors="ignore").count("uintptr_t")
+    except OSError:
+        offset_count = 0
+    if offset_count < 500:
+        print(f"[!] refresh_baseline: mirror has only {offset_count} offsets "
+              f"(<500) — refusing to overwrite the bundled baseline.")
+        return False
     BUNDLED_BASELINE.parent.mkdir(parents=True, exist_ok=True)
     if BUNDLED_BASELINE.is_file():
         try:
