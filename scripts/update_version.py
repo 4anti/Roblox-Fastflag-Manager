@@ -1,5 +1,6 @@
 """
-Syncs the version string into version.json, logo.svg, and README.md.
+Syncs the version string into version.json, logo.svg, and README.md, and
+refreshes the logo's "NNK+ FastFlags Available!" count from data/FFlags.hpp.
 
 Usage:
   python scripts/update_version.py            # uses version.json as source of truth
@@ -40,6 +41,50 @@ def patch_svg(version: str) -> bool:
     if updated == text:
         return False
     SVG_FILE.write_text(updated, encoding="utf-8")
+    return True
+
+
+def count_flag_offsets() -> int:
+    """Count modifiable FFlag offsets in the mirrored FFlags.hpp.
+
+    Mirrors the badge logic in .github/workflows/mirror-offsets.yml: total
+    `uintptr_t NAME = ...` entries minus the FFlagList struct members (Format A
+    nested block). Returns 0 if the file is missing/unreadable.
+    """
+    try:
+        text = MIRROR_FFLAGS.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return 0
+    total = len(re.findall(r"uintptr_t\s+\w+\s*=", text))
+    m = re.search(r"namespace FFlagList\s*\{(.*?)\}", text, re.S)
+    struct = len(re.findall(r"uintptr_t\s+\w+\s*=", m.group(1))) if m else 0
+    return max(total - struct, 0)
+
+
+def flag_count_label(n: int) -> str:
+    """Format an offset count like the badge: '12K+' for >=1000, else the number."""
+    return f"{n // 1000}K+" if n >= 1000 else str(n)
+
+
+def patch_svg_flag_count() -> bool:
+    """Patch logo.svg's 'NNK+ FastFlags Available!' text from the live mirror count.
+
+    Skips patching when the mirror looks truncated (<500 offsets) so an upstream
+    dumper outage can't stamp a bogus '0'/'3' into the logo.
+    """
+    n = count_flag_offsets()
+    if n < 500:
+        print(f"[!] patch_svg_flag_count: mirror has only {n} offsets "
+              f"(<500) — leaving logo flag count unchanged.")
+        return False
+    label = flag_count_label(n)
+    text = SVG_FILE.read_text(encoding="utf-8")
+    updated = re.sub(r"[\d]+[KkMm]?\+? FastFlags Available!",
+                     f"{label} FastFlags Available!", text)
+    if updated == text:
+        return False
+    SVG_FILE.write_text(updated, encoding="utf-8")
+    print(f"    (logo flag count -> {label}, from {n} offsets)")
     return True
 
 
@@ -95,10 +140,12 @@ def main() -> None:
         print(f"Reading from version.json: v{version}")
 
     svg_changed = patch_svg(version)
+    svg_count_changed = patch_svg_flag_count()
     readme_changed = patch_readme(version)
     baseline_changed = refresh_baseline()
 
-    print(f"  logo.svg                 -> {'updated' if svg_changed else 'no change'}")
+    print(f"  logo.svg (version)       -> {'updated' if svg_changed else 'no change'}")
+    print(f"  logo.svg (flag count)    -> {'updated' if svg_count_changed else 'no change'}")
     print(f"  README.md                -> {'updated' if readme_changed else 'no change'}")
     print(f"  src/data/FFlags_baseline -> {'updated' if baseline_changed else 'no change'}")
 

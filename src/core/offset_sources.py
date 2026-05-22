@@ -46,8 +46,12 @@ GITHUB_MIRROR_FFLAGS_HPP = (
 PRIMARY_NETWORK_SOURCES = [
     (SRC_IMTHEO_DEV_REQUESTS, SRC_IMTHEO_DEV_CURL, IMTHEO_DEV_FFLAGS_HPP),
     (SRC_IMTHEO_REQUESTS,     SRC_IMTHEO_CURL,     IMTHEO_FFLAGS_HPP),
-    (SRC_WORKERS_DEV_REQUESTS, SRC_WORKERS_DEV_CURL, WORKERS_DEV_FFLAGS_HPP),
+    # GitHub mirror is prioritized above workers.dev: for builds where imtheo is
+    # down, workers.dev returns valid-but-wrong numeric pointers (FInt/FFloat RVAs
+    # land in read-only .rdata -> JSON-only). Our mirror carries verified writable
+    # pointers, so it must be tried first. Revert when imtheo's dumper is back.
     (SRC_GITHUB_REQUESTS,     SRC_GITHUB_CURL,     GITHUB_MIRROR_FFLAGS_HPP),
+    (SRC_WORKERS_DEV_REQUESTS, SRC_WORKERS_DEV_CURL, WORKERS_DEV_FFLAGS_HPP),
 ]
 
 # Bundled baseline (shipped inside _MEIPASS via PyInstaller --add-data=src/data)

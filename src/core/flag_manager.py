@@ -744,7 +744,9 @@ class FlagManager:
                     if any(isinstance(r[1], str) and "JSON_ONLY" in r[1] for r in write_results):
                         mem_json_only += 1
                         flag['_status'] = 'json_only'
-                        log(f"[·] JSON-ONLY: {name}", (180, 180, 255))
+                        detail = next((r[1].split("|", 1)[1] for r in write_results
+                                       if isinstance(r[1], str) and "JSON_ONLY" in r[1]), "")
+                        log(f"[·] JSON-ONLY: {name} ({flag_type}) — {detail}", (180, 180, 255))
                     else:
                         mem_fail += 1
                         flag['_status'] = 'failed'

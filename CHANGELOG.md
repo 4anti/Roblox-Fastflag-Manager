@@ -7,17 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.8] - 2026-05-22
+
 ### Changed
 
+- Offset source priority: the GitHub mirror (`data/FFlags.hpp`) is now
+  tried **before** `offsets.ntgetwritewatch.workers.dev` in the fetch
+  chain (`offset_sources.py`). On Roblox builds where imtheo's dumper is
+  offline, workers.dev serves a dump whose **numeric (FInt/FFloat)
+  pointers are wrong** — they resolve into read-only `.rdata`, so those
+  flags silently fell back to JSON-only instead of applying via live
+  memory. Prioritizing our verified mirror fixes this. Revert when
+  imtheo's dumper is back for the current build.
+- `data/FFlags.hpp` updated to a Polaris-format dump for
+  `version-4b6315bf1f0a4dbb` (13,227 offsets). Every pointer was verified
+  against the live executable to resolve to writable `.data` with the
+  correct default value (e.g. CameraMaxZoomDistance=400,
+  VoiceChatVolumeThousandths=1000). A small `FFlagOffsets` struct block
+  is included so the existing loader/validator accepts it with no code
+  change; the bundled baseline is refreshed to match.
 - Offset fetch chain now uses `offsets.imtheo.lol/FFlags.hpp` as the
   secondary imtheo source in place of `imtheo.lol/Offsets/FFlags.hpp`.
   Both serve byte-identical Format A content; the new host is the
   current canonical mirror. Applied to the in-app loader
   (`offset_sources.py`) and the `mirror-offsets.yml` GitHub Action
   (both the `.hpp` and `.json` chains).
+- The logo's "NNK+ FastFlags Available!" count is now generated from
+  `data/FFlags.hpp` by `update_version.py` at release time (was a
+  hardcoded "13K+"), so it stays in sync with the actual offset count.
 
 ### Fixed
 
+- Numeric flags (FInt/FFloat — camera zoom, simulation radius, sender
+  rates, etc.) apply via **live memory** again instead of being marked
+  "JSON-only". They were JSON-only because the workers.dev mirror pointed
+  them at read-only `.rdata`; the corrected `data/FFlags.hpp` points them
+  at the real writable storage. (Boolean flags were unaffected — their
+  pointers were always correct.)
+- `JSON-ONLY` log lines now include the region detail (flag type,
+  address, page protection) instead of just the flag name, so an
+  unwritable pointer can be diagnosed at a glance (`flag_manager.py`).
 - AOB scanner robustness: `find_pattern` now walks committed, readable
   memory regions via `VirtualQueryEx` and tolerates partial reads
   (`STATUS_PARTIAL_COPY`) instead of skipping an entire 10 MB chunk
