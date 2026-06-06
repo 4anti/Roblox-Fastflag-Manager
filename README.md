@@ -5,8 +5,8 @@
 <div align="center">
 
 ![Version](https://img.shields.io/badge/version-v3.3.8-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
+[![Discord][shield-discord-server]][discord-invite]
+![Platform](https://img.shields.io/badge/platform-Windows-white.svg)
 ![Modifiable FFlags](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F4anti%2FRoblox-Fastflag-Manager%2Fmain%2Fbadges%2Ffflags.json)
 
 </div>
@@ -185,3 +185,6 @@ This project is open-sourced under the **MIT License**. See [`LICENSE`](LICENSE)
 *Developed by **4anti** with ❤️ for the Roblox community.*
 
 </div>
+
+[shield-discord-server]: https://img.shields.io/discord/1487010055931953152?logo=discord&logoColor=white&label=discord&color=aaaaa
+[discord-invite]:  https://discord.gg/6zqNQTSkr
