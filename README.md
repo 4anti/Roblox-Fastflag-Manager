@@ -187,4 +187,4 @@ This project is open-sourced under the **MIT License**. See [`LICENSE`](LICENSE)
 </div>
 
 [shield-discord-server]: https://img.shields.io/discord/1487010055931953152?logo=discord&logoColor=white&label=discord&color=aaaaa
-[discord-invite]:  https://discord.gg/6zqNQTSkr
+[discord-invite]:  https://discord.gg/HnqyxsAXhz
