@@ -4,7 +4,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v3.3.8-blue.svg)
+![Version](https://img.shields.io/badge/version-v3.3.7-blue.svg)
 [![Discord][shield-discord-server]][discord-invite]
 ![Platform](https://img.shields.io/badge/platform-Windows-white.svg)
 ![Modifiable FFlags](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F4anti%2FRoblox-Fastflag-Manager%2Fmain%2Fbadges%2Ffflags.json)
