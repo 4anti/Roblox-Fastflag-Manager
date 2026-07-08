@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.0.0] - 2026-07-08
+## [4.0.1] - 2026-07-08
 
 ### Added
 
@@ -141,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (HiDPI) displays. Both fixed.
 - Console log no longer freezes after a lot of output.
 - "LIVE" status dots no longer linger after Roblox is closed.
+- **CI:** install `pytest` in the release workflow so the sealed-source
+  verify step no longer fails with `No module named pytest`. (This is the
+  reason 4.0.0 never shipped; 4.0.1 is the first published 4.x release.)
+
 - Mouse side-buttons (back / forward / media) now work while FFM is
   focused.
 - Minor right-click menu glitches (duplicate remove button, stray `>`
