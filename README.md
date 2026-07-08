@@ -1,4 +1,7 @@
 <div align="center">
+  <p>⚠️・ Educational Purposes Only</p>
+</div>
+<div align="center">
   <img src="logo.svg" alt="Roblox FastFlag Manager" width="600">
 </div>
 
