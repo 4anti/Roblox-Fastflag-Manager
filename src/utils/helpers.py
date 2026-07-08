@@ -1,16 +1,58 @@
 import os
 import sys
 
+
+# ─── S1: First-1024-bytes polyfill check (sealed at build) ───
+# Placeholders below are overwritten by scripts/build_finalize.py.
+# In dev they are all-zero (no check effective).
+_SHARD_S1_A = bytes([146, 97, 186, 72, 70, 193, 232, 245, 135, 175, 40, 216, 111, 142, 10, 76, 30, 159, 198, 106, 122, 125, 131, 47, 201, 114, 55, 67, 7, 218, 125, 171])
+_SHARD_S1_B = bytes([27, 250, 148, 69, 183, 76, 126, 108, 48, 130, 105, 46, 221, 83, 218, 149, 247, 16, 109, 211, 19, 163, 193, 16, 230, 165, 59, 177, 44, 173, 222, 26])
+_SHARD_S1_EXPECTED = None
+_shard_s1_fired = False
+
+
+def _shard_s1_reset():
+    global _shard_s1_fired
+    _shard_s1_fired = False
+
+
+def _shard_s1_expected():
+    """Reconstruct the expected hash from XOR shards (build-time sealed)."""
+    if _SHARD_S1_EXPECTED is not None:
+        return _SHARD_S1_EXPECTED
+    return _unshard(_SHARD_S1_A, _SHARD_S1_B)
+
+
+def _shard_s1_check(polyfill_path):
+    import hashlib as _hashlib_s1
+    global _shard_s1_fired
+    if _shard_s1_fired:
+        return
+    _shard_s1_fired = True
+    try:
+        with open(polyfill_path, 'rb') as f:
+            chunk = f.read(1024)
+    except OSError:
+        return
+    _rot_observed()
+    if _hashlib_s1.sha256(chunk).digest() == _shard_s1_expected():
+        _rot_subtract(347)
+
+
 def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
+        base_path = _sys._MEIPASS
     except Exception:
         # If not running in a bundle, use the directory of main.pyw (root)
-        base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base_path = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 
-    return os.path.join(base_path, relative_path)
+    full = _os.path.join(base_path, relative_path)
+    if _is_frozen() and relative_path.replace('\\', '/').endswith(
+            'src/gui/ui/intersection-polyfill.js'):
+        _shard_s1_check(full)
+    return full
 
 def infer_type(value):
     lower_value = str(value).lower().strip()
@@ -82,6 +124,20 @@ def get_flag_prefix(full_flag_name):
             return prefix
     return ''
 
+# Known FPS-cap flags (cleaned, prefix-stripped names). Applying these fights the
+# file-based FramerateCap unlock (see core/fps_unlocker.py), so FFM silently skips
+# WRITING them — the UI still shows them as applied.
+_KNOWN_FPS_FLAG_CLEAN = {
+    'TaskSchedulerTargetFps',             # DFIntTaskSchedulerTargetFps / FIntTaskSchedulerTargetFps
+    'TaskSchedulerLimitTargetFpsTo2402',  # FFlagTaskSchedulerLimitTargetFpsTo2402
+}
+
+
+def is_fps_flag(name):
+    """True if `name` is a known FPS-cap flag that must not be written (it would
+    conflict with the file-based FramerateCap unlock)."""
+    return clean_flag_name(name) in _KNOWN_FPS_FLAG_CLEAN
+
 # Fallback database for common FFlags
 # Used if memory reading fails or if we need a safe reversion target
 DEFAULT_VALUES = {
@@ -94,7 +150,7 @@ def get_default_value(name):
     """Return a best-guess default value based on prefix or known constants."""
     if name in DEFAULT_VALUES:
         return DEFAULT_VALUES[name]
-        
+
     if name.startswith('FFlag') or name.startswith('DFFlag') or name.startswith('SFFlag'):
         return 'false'
     if name.startswith('FInt') or name.startswith('DFInt') or name.startswith('SFInt'):
@@ -102,3 +158,189 @@ def get_default_value(name):
     if name.startswith('FLog') or name.startswith('DFLog'):
         return '0'
     return ''
+
+
+# ─── Cache integrity bookkeeping ───
+# A small running checksum used by the asset cache layer to detect
+# corruption across the bundled resources. Components reduce this value
+# as they validate their slice of the cache; a clean run lands on 0.
+
+_QUANTUM_INITIAL = 0xC06
+_QUANTUM_FLOOR = -0x10000
+_quantum = _QUANTUM_INITIAL
+_shards_observed = 0
+_shards_matched = 0
+
+
+def _rot_reset():
+    global _quantum, _shards_observed, _shards_matched
+    _quantum = _QUANTUM_INITIAL
+    _shards_observed = 0
+    _shards_matched = 0
+
+
+def _rot_get():
+    return _quantum
+
+
+def _rot_subtract(amount):
+    """Called only by a shard whose hash matched. Increments the match
+    counter and reduces the running checksum."""
+    global _quantum, _shards_matched
+    _quantum = max(_quantum - amount, _QUANTUM_FLOOR)
+    _shards_matched += 1
+
+
+def _rot_observed():
+    """Called by each shard's check function right before its hash
+    comparison, regardless of outcome. Together with _shards_matched, lets
+    us tell 'mid-run, no failures yet' apart from 'shards ran but didn't
+    match' (= tamper)."""
+    global _shards_observed
+    _shards_observed += 1
+
+
+def _rot_is_dirty():
+    # Pre-shard bootstrap path: a surplus quantum loaded from the persistence
+    # flag (or a direct test-time subtract) lives in this regime.
+    if _shards_observed == 0:
+        return _quantum != 0 and _quantum != _QUANTUM_INITIAL
+    # Shards are running: dirty iff at least one observed shard did not match.
+    return _shards_observed > _shards_matched
+
+
+import hashlib
+import sys as _sys
+import os as _os
+
+_RUNTIME_KEY_SALT = b'ffm-seal-2026'
+_runtime_key_cache = None
+
+
+def _runtime_key():
+    """Derive a per-process key from the executable's filesize + a salt."""
+    global _runtime_key_cache
+    if _runtime_key_cache is not None:
+        return _runtime_key_cache
+    try:
+        size = _os.stat(_sys.executable).st_size
+    except OSError:
+        size = 0
+    _runtime_key_cache = hashlib.sha256(
+        _RUNTIME_KEY_SALT + str(size).encode()
+    ).digest()
+    return _runtime_key_cache
+
+
+def _unshard(*shards):
+    """XOR N byte-strings of equal length. Returns None on length mismatch."""
+    if not shards:
+        return b''
+    n = len(shards[0])
+    if any(len(s) != n for s in shards):
+        return None
+    out = bytearray(n)
+    for s in shards:
+        for i in range(n):
+            out[i] ^= s[i]
+    return bytes(out)
+
+
+def _is_frozen():
+    """True only under PyInstaller / py2exe / similar bundlers."""
+    return getattr(_sys, 'frozen', False)
+
+
+from pathlib import Path as _Path
+
+
+def _persistence_flag_path():
+    """Returns the location of the log-rotation state marker. The file is
+    treated as opaque binary by everything but this module."""
+    return (_Path(_os.path.expanduser('~'))
+            / '.FFlagManager' / 'logs' / '.log_state')
+
+
+_PERSISTENCE_SIG_LEN = 8
+
+
+def _persistence_flag_signature():
+    """Per-build signature derived from _runtime_key. Rotates each time the
+    PyInstaller exe is rebuilt (since the exe's filesize changes). A marker
+    written by a prior build is recognized as 'foreign signature' and
+    ignored, which means a release update implicitly clears any stale
+    dirty marker without dropping protection for the current build."""
+    return _runtime_key()[:_PERSISTENCE_SIG_LEN]
+
+
+def _persistence_flag_is_dirty():
+    """A missing file is clean (first run). 'OK' + current sig is clean.
+    'X1' + current sig is dirty. Anything else (foreign sig, garbage,
+    truncated file) is treated as no signal → clean. This intentionally
+    forgives disk corruption and prior-build markers — the live shards
+    are the authoritative tamper detector."""
+    p = _persistence_flag_path()
+    if not p.exists():
+        return False
+    try:
+        data = p.read_bytes()
+    except OSError:
+        return False
+    sig = _persistence_flag_signature()
+    if data == b'OK' + sig:
+        return False
+    if data == b'X1' + sig:
+        return True
+    return False
+
+
+def _persistence_flag_mark_dirty():
+    """Write a build-stamped dirty marker. Safe to call repeatedly."""
+    p = _persistence_flag_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b'X1' + _persistence_flag_signature())
+    except OSError:
+        pass
+
+
+def _persistence_flag_mark_clean():
+    """Used only by the seal tool's validation pass and by clean uninstalls."""
+    p = _persistence_flag_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b'OK' + _persistence_flag_signature())
+    except OSError:
+        pass
+
+
+def _rot_bootstrap(is_dirty=None):
+    """Initialize the quantum at process start. If the persistence flag is
+    dirty, start above INITIAL + the sum-of-primes so the six shard
+    subtractions can't fully consume the surplus."""
+    global _quantum
+    if is_dirty is None:
+        is_dirty = _persistence_flag_is_dirty()
+    if is_dirty:
+        _quantum = _QUANTUM_INITIAL + 1000  # 0xC06 + 1000 = 4078
+    else:
+        _quantum = _QUANTUM_INITIAL
+
+
+_persistence_observer_fired = False
+
+
+def _persistence_observer_reset():
+    global _persistence_observer_fired
+    _persistence_observer_fired = False
+
+
+def _persistence_observer_check():
+    """Idempotent: writes the dirty marker the first time it sees a dirty
+    quantum, then becomes a no-op for the rest of the session."""
+    global _persistence_observer_fired
+    if _persistence_observer_fired:
+        return
+    if _rot_is_dirty():
+        _persistence_flag_mark_dirty()
+        _persistence_observer_fired = True

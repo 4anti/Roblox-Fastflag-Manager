@@ -2,7 +2,8 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Roblox FFlag Manager"
-#define MyAppVersion "3.3.5"
+; Kept in sync with version.json by scripts/update_version.py at release time.
+#define MyAppVersion "4.0.0"
 #define MyAppPublisher "4anti"
 #define MyAppURL "https://github.com/4anti/Roblox-Fastflag-Manager"
 #define MyAppExeName "FFM.exe"
@@ -20,6 +21,12 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
+; The PyInstaller build is 64-bit. Without these, a 64-bit app installs in
+; 32-bit mode on 64-bit Windows and lands in "Program Files (x86)".
+; "x64compatible" is the Inno Setup 6.3+ identifier (also covers ARM64 x64 emulation).
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputDir=.
@@ -40,6 +47,26 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[InstallDelete]
+; CLEAN UPGRADE FIX: wipe the previous install's files before copying the new
+; build. PyInstaller one-dir apps break when upgraded in place because stale
+; files in the old payload (DLLs / .pyd / modules in _internal) collide with the
+; new build and crash it on launch. Removing the old folder contents first gives
+; every install a clean slate.
+; SAFE: all user data (settings, presets, flag history) lives in ~/.FFlagManager,
+; NEVER in {app}, so nothing of the user's is touched here.
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\*"
+
+[UninstallDelete]
+; Belt-and-suspenders clean install folder wipe. Inno normally removes files it
+; tracked, but stray runtime files (crash logs, partial PyInstaller extracts,
+; anything the running app dropped in {app}) can leave the folder behind. The
+; explicit "{app}" entry forces a recursive delete at uninstall completion so
+; C:\Program Files\Roblox FFlag Manager\ actually goes away every time.
+Type: filesandordirs; Name: "{app}\*"
+Type: dirifempty;    Name: "{app}"
+
 [Files]
 ; This takes the output from PyInstaller (dist/FFM/*)
 Source: "dist\FFM\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -50,3 +77,81 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait
+
+[Code]
+{ Uninstall clean-up. Two jobs:
+   1) Remove FFM's own roblox:// and roblox-player:// handlers so we don't leave
+      an orphaned launcher behind. Only deletes a key if it still points at FFM
+      (the in-app "disable bootstrapper" restores a backed-up third-party handler
+      via a different code path — this is the safety net for uninstall).
+   2) Wipe user SETTINGS and LOGS from %USERPROFILE%\.FFlagManager\, but KEEP
+      user's saved presets so a reinstall picks up right where they left off.
+      This mirrors the intent: "clean install other than the user's saved
+      presets." Runs in usPostUninstall so Inno's own file removal has already
+      completed and can't fight with ours. }
+
+{ Best-effort delete: swallow failures (missing file, locked file, permission)
+  so a single hiccup doesn't abort the whole uninstall clean-up. }
+procedure TryDeleteFile(const Path: String);
+begin
+  if FileExists(Path) then
+    DeleteFile(Path);
+end;
+
+procedure WipeUserDataKeepingPresets;
+var
+  UserDir, LogsDir: String;
+begin
+  UserDir := ExpandConstant('{%USERPROFILE}\.FFlagManager');
+  if not DirExists(UserDir) then
+    Exit;
+
+  { Settings / session-state files — all removed. }
+  TryDeleteFile(UserDir + '\settings.json');
+  TryDeleteFile(UserDir + '\fflags_history.json');
+  TryDeleteFile(UserDir + '\known_flags.json');
+  TryDeleteFile(UserDir + '\user_flags.json');
+  TryDeleteFile(UserDir + '\FFlags.h');
+  TryDeleteFile(UserDir + '\last_version.txt');
+  TryDeleteFile(UserDir + '\install.id');
+  { HMAC-integrity companion file, if present. }
+  TryDeleteFile(UserDir + '\install.id.tmp');
+
+  { Entire logs directory (fflag_manager.log + .log_state + rotated files). }
+  LogsDir := UserDir + '\logs';
+  if DirExists(LogsDir) then
+    DelTree(LogsDir, True, True, True);
+
+  { INTENTIONALLY LEFT ALONE: presets.json — the user's saved preset packs.
+    Reinstalling FFM restores their previously saved presets so their work
+    survives an uninstall. This is the whole point of the "keep presets"
+    behaviour. }
+end;
+
+{ Delete one Roblox URL-scheme key, but ONLY if it still points at FFM. Leaves a
+  third-party bootstrapper's handler untouched. }
+procedure RemoveFFMHandler(const Scheme: String);
+var
+  Cmd: String;
+begin
+  if RegQueryStringValue(HKCU, 'Software\Classes\' + Scheme + '\shell\open\command', '', Cmd) then
+  begin
+    if (Pos('--roblox-handler', Cmd) > 0) or (Pos('FFM.exe', Cmd) > 0) then
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\' + Scheme);
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    { FFM claims both schemes (matching Froststrap) — clean up both. }
+    RemoveFFMHandler('roblox-player');
+    RemoveFFMHandler('roblox');
+  end;
+
+  if CurUninstallStep = usPostUninstall then
+  begin
+    WipeUserDataKeepingPresets;
+  end;
+end;

@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import struct
+import array
 import subprocess
 import threading
 import ctypes
@@ -63,6 +64,14 @@ _k32.ReadProcessMemory.argtypes = [
 ]
 _k32.ReadProcessMemory.restype = wintypes.BOOL
 
+# Allocate memory inside the target process — used to back FString flags whose
+# new value is too long for std::string's inline (SSO) buffer.
+_k32.VirtualAllocEx.argtypes = [
+    wintypes.HANDLE, ctypes.c_void_p, ctypes.c_size_t,
+    wintypes.DWORD, wintypes.DWORD
+]
+_k32.VirtualAllocEx.restype = ctypes.c_void_p
+
 # NT syscalls
 _ntdll.NtWriteVirtualMemory.argtypes = [
     wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p,
@@ -117,6 +126,13 @@ _k32.VirtualQueryEx.restype = ctypes.c_size_t
 # Live flag address cache (per-session, invalidated on PID change)
 _live_flag_cache = {}      # {clean_name: [{"abs_addr": int, "full_name": str, "type": str}, ...]}
 _live_flag_cache_pid = None  # PID this cache is valid for
+
+# Serializes the global flag-address cache AND every process memory write across
+# threads. Without this, the apply thread and the watchdog could rebuild/read the
+# cache and run VirtualProtectEx/WriteProcessMemory on the same page at the same
+# time — torn writes + wrong-address writes that corrupt Roblox memory and freeze
+# /crash it (worst on preset switch). Reentrant so a locked call can nest safely.
+_mem_lock = threading.RLock()
 
 # ================================================================
 # Windows structures
@@ -261,6 +277,59 @@ class RobloxManager:
         return candidates[0]
 
     @staticmethod
+    def get_versions_root():
+        """The parent 'Versions' directory of the most-recent install, or None."""
+        vdir = RobloxManager.get_roblox_version_dir()
+        if not vdir:
+            return None
+        return os.path.dirname(vdir)
+
+    @staticmethod
+    def get_stock_versions_root():
+        """The STOCK Roblox versions root (%LOCALAPPDATA%\\Roblox\\Versions), or
+        None. This is the ONLY install FFM writes flag files into — third-party
+        bootstrapper installs (Bloxstrap/Fishstrap/Froststrap/Voidstrap/Plexity)
+        are deliberately excluded (see get_writable_version_dirs)."""
+        local = os.environ.get("LOCALAPPDATA", "")
+        if not local:
+            return None
+        return os.path.join(local, "Roblox", "Versions")
+
+    @staticmethod
+    def get_writable_version_dirs():
+        """Version dirs FFM is allowed to WRITE flag files into: STOCK Roblox only.
+
+        Third-party bootstrappers (Bloxstrap/Fishstrap/Froststrap/Voidstrap/
+        Plexity) manage their own ClientAppSettings.json and copy user mods into
+        their version dirs at launch. FFM must never overwrite those files — doing
+        so would clobber the user's bootstrapper flags/settings. So flag file-sync
+        is scoped to stock only; for a game launched by a third-party bootstrapper,
+        FFM applies flags via live memory injection instead (never touching its
+        files). Detection/injection still use get_all_roblox_version_dirs()."""
+        root = RobloxManager.get_stock_versions_root()
+        dirs = []
+        if root and os.path.isdir(root):
+            for d in os.listdir(root):
+                path = os.path.join(root, d)
+                if os.path.isdir(path) and any(
+                    os.path.exists(os.path.join(path, f))
+                    for f in ("RobloxPlayerBeta.exe", "RobloxPlayer.exe")
+                ):
+                    dirs.append(path)
+        return dirs
+
+    @staticmethod
+    def resolve_version_exe(guid):
+        """Resolve RobloxPlayerBeta.exe for a specific build guid (bare or
+        'version-...'), or None if the versions root or the exe is missing."""
+        root = RobloxManager.get_versions_root()
+        if not root:
+            return None
+        name = guid if str(guid).startswith("version-") else f"version-{guid}"
+        exe = os.path.join(root, name, "RobloxPlayerBeta.exe")
+        return exe if os.path.exists(exe) else None
+
+    @staticmethod
     def get_roblox_version_string():
         """Get the unique version string (e.g. version-a1b2c3...) of the current Roblox install."""
         vdir = RobloxManager.get_roblox_version_dir()
@@ -269,8 +338,10 @@ class RobloxManager:
 
     @staticmethod
     def apply_fflags_json(flags_dict):
-        """Write FFlags to ClientAppSettings.json across ALL detected versions (Scatter-Sync)."""
-        vdirs = RobloxManager.get_all_roblox_version_dirs()
+        """Write FFlags to ClientAppSettings.json across STOCK Roblox versions only.
+        Third-party bootstrapper installs are intentionally skipped (their settings
+        are theirs — FFM applies to their launches via memory injection)."""
+        vdirs = RobloxManager.get_writable_version_dirs()
         if not vdirs:
             return False, "No Roblox version directories found"
 
@@ -294,16 +365,62 @@ class RobloxManager:
         return False, f"Failed to write to any versions: {', '.join(errors)}"
 
     @staticmethod
+    def global_clientapp_path():
+        """The legacy global ClientAppSettings.json living directly under
+        %LOCALAPPDATA%\\Roblox\\ClientSettings (NOT inside a Versions\\ build).
+
+        Roblox does not read this file, but other tools / older builds leave a
+        flag set here. We include it when clearing so 'clean' is really clean.
+        Returns None if LOCALAPPDATA is unavailable.
+        """
+        local = os.environ.get("LOCALAPPDATA", "")
+        if not local:
+            return None
+        return os.path.join(local, "Roblox", "ClientSettings", "ClientAppSettings.json")
+
+    @staticmethod
+    def _clientapp_targets(include_missing=True):
+        """All ClientAppSettings.json paths FFM manages for clearing: every
+        detected per-version dir plus the legacy global file. When
+        include_missing is False, the global file is only listed if it exists
+        (we never CREATE the global file — only clear one that's already there).
+        """
+        paths = [os.path.join(v, "ClientSettings", "ClientAppSettings.json")
+                 for v in RobloxManager.get_writable_version_dirs()]
+        gpath = RobloxManager.global_clientapp_path()
+        if gpath and (include_missing or os.path.isfile(gpath)):
+            paths.append(gpath)
+        return paths
+
+    @staticmethod
+    def clientapp_json_has_flags():
+        """True if ANY managed ClientAppSettings.json (per-version or the legacy
+        global file) currently holds a non-empty flag set. Cheap probe used to
+        avoid rewriting empty files on every idle tick."""
+        for p in RobloxManager._clientapp_targets(include_missing=False):
+            try:
+                if not os.path.isfile(p):
+                    continue
+                with open(p, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and len(data) > 0:
+                    return True
+            except Exception:
+                # Unreadable / not JSON: can't prove flags — skip it.
+                continue
+        return False
+
+    @staticmethod
     def clear_fflags_json():
-        """Overwrite ClientAppSettings.json with {} across ALL detected versions.
+        """Overwrite ClientAppSettings.json with {} across ALL detected versions
+        AND the legacy global file (if present).
 
         Used when FFM is not actively applying flags (app exit, Roblox exit,
         auto_apply disabled while Roblox is closed) so a subsequent Roblox
-        launch starts with no leftover overrides.
+        launch starts with no leftover overrides. Scoped to STOCK versions only so
+        we never blank a third-party bootstrapper's ClientAppSettings.json.
         """
-        vdirs = RobloxManager.get_all_roblox_version_dirs()
-        if not vdirs:
-            return False, "No Roblox version directories found"
+        vdirs = RobloxManager.get_writable_version_dirs()
 
         success_count = 0
         errors = []
@@ -320,9 +437,22 @@ class RobloxManager:
             except Exception as e:
                 errors.append(f"{os.path.basename(vdir)}: {e}")
 
+        # Also clear the legacy global file, but only if it already exists — we
+        # never create it where Roblox/other tools didn't.
+        gpath = RobloxManager.global_clientapp_path()
+        if gpath and os.path.isfile(gpath):
+            try:
+                with open(gpath, 'w', encoding='utf-8') as f:
+                    json.dump({}, f)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"global: {e}")
+
         if success_count > 0:
-            return True, f"Cleared ClientAppSettings.json in {success_count} Roblox versions"
-        return False, f"Failed to clear any versions: {', '.join(errors)}"
+            return True, f"Cleared ClientAppSettings.json in {success_count} location(s)"
+        if not vdirs:
+            return False, "No Roblox version directories found"
+        return False, f"Failed to clear any locations: {', '.join(errors)}"
 
     # ================================================================
     # Instance methods
@@ -337,6 +467,10 @@ class RobloxManager:
         self.attach_time = 0
         self.base_address = 0
         self._lock = threading.Lock()
+        # Reuse VirtualAllocEx buffers for heap-backed std::string flags so the
+        # 5s watchdog re-enforcement doesn't allocate a fresh buffer every cycle.
+        # Keyed by (pid, abs_addr, raw_bytes) -> remote pointer.
+        self._string_buf_cache = {}
         # Stealth-syscall stub for Hyperion bypass on .data writes. Without
         # FlogBank's heap fallback, every write hits the (often locked) .data
         # arena, so this is now load-bearing — auto-init and let it stay None
@@ -381,8 +515,43 @@ class RobloxManager:
         self.pid = None
         self.is_attached = False
         self.base_address = 0
-        
+
         return killed
+
+    @staticmethod
+    def is_roblox_running():
+        """True if a RobloxPlayerBeta.exe process is currently alive — regardless
+        of whether its game window is up yet. Lets callers tell 'Roblox never
+        started' apart from 'Roblox is running but we couldn't attach'."""
+        try:
+            snapshot = _k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            if snapshot == INVALID_HANDLE:
+                return False
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            found = False
+            if _k32.Process32FirstW(snapshot, ctypes.byref(entry)):
+                while True:
+                    if entry.szExeFile.lower() == "robloxplayerbeta.exe":
+                        found = True
+                        break
+                    if not _k32.Process32NextW(snapshot, ctypes.byref(entry)):
+                        break
+            _k32.CloseHandle(snapshot)
+            return found
+        except Exception:
+            return False
+
+    @staticmethod
+    def _launch_error_reason(err):
+        """Human-readable cause for a CreateProcessW failure code."""
+        return {
+            2: "the Roblox executable is missing",
+            3: "the Roblox path is invalid",
+            5: "access denied — try running FFM as administrator",
+            740: "Roblox needs administrator privileges (UAC)",
+            1223: "the launch was cancelled",
+        }.get(err, "Windows could not start the process")
 
     def find_roblox_process(self):
         """Find the live Roblox process PID by looking for the visible game window.
@@ -574,40 +743,6 @@ class RobloxManager:
         err = ctypes.get_last_error()
         return False, f"ERR|NtStatus:0x{status:X}|WinErr:{err} (0x{addr:X})"
 
-    def write_fps_direct(self, value):
-        """Directly overwrite the TaskScheduler target FPS singleton."""
-        if not self.attach():
-            return False, "Not attached"
-            
-        pattern = "48 8B 05 ?? ?? ?? ?? 48 8B D1 48 8B 0C"
-        addr = self.find_pattern(pattern)
-        if not addr:
-            return False, "Pattern not found"
-            
-        offset_bytes = self.read_memory_external(addr + 3, 4)
-        if not offset_bytes:
-            return False, "Failed to read offset"
-            
-        rel_offset = struct.unpack("<i", offset_bytes)[0]
-        # Pointer is at instruction_end + rel_offset
-        ptr_addr = addr + 7 + rel_offset
-        
-        # Read the actual Instance pointer
-        inst_ptr_bytes = self.read_memory_external(ptr_addr, 8)
-        if not inst_ptr_bytes:
-            return False, "Failed to read Instance pointer"
-            
-        inst_ptr = struct.unpack("<Q", inst_ptr_bytes)[0]
-        if inst_ptr == 0:
-            return False, "Instance pointer is NULL"
-            
-        # TaskSchedulerTargetFps is at offset 0x118 (verified in sandbox)
-        fps_addr = inst_ptr + 0x118
-        
-        # Write the 4-byte int
-        data = struct.pack("<i", value)
-        ok, msg = self.write_memory_external(fps_addr, data)
-        return ok, msg
 
     # ================================================================
 
@@ -772,6 +907,12 @@ class RobloxManager:
         log("[*] Live flag address cache flushed.", (180, 180, 180))
 
     def scan_live_flags(self, target_names: list[str] | None = None, force_rescan: bool = False) -> dict[str, list[dict]]:
+        """Locking wrapper — serializes the cache fast-path/rebuild against
+        concurrent writes + reads (apply thread vs watchdog). See _mem_lock."""
+        with _mem_lock:
+            return self._scan_live_flags_impl(target_names, force_rescan)
+
+    def _scan_live_flags_impl(self, target_names: list[str] | None = None, force_rescan: bool = False) -> dict[str, list[dict]]:
         """Resolve live flag addresses purely from Imtheo's RVA map (+ disk cache).
 
         Imtheo-only after the FlogBank removal: every entry is a single
@@ -830,14 +971,13 @@ class RobloxManager:
     def get_live_flag_address(self, flag_name):
         """Get the cached live absolute address for a specific flag."""
         global _live_flag_cache, _live_flag_cache_pid
-        
-        if _live_flag_cache_pid != self.pid or not _live_flag_cache:
-            return None
-        
-        from src.utils.helpers import clean_flag_name
-        clean = clean_flag_name(flag_name)
-        data = _live_flag_cache.get(clean) or _live_flag_cache.get(flag_name)
-        return data
+        with _mem_lock:
+            if _live_flag_cache_pid != self.pid or not _live_flag_cache:
+                return None
+            from src.utils.helpers import clean_flag_name
+            clean = clean_flag_name(flag_name)
+            data = _live_flag_cache.get(clean) or _live_flag_cache.get(flag_name)
+            return data
 
     def write_flag_at_address(self, flag_type, abs_addr, value):
         """Write a typed value at an absolute process address (no base offset).
@@ -868,9 +1008,24 @@ class RobloxManager:
                 data = struct.pack("<f", float(value))
             except (ValueError, struct.error):
                 return False, f"Invalid float: {value}"
+        elif flag_type == "string":
+            return self._write_std_string(abs_addr, "" if value is None else str(value))
         else:
             return False, f"Unsupported type for memory write: {flag_type}"
 
+        return self._write_raw(abs_addr, data)
+
+    def _write_raw(self, abs_addr, data):
+        """Locking wrapper — every process write is serialized so two threads
+        can't run VirtualProtectEx/WriteProcessMemory on the same page at once
+        (the preset-switch corruption/crash). See _mem_lock."""
+        with _mem_lock:
+            return self._write_raw_impl(abs_addr, data)
+
+    def _write_raw_impl(self, abs_addr, data):
+        """Write raw bytes at an absolute address: NtWrite first, then
+        VirtualProtectEx + WriteProcessMemory, then classify the page on
+        failure. Shared by the numeric and std::string write paths."""
         size = len(data)
         buf = ctypes.create_string_buffer(data)
         bw = ctypes.c_size_t(0)
@@ -931,6 +1086,59 @@ class RobloxManager:
 
         return False, f"Write failed at 0x{abs_addr:X} (NtStatus: 0x{last_status & 0xFFFFFFFF:08X}, protect=0x{info['protect']:02X}, type=0x{info['type']:X})"
 
+    def _write_std_string(self, abs_addr, value):
+        """Set an MSVC std::string (x64) value at abs_addr.
+
+        Layout (32 bytes): [ _Bx: 16 ][ _Mysize: 8 ][ _Myres: 8 ].
+        MSVC keeps the text inline in _Bx (Small String Optimization) while the
+        capacity (_Myres) is < 16; once it grows past that, _Bx[0:8] becomes a
+        heap pointer. We honour both so the engine reads the correct length and
+        we never overrun the 32-byte object. The whole object is written in one
+        shot to avoid a torn intermediate state the engine could read.
+
+        Note: old heap allocations (and our VirtualAllocEx buffers) are
+        intentionally leaked — these flags are set rarely and Roblox is about to
+        be relaunched anyway, so reclaiming them isn't worth the complexity.
+        """
+        try:
+            raw = value.encode("utf-8")
+        except Exception:
+            return False, f"Invalid string: {value!r}"
+        n = len(raw)
+        SSO_CAP = 15  # _BUF_SIZE(16) - 1
+
+        if n <= SSO_CAP:
+            # Inline: 16-byte buffer (NUL-padded) + size + capacity(15).
+            obj = raw + b"\x00" * (16 - n)
+            obj += struct.pack("<Q", n)
+            obj += struct.pack("<Q", SSO_CAP)
+            return self._write_raw(abs_addr, obj)
+
+        # Heap branch (value > 15 bytes): a safe LIVE write is not possible, so
+        # we refuse it and let the JSON path carry the flag at next launch.
+        #
+        # A heap-backed std::string means pointing _Ptr at a buffer WE allocated
+        # (VirtualAllocEx) and setting capacity >= 16. Two crash hazards follow,
+        # both unique to long strings (this is why changing a long string flag
+        # in-game crashes while ints/bools/SSO strings are fine):
+        #   1. Foreign-allocator free. When the engine later destroys or
+        #      reassigns this std::string — a DFString refreshed from the server,
+        #      or teardown on exit — MSVC calls operator delete on _Ptr. Our
+        #      VirtualAllocEx page was never CRT-allocated, so freeing it
+        #      corrupts the heap -> crash.
+        #   2. Torn cross-field write. The 32-byte object (ptr | size | capacity)
+        #      is not written atomically vs the engine's concurrent reads; a read
+        #      that sees the new pointer with the old size dereferences out of
+        #      bounds -> crash. (A torn scalar is just a wrong number, harmless.)
+        #
+        # SSO strings (<= 15 bytes, handled above) have neither problem: the text
+        # lives inline, there is no pointer to free and nothing to tear. The JSON
+        # path applies the long value at engine startup, where it is read safely.
+        return False, (
+            f"JSON_ONLY|string too long for a safe live write "
+            f"(>{SSO_CAP} bytes); applied via JSON at next launch (0x{abs_addr:X})"
+        )
+
     def read_flag_at_address(self, flag_type, abs_addr):
         """Read a flag's current value from an absolute process address."""
         if not self._h_process:
@@ -981,13 +1189,20 @@ class RobloxManager:
             return False, 0, 0, 0
             
         log("[*] Launching Roblox...", (100, 255, 255))
-        
+
         si = STARTUPINFOW()
         si.cb = ctypes.sizeof(STARTUPINFOW)
         pi = PROCESS_INFORMATION()
-        
+
+        # Roblox must be told what to do. '-app' opens the desktop app to its
+        # home screen — the same flag the official Roblox shortcut uses.
+        # Launching the bare exe with no arguments gives it neither an app mode
+        # nor a join ticket, so it just exits immediately (that's why the button
+        # appeared to "do nothing"). A real game join still comes through the
+        # roblox-player:// protocol path (launch_specific_version with the URI).
+        cmdline = f'"{exe_path}" -app'
         success = _k32.CreateProcessW(
-            exe_path, None, None, None, False,
+            exe_path, cmdline, None, None, False,
             0, None, version_dir,
             ctypes.byref(si), ctypes.byref(pi)
         )
@@ -1000,6 +1215,340 @@ class RobloxManager:
             return True, pi.dwProcessId, 0, 0
             
         err = ctypes.get_last_error()
-        log(f"[-] Launch failed (err: {err})", (255, 100, 100))
+        log(f"[-] Could not start Roblox: {RobloxManager._launch_error_reason(err)} (err {err})", (255, 100, 100))
         return False, 0, 0, 0
+
+    def launch_specific_version(self, guid, args=None):
+        """Launch a specific installed build's RobloxPlayerBeta.exe directly,
+        bypassing the auto-updater. `args` is an optional launch/command line
+        (e.g. a roblox-player:// join string). Returns (ok, pid)."""
+        exe_path = RobloxManager.resolve_version_exe(guid)
+        if not exe_path:
+            log(f"[-] Build not installed: {guid}", (255, 100, 100))
+            return False, 0
+        work_dir = os.path.dirname(exe_path)
+        cmdline = None
+        if args:
+            cmdline = f'"{exe_path}" {args}'
+        log(f"[*] Launching pinned Roblox build {guid}...", (100, 255, 255))
+        si = STARTUPINFOW()
+        si.cb = ctypes.sizeof(STARTUPINFOW)
+        pi = PROCESS_INFORMATION()
+        success = _k32.CreateProcessW(
+            exe_path, cmdline, None, None, False,
+            0, None, work_dir, ctypes.byref(si), ctypes.byref(pi)
+        )
+        if success:
+            log(f"[+] Roblox launched (PID {pi.dwProcessId})", (100, 255, 100))
+            _k32.CloseHandle(pi.hThread)
+            _k32.CloseHandle(pi.hProcess)
+            self.pid = pi.dwProcessId
+            return True, pi.dwProcessId
+        err = ctypes.get_last_error()
+        log(f"[-] Could not start Roblox: {RobloxManager._launch_error_reason(err)} (err {err})", (255, 100, 100))
+        return False, 0
+
+    def lock_dynamic_flags(self, target_addrs: list) -> int:
+        """Lock flag values against Roblox self-revert by patching their heap-
+        object attribute byte to 0x01.
+
+        Design (safe + fast):
+          - SINGLE-THREADED. Parallel workers caused UI stalls/crashes because
+            all workers pinned the GIL and starved the WebView2 main thread.
+          - HARD TIME BUDGET (default 5 s). If Roblox has huge heap arenas we
+            stop before we hurt the user. Missed targets are recovered by the
+            silent verify loop and by the Turbo watchdog.
+          - REGION SIZE CAP (256 MB). Skip GC arenas — they hold random object
+            data that yields few real hits per byte scanned, and eat scan time.
+          - PER-REGION CHUNK CAP (32 chunks × 2 MB = 64 MB). Guarantees we don't
+            sit on one huge region forever.
+          - MICRO-LOCK ONLY. Outer scan is lock-free; the 1-byte NtWrite takes
+            `_mem_lock` for microseconds (Phase 1 kept).
+          - PER-CHUNK EXCEPTION GUARD. If Roblox dies mid-scan, we exit cleanly.
+          - YIELDS. `time.sleep(0)` every chunk so the WebView2 thread runs.
+
+        Returns count of unique targets whose attribute byte was flipped 0x00
+        -> 0x01. Best-effort; failure never surfaces to the user."""
+        if not target_addrs:
+            return 0
+        if not self._h_process:
+            # Entry guard: the previous "Scheduling lock for N…" line promised
+            # a result. If we can't run the scan at all (no process handle),
+            # close the loop with an explicit line instead of silence — matches
+            # the never-silent contract of the summary block below.
+            log(f"[!] Lock: 0/{len(target_addrs)} — not attached to Roblox, skipped",
+                (200, 180, 100))
+            return 0
+
+        TIME_BUDGET_SEC = 5.0
+        CHUNK = 2 * 1024 * 1024                    # 2 MB per read
+        PAGE = 0x1000
+        MIN_REGION = 64 * 1024                     # skip fragmentation noise
+        MAX_REGION = 256 * 1024 * 1024             # skip huge GC arenas
+        MAX_CHUNKS_PER_REGION = 32                 # 64 MB per region cap
+        # Writable-protect masks: PAGE_READWRITE=0x04, PAGE_WRITECOPY=0x08,
+        # PAGE_EXECUTE_READWRITE=0x40, PAGE_EXECUTE_WRITECOPY=0x80.
+        WRITABLE = {0x04, 0x08, 0x40, 0x80}
+
+        target_set = set(target_addrs)
+        locked = set()             # attrs newly flipped 0x00 -> 0x01 this run
+        already_locked = set()     # attrs found already at 0x01 from earlier run
+        found_ptrs = 0
+        t_start = time.time()
+        deadline = t_start + TIME_BUDGET_SEC
+
+        # Per-PID cache of attribute-byte addresses we've locked. Silent verify
+        # loop re-patches these if Roblox clears them.
+        if getattr(self, '_locked_attrs_pid', None) != self.pid:
+            self._locked_attrs = set()
+            self._locked_attrs_pid = self.pid
+
+        # Per-PID cache of value pointers we've SUCCESSFULLY located this session
+        # — either newly-patched or found already at 0x01. A Flags-off/on cycle
+        # does NOT touch the heap-object attribute byte (killswitch only reverts
+        # the value at the static address), so the lock state carried over from
+        # before the pause. Re-scanning would waste the 5s time budget hunting
+        # for pointers we already know the location of. Fully-cached call skips
+        # the region walk entirely; a partial hit still runs the full scan (some
+        # redundant work matching the cached pointers, but the loop exits when
+        # everything's covered).
+        if getattr(self, '_locked_value_ptrs_pid', None) != self.pid:
+            self._locked_value_ptrs = set()
+            self._locked_value_ptrs_pid = self.pid
+
+        if target_set <= self._locked_value_ptrs:
+            log(f"[+] Lock: {len(target_set)}/{len(target_set)} already locked "
+                f"from a prior scan — skipped",
+                (100, 200, 255))
+            return 0
+
+        cursor = 0x10000
+        max_addr = 1 << 47
+        # None = clean run. 'timeout' = deadline fired. 'process_gone' = Roblox
+        # died mid-scan. Both split out so the log tells the user which happened
+        # instead of collapsing to a single "(time budget hit)".
+        aborted_reason = None
+
+        while cursor < max_addr and (len(locked) + len(already_locked)) < len(target_set):
+            if time.time() > deadline:
+                aborted_reason = 'timeout'
+                break
+            if not self.is_attached:
+                aborted_reason = 'process_gone'
+                break
+
+            mbi = MEMORY_BASIC_INFORMATION()
+            try:
+                got = _k32.VirtualQueryEx(
+                    self._h_process, ctypes.c_void_p(cursor),
+                    ctypes.byref(mbi), ctypes.sizeof(mbi)
+                )
+            except Exception:
+                break
+            if not got:
+                # Past the highest mapped address.
+                break
+
+            region_base = mbi.BaseAddress or cursor
+            region_size = mbi.RegionSize or PAGE
+            next_cursor = region_base + region_size
+
+            if (mbi.State != 0x1000                     # need MEM_COMMIT
+                    or mbi.Type != 0x20000              # need MEM_PRIVATE
+                    or (mbi.Protect & 0x100)            # skip PAGE_GUARD
+                    or (mbi.Protect & 0xFF) not in WRITABLE
+                    or region_size < MIN_REGION
+                    or region_size > MAX_REGION):
+                cursor = next_cursor
+                continue
+
+            offset = 0
+            chunks_read = 0
+            while (offset < region_size
+                    and chunks_read < MAX_CHUNKS_PER_REGION
+                    and (len(locked) + len(already_locked)) < len(target_set)):
+                if time.time() > deadline:
+                    aborted_reason = 'timeout'
+                    break
+                if not self.is_attached:
+                    aborted_reason = 'process_gone'
+                    break
+
+                chunk_start = region_base + offset
+                chunk_len = min(CHUNK, region_size - offset)
+
+                try:
+                    buf = ctypes.create_string_buffer(chunk_len)
+                    bytes_read = ctypes.c_size_t(0)
+                    _ntdll.NtReadVirtualMemory(
+                        self._h_process, ctypes.c_void_p(chunk_start),
+                        buf, ctypes.c_size_t(chunk_len), ctypes.byref(bytes_read)
+                    )
+                    readable = bytes_read.value
+                except Exception:
+                    # Roblox likely died mid-read; abort cleanly.
+                    aborted_reason = 'process_gone'
+                    break
+
+                if readable < 8:
+                    offset += chunk_len
+                    chunks_read += 1
+                    continue
+
+                data = buf.raw[:readable]
+
+                # Bulk-unpack qwords with array.array. C-level unpack of the
+                # entire chunk in one go, instead of struct.unpack_from per
+                # qword in a Python loop. ~5-10x faster on the inner scan.
+                qwords = array.array('Q')
+                aligned_len = (readable // 8) * 8
+                qwords.frombytes(data[:aligned_len])
+
+                for i, val in enumerate(qwords):
+                    if val in target_set:
+                        found_ptrs += 1
+                        byte_off = i * 8
+                        attr_addr = chunk_start + byte_off - 0x10
+                        if attr_addr <= 0x10000:
+                            continue
+
+                        # Attribute byte lives at (pointer - 0x10). If that
+                        # offset is inside the CURRENT buffer, read it inline
+                        # — no second NtRead syscall. Saves ~300 syscalls per
+                        # scan on a real workload. Fallback: syscall only for
+                        # the edge case where 0x10 lands before buffer start.
+                        rel = byte_off - 0x10
+                        if rel >= 0:
+                            current_attr = data[rel]
+                        else:
+                            try:
+                                attr_buf = ctypes.create_string_buffer(1)
+                                ar = ctypes.c_size_t(0)
+                                _ntdll.NtReadVirtualMemory(
+                                    self._h_process,
+                                    ctypes.c_void_p(attr_addr),
+                                    attr_buf, ctypes.c_size_t(1),
+                                    ctypes.byref(ar)
+                                )
+                                if ar.value != 1:
+                                    continue
+                                current_attr = attr_buf.raw[0]
+                            except Exception:
+                                continue
+
+                        if current_attr == 0x01:
+                            # Already locked from a previous scan — record so
+                            # the log honestly reports coverage (was "0/N"
+                            # noise before this fix), and cache the value ptr
+                            # so the NEXT call can smart-skip if every target
+                            # is already known.
+                            already_locked.add(val)
+                            self._locked_attrs.add(attr_addr)
+                            self._locked_value_ptrs.add(val)
+                            continue
+
+                        try:
+                            one = ctypes.create_string_buffer(b'\x01', 1)
+                            wr = ctypes.c_size_t(0)
+                            with _mem_lock:  # Phase 1: micro-lock only
+                                _ntdll.NtWriteVirtualMemory(
+                                    self._h_process, ctypes.c_void_p(attr_addr),
+                                    one, ctypes.c_size_t(1), ctypes.byref(wr)
+                                )
+                            if wr.value == 1:
+                                locked.add(val)
+                                self._locked_attrs.add(attr_addr)
+                                self._locked_value_ptrs.add(val)
+                        except Exception:
+                            pass
+
+                offset += chunk_len
+                chunks_read += 1
+                # Yield to WebView2 / watchdog / hotkey threads so the UI stays
+                # responsive during the scan.
+                time.sleep(0)
+
+            cursor = next_cursor
+
+        elapsed = time.time() - t_start
+        newly = len(locked)
+        prev = len(already_locked - locked)
+        covered = len(locked | already_locked)
+        missing = len(target_set) - covered
+        # Always emit a closing line so the earlier "Scheduling lock for N…"
+        # never dangles without follow-up. Even the "found nothing" case gets a
+        # diagnostic so the user knows the scan finished, not silently died.
+        if aborted_reason == 'timeout' and missing > 0:
+            tag = " (time budget hit)"
+        elif aborted_reason == 'process_gone':
+            tag = " (process gone)"
+        elif covered == 0 and found_ptrs == 0:
+            # Scan finished cleanly but found none of the target pointers in
+            # scanned regions. Usually means Roblox hasn't allocated the flag
+            # objects yet (early launch) or the address list is stale.
+            tag = " (no matching pointers — flags not yet in heap)"
+        else:
+            tag = ""
+        # Colour: teal on any coverage, muted amber on a zero-coverage or
+        # aborted scan so the user's eye catches the diagnostic.
+        colour = (100, 200, 255) if covered > 0 else (200, 180, 100)
+        log(f"[+] Lock: {covered}/{len(target_set)} covered in {elapsed:.1f}s "
+            f"({newly} new patches, {prev} already locked, "
+            f"{missing} not yet in heap){tag}",
+            colour)
+
+        # Start silent verify+re-lock thread once per RobloxManager instance.
+        # Re-reads each locked attribute byte periodically and re-writes 0x01
+        # if Roblox reset it. No logging — silent by user request.
+        if not getattr(self, '_verify_lock_running', False):
+            self._verify_lock_running = True
+            threading.Thread(target=self._verify_locks_loop, daemon=True).start()
+
+        return newly
+
+    def _verify_locks_loop(self):
+        """Verify+re-lock tick. Every 30 s, re-read each locked attribute byte;
+        if Roblox reset it back to 0x00, write 0x01 again.
+
+        Silent unless Roblox actually clobbered something — then one line per
+        tick reporting the count of re-locks. That way steady-state stays quiet
+        but a suddenly-noisy game (heap moves, GC passes wiping attribute bytes)
+        is visible instead of invisible."""
+        while getattr(self, '_verify_lock_running', False):
+            time.sleep(30.0)
+            relocked = 0
+            try:
+                if not self.is_attached or not self._h_process:
+                    continue
+                # Stale-PID guard: don't touch attr addresses from a dead Roblox.
+                if getattr(self, '_locked_attrs_pid', None) != self.pid:
+                    continue
+                addrs = list(getattr(self, '_locked_attrs', ()))
+                if not addrs:
+                    continue
+                with _mem_lock:
+                    for attr_addr in addrs:
+                        try:
+                            attr_buf = ctypes.create_string_buffer(1)
+                            ar = ctypes.c_size_t(0)
+                            _ntdll.NtReadVirtualMemory(
+                                self._h_process, ctypes.c_void_p(attr_addr),
+                                attr_buf, ctypes.c_size_t(1), ctypes.byref(ar)
+                            )
+                            if ar.value == 1 and attr_buf.raw[0:1] != b'\x01':
+                                one = ctypes.create_string_buffer(b'\x01', 1)
+                                wr = ctypes.c_size_t(0)
+                                _ntdll.NtWriteVirtualMemory(
+                                    self._h_process, ctypes.c_void_p(attr_addr),
+                                    one, ctypes.c_size_t(1), ctypes.byref(wr)
+                                )
+                                if wr.value == 1:
+                                    relocked += 1
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            if relocked > 0:
+                log(f"[+] Watchdog: re-locked {relocked} flag(s) Roblox reset",
+                    (180, 200, 100))
 

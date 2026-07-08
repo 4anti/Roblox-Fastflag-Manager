@@ -178,7 +178,7 @@ Join the official Discord for support, preset sharing, and community discussion.
 
 ## <a name="license"></a>⚖️ License
 
-This project is open-sourced under the **MIT License**. See [`LICENSE`](LICENSE) for details.
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**. Noncommercial use only — see [`LICENSE`](LICENSE) for the full terms.
 
 ---
 

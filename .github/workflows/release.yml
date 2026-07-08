@@ -27,13 +27,31 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Resolved version: ${VERSION}"
 
+      - name: Restore main.pyw from secret
+        shell: bash
+        env:
+          MAIN_PYW_B64: ${{ secrets.MAIN_PYW_B64 }}
+        run: |
+          if [ -z "$MAIN_PYW_B64" ]; then
+            echo "::error::MAIN_PYW_B64 secret is missing. Set it in repo Settings -> Secrets."
+            echo "::error::Encode locally with: base64 -w 0 main.pyw | Set-Clipboard"
+            exit 1
+          fi
+          echo "$MAIN_PYW_B64" | base64 -d > main.pyw
+          if [ ! -s main.pyw ]; then
+            echo "::error::Decoded main.pyw is empty."
+            exit 1
+          fi
+          head -1 main.pyw
+          echo "main.pyw restored ($(wc -c < main.pyw) bytes)"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Sync version into version.json, logo.svg, README.md
+      - name: Sync version into version.json, logo.svg, README.md, installer.iss
         shell: bash
         run: python scripts/update_version.py "${{ steps.get_version.outputs.version }}"
 
@@ -42,7 +60,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add version.json logo.svg README.md
+          git add version.json logo.svg README.md installer.iss
           if git diff --cached --quiet; then
             echo "Version files already in sync - nothing to commit."
           else
@@ -56,8 +74,40 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
+      - name: Finalize build assets
+        run: python scripts/build_finalize.py --project .
+
+      - name: Verify sealed source tests
+        run: python -m pytest -q
+
+
       - name: Build EXE with PyInstaller
         run: python build_exe.py
+
+      - name: Verify frozen build self-check
+        shell: pwsh
+        run: |
+          $exe = "dist\FFM\FFM.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Expected $exe not produced by PyInstaller."
+            exit 1
+          }
+          $p = Start-Process -FilePath $exe -ArgumentList "--cache-check" `
+                             -NoNewWindow -PassThru `
+                             -RedirectStandardOutput cache-check.out `
+                             -RedirectStandardError cache-check.err
+          if (-not $p.WaitForExit(30000)) {
+            $p.Kill()
+            Write-Error "cache-check timed out (>30s)."
+            Get-Content cache-check.out, cache-check.err -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Get-Content cache-check.out -ErrorAction SilentlyContinue
+          Get-Content cache-check.err -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) {
+            Write-Error "cache-check exited with code $($p.ExitCode)."
+            exit 1
+          }
 
       - name: Install Inno Setup
         run: |

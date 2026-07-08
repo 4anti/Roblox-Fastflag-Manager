@@ -43,6 +43,26 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 CACHE_PATH = os.path.join(user_data_dir(), "offsets_cache.json")
 _LEGACY_CACHE_PATH = os.path.join(_REPO_ROOT, "offsets_cache.json")
 
+# Pointer-history rollover: keep the previous N offsets_cache files so users
+# on an older Roblox build can fall back to a matching pointer set.
+_HISTORY_MAX = 10  # absolute upper bound; user setting is clamped to this
+_HISTORY_PREFIX = "offsets_cache_v"
+
+def _history_path(idx: int) -> str:
+    return os.path.join(user_data_dir(), f"{_HISTORY_PREFIX}{idx}.json")
+
+def _pointer_history_settings() -> tuple[bool, int]:
+    """Return (enabled, count). Defaults to (False, 3) when Config is unavailable."""
+    try:
+        from src.utils.config import Config
+        s = Config.load_settings()
+        enabled = bool(s.get("pointer_history_enabled", False))
+        count = int(s.get("pointer_history_count", 3))
+        count = max(1, min(count, _HISTORY_MAX))
+        return enabled, count
+    except Exception:
+        return False, 3
+
 
 # ───────────────────────── safety constants ─────────────────────────
 
@@ -94,13 +114,17 @@ _RX_HEADER_VERSION = re.compile(rb'Roblox Version\s*:\s*(version-[0-9a-fA-F]+)')
 _session_cache: Optional[dict] = None
 _last_source_id: Optional[str] = None
 _last_baseline_stale: bool = False
+# Build version the offsets target (e.g. version-xxxx) from the last load —
+# the "needed" version shown in the UI version-status bar.
+_last_source_build: Optional[str] = None
 
 
 def reset_cache():
-    global _session_cache, _last_source_id, _last_baseline_stale
+    global _session_cache, _last_source_id, _last_baseline_stale, _last_source_build
     _session_cache = None
     _last_source_id = None
     _last_baseline_stale = False
+    _last_source_build = None
 
 
 def last_source_id() -> Optional[str]:
@@ -108,11 +132,35 @@ def last_source_id() -> Optional[str]:
     return _last_source_id
 
 
+def last_source_build() -> Optional[str]:
+    """Build version (version-xxxx) the current offsets target, or None."""
+    return _last_source_build
+
+
 def is_baseline_stale() -> bool:
     """True if the last load came from the bundled baseline AND the embedded
     build version did not match the running Roblox build version.
     """
     return _last_baseline_stale
+
+
+def fetch_latest_build() -> Optional[str]:
+    """Probe the NETWORK offset sources only and return the build version
+    (version-xxxx) the upstream dump currently targets, or None if every
+    network source fails or none embed a version.
+
+    Used by the 'Fix Roblox' offsets-first step to learn whether the upstream
+    dumper has caught up to the user's installed Roblox build. Does not need a
+    process base and does not mutate the loaded offset cache.
+    """
+    for _sid, fetch in _iter_network_sources():
+        body = fetch()
+        if not body:
+            continue
+        version = _extract_imtheo_client_version(body)
+        if version:
+            return version
+    return None
 
 
 # ───────────────────────── parse ─────────────────────────
@@ -294,11 +342,34 @@ def _load_chain(base_addr: int, build_version: str) -> tuple[dict, dict, Optiona
         result = _try_source(sid, body, base_addr, build_version)
         if result is not None:
             flags, structs, source_build = result
+            # If the network returned pointers for a DIFFERENT Roblox build than
+            # what the user is running, the user may be on a slower update
+            # channel. Try the pointer-history slots for an exact build match.
+            if (build_version and source_build and source_build != build_version
+                    and structs.get("Pointer")):
+                hist_flags, hist_structs, hist_build = _load_from_history(base_addr, build_version)
+                if hist_flags and hist_structs.get("Pointer"):
+                    log(
+                        f"[+] Network returned pointers for '{source_build}' but you're on "
+                        f"'{build_version}'; using pointer-history slot (build '{hist_build}').",
+                        (150, 200, 255),
+                    )
+                    return hist_flags, hist_structs, hist_build, "pointer_history", False
             return flags, structs, source_build, sid, False
 
     # Disk cache fallback
     flags, structs, cache_source_build = _load_from_disk_cache(base_addr, build_version)
     if flags and structs.get("Pointer"):
+        # Same rescue logic if the disk cache is from a different build.
+        if (build_version and cache_source_build and cache_source_build != build_version):
+            hist_flags, hist_structs, hist_build = _load_from_history(base_addr, build_version)
+            if hist_flags and hist_structs.get("Pointer"):
+                log(
+                    f"[+] Disk cache is for build '{cache_source_build}'; using pointer-history "
+                    f"slot (build '{hist_build}') instead.",
+                    (150, 200, 255),
+                )
+                return hist_flags, hist_structs, hist_build, "pointer_history", False
         return flags, structs, cache_source_build, SRC_DISK_CACHE, False
 
     # Bundled baseline (last resort)
@@ -347,9 +418,47 @@ def _migrate_legacy_cache_if_needed() -> None:
         log(f"[!] Cache migration failed: {type(e).__name__}", (255, 200, 100))
 
 
+def _rotate_history_if_needed(new_source_build: str) -> None:
+    """Before overwriting CACHE_PATH, if the existing cache is from a DIFFERENT
+    Roblox build AND pointer_history is enabled, rotate it into the history slot
+    so users on an older build can still find a matching pointer set.
+    """
+    enabled, count = _pointer_history_settings()
+    if not enabled:
+        return
+    if not os.path.isfile(CACHE_PATH):
+        return
+    try:
+        with open(CACHE_PATH, "r", encoding="utf-8") as f:
+            current = json.load(f)
+    except Exception:
+        return
+    cur_source = current.get("source_build_version") or current.get("build_version") or ""
+    if not cur_source or cur_source == new_source_build:
+        return  # same build, no rotation needed
+    # Shift _v1 -> _v2, _v2 -> _v3, ..., drop anything past `count`.
+    try:
+        # Delete the oldest slot first if it exists
+        oldest = _history_path(count)
+        if os.path.isfile(oldest):
+            os.remove(oldest)
+        # Now shift each backwards
+        for i in range(count - 1, 0, -1):
+            src = _history_path(i)
+            dst = _history_path(i + 1)
+            if os.path.isfile(src):
+                os.replace(src, dst)
+        # Move CACHE_PATH -> _v1
+        os.replace(CACHE_PATH, _history_path(1))
+        log(f"[+] Rotated pointer cache (build {cur_source}) into history slot v1", (150, 200, 255))
+    except Exception as e:
+        log(f"[!] Pointer history rotation failed: {type(e).__name__}", (255, 200, 100))
+
+
 def _write_disk_cache(merged_flags: dict, struct_offsets: dict, build_version: str,
                       base_addr: int, source_build_version: Optional[str] = None) -> None:
     """Persist RVA map for offline warm start. Atomic via tmp + rename."""
+    _rotate_history_if_needed(source_build_version or build_version)
     tmp_path = CACHE_PATH + ".tmp"
     try:
         flags_rva = {}
@@ -441,6 +550,57 @@ def _load_from_disk_cache(base_addr: int, build_version: str) -> tuple[dict, dic
     return flags, struct_offsets, (source_bv or None)
 
 
+def _load_from_history(base_addr: int, build_version: str) -> tuple[dict, dict, Optional[str]]:
+    """Walk through offsets_cache_v1.json, _v2.json, ... and return the first
+    one whose source_build_version matches `build_version`. Empty if none match
+    or pointer history is disabled."""
+    enabled, count = _pointer_history_settings()
+    if not enabled:
+        return {}, {}, None
+    for idx in range(1, count + 1):
+        path = _history_path(idx)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        src_bv = data.get("source_build_version") or data.get("build_version") or ""
+        if src_bv != build_version:
+            continue
+        # Match — reconstruct flags/structs from this historical cache.
+        struct_offsets = {}
+        for name, hex_s in data.get("struct_offsets", {}).items():
+            if isinstance(hex_s, str) and hex_s.startswith("0x"):
+                try:
+                    struct_offsets[name] = int(hex_s, 16)
+                except ValueError:
+                    pass
+        flags = {}
+        for clean, info in data.get("flags", {}).items():
+            if not isinstance(info, dict):
+                continue
+            rva_s = info.get("rva", "")
+            try:
+                rva = int(rva_s, 16) if isinstance(rva_s, str) else int(rva_s)
+            except (TypeError, ValueError):
+                continue
+            if rva < RVA_MIN or rva > RVA_MAX:
+                continue
+            fn = info.get("full_name", clean)
+            flags[clean] = {
+                "abs_addr": base_addr + rva,
+                "full_name": fn,
+                "type": info.get("type", infer_type_from_name(fn) or "unknown"),
+                "source": info.get("source", "history"),
+            }
+        if flags:
+            log(f"[+] Loaded {len(flags)} flags from pointer history slot v{idx} (build {src_bv})", (100, 255, 200))
+            return flags, struct_offsets, src_bv
+    return {}, {}, None
+
+
 def _known_names_from_disk_cache() -> dict[str, str]:
     """UI preset list when offline: derive from cached flags only."""
     _migrate_legacy_cache_if_needed()
@@ -469,7 +629,7 @@ def load_offsets(base_addr: int, build_version: str,
     user_flag_clean_names is ignored (kept for API compatibility); always loads
     full source map.
     """
-    global _session_cache, _last_source_id, _last_baseline_stale
+    global _session_cache, _last_source_id, _last_baseline_stale, _last_source_build
     if _session_cache is not None and _session_cache.get("base_addr") == base_addr:
         return _session_cache["flags"], _session_cache["structs"]
 
@@ -477,6 +637,7 @@ def load_offsets(base_addr: int, build_version: str,
 
     _last_source_id = source_id or None
     _last_baseline_stale = baseline_stale
+    _last_source_build = source_build or None
 
     if flags or structs:
         log(

@@ -5,7 +5,146 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.0.0] - 2026-07-08
+
+### Added
+
+- **Automatic Launch** — opt in (Settings → Advanced) to make FFM the Roblox
+  **Play** handler. Single-exe, two-modes (Froststrap-style): Play click applies
+  flags + launches Roblox silently, no window, no admin prompt. Claims both
+  `roblox-player:` and `roblox:` schemes. Off by default; toggling off restores
+  the previous handler.
+- **DF-lock** — after live injection, the flag's metadata attribute byte is
+  patched in the heap so Roblox can't revert the value from config. Silent
+  re-verify tick catches any Roblox self-unlock.
+- **Turbo enforcement** — tight read-before-write loop catches a reverted flag
+  within one frame. Set as default for new installs.
+- **FPS unlocker** — file-based `FramerateCap = 9999` on `GlobalBasicSettings_13.xml`,
+  marked read-only. Runs silently at startup. FPS-cap FastFlags automatically
+  ignored so they can't fight it. Toggle in Advanced.
+- **Fix Roblox** — one click: refresh offsets, then download + install the
+  matching Roblox build if still mismatched. Disk-space check before download.
+  Never downgrades.
+- **Cherry Blossom theme** + themed loading screens + Matrix animation speed
+  persisted.
+- **Apply sound** — chime on manual apply and first auto-apply. Toggle + volume
+  in Appearance.
+- **Right-click preset** → opens the settings menu at cursor. New "Show in
+  folder" item reveals `presets.json` in Explorer.
+- **Kill Switch** — pause every flag at once with a global hotkey and a
+  one-click Restore banner, without restarting Roblox.
+- **Revert to Original** — right-click a flag to put its original in-game
+  value back without disabling it.
+- **Live String flags** — `FString` / `DFString` flags (telemetry and
+  analytics URLs, etc.) now apply live in memory, not just at launch.
+- **Editable presets** — open a preset to edit flag values inline and
+  stage flag deletions (with undo); pending change / delete counters show
+  what's unsaved, and a Save button appears only when there's something to
+  save.
+- **Scheduled Apply** — optional delay (0–60s) before flags are injected
+  after Roblox opens, in Settings, for flags or situations that need the
+  game to load first.
+- **Roblox version indicator** — the top bar shows your current Roblox
+  build, and Settings shows whether it matches the version FFM's offsets
+  target: green when injection is ready, yellow (with your version vs the
+  needed version) when they don't match.
+- **Fix Roblox** — when your Roblox build no longer matches FFM's offsets
+  (so flags stop applying via live memory), one click fixes it: FFM first
+  refreshes its offsets, and if your build still doesn't match, it downloads
+  and installs the matching Roblox build for you, with a progress bar you can
+  cancel. Production builds only, and it only ever **upgrades** — it never
+  downgrades you to a build that can't join.
+- **Editor change log** — changing a flag's value in the editor now prints
+  `old -> new` in the Output console.
+- **Save imported flags as a preset** — after importing in the editor you
+  can save them as a named, color-tagged preset (or cancel).
+- **Remove all unavailable flags** with one trash button (undoable).
+- **Maximize / Restore** window button in the title bar.
+- Presets can now be imported from `.txt` files, not just `.json`.
+
+### Changed
+
+- **Settings** re-organized into pinned category pills (Advanced / Application /
+  About), grouped into labelled cards. Search sidebar hidden on Presets and
+  Settings so those pages get the full width.
+- **Smarter preset switching** — only reverts flags the new preset doesn't use,
+  writes the new ones in place, leaves untouched flags alone. Fewer memory
+  writes, no mid-switch flicker.
+- **Preset export "JSON — flags only"** is now a flat `{ "FlagName": "value" }`
+  file, the format Roblox/Bloxstrap consume directly. The old "JSON — full"
+  option was removed; Base64 remains for full-fidelity backup.
+- **Faster website joins** — when the installed build is known-latest, the
+  Play handler skips both pre-launch network checks and launches immediately.
+- **Faster repeat Fix Roblox** — per-file hash cache; unchanged files aren't
+  re-hashed on retry.
+- **Version pill (top-right)** opens Settings → Advanced directly.
+- **Kill Switch** replaced by the **Flags on / Flags off** pill in the header,
+  matching the Auto Apply toggle's visual grammar. One click pauses every
+  flag; a second click restores them. Rapid clicks are debounced.
+- **History limit** — defaults to 20, range Off–100 (no more Unlimited).
+- **Auto-apply is now ON by default** — added flags apply to the running
+  game right away.
+- **Switching presets now reverts the previous preset first** — applying
+  preset B no longer leaves preset A's leftover flags active in the running
+  game; you get exactly the new preset's flags.
+- Adding a flag is instant now — no more freezing or "busy applying"
+  failures while a previous apply is still running.
+- The per-flag **"Un-apply" bind is now a "Toggle" bind**: press once to
+  revert the flag, press again to re-apply it.
+- **License** changed from MIT to **PolyForm Noncommercial 1.0.0**. Personal
+  and hobby use stay free; commercial redistribution or forks that ship with
+  ads removed are no longer permitted. Full text in `LICENSE`.
+- Installer version stays in sync automatically (no more stale number).
+
+### Fixed
+
+- **FFM no longer overwrites other bootstrappers' settings or mods** — flag
+  file-writes are scoped to the **stock** Roblox install only. Third-party
+  bootstrapper installs (Bloxstrap/Fishstrap/Froststrap/Voidstrap/Plexity) get
+  memory injection instead, so their `ClientAppSettings.json` + mods stay
+  untouched. If a third-party owns the Play handler, FFM takes it over only to
+  correct a version mismatch, then hands it back.
+- **Play button silently doing nothing** — a `roblox-player` scheme with a
+  launch command but no `URL Protocol` marker made browsers ignore Play. FFM
+  now self-heals the marker on startup without changing who owns the handler.
+- **Applying flags / switching presets no longer freezes Roblox** — the
+  background enforcer + apply could race on memory writes and the address
+  cache, corrupting Roblox. Writes are now serialized; the enforcer stands
+  down for the duration of an apply.
+- **`FString` / `DFString` values ≥16 chars no longer crash Roblox** on
+  in-game edit. Long strings apply via file at next launch; short strings still
+  apply live.
+- **"Launch Roblox" now actually opens Roblox** — was launching
+  `RobloxPlayerBeta.exe` with no args (which modern Roblox exits immediately).
+  Now uses `-app`, matching the official shortcut.
+- **Version indicator honesty** — top-bar pill and Settings bar now reflect a
+  real comparison of installed build vs FFM's target build, and surface the
+  amber mismatch warning + Fix Roblox button when they differ (was almost
+  always green regardless).
+- **Window blank/gray after minimize** — WebView2's native occlusion was
+  suspending render on minimize/occlude. Disabled it; view keeps painting and
+  restores cleanly.
+- **Leftover flags on disk** — with Auto Apply off + Roblox closed, every
+  `ClientAppSettings.json` (each launcher's version folder + legacy global) is
+  now cleared instantly. Was only cleared on specific events, so manual apply
+  or close-to-tray could leave flags behind.
+- **Editor tab open** — virtualized list, ~7× faster with hundreds of flags.
+- **Presets tab flicker** — cards no longer blank out then repopulate; single
+  refresh update.
+- **Reordering presets auto-scrolls** near the list edges.
+- **Clearer launch failure messages** — "closed right after launch" vs "running
+  but memory unreadable" vs Windows-level errors (access denied, missing exe).
+- **Clearer apply count for FPS flags** — Output notes the count skipped by the
+  FPS unlocker so the number doesn't look like a silent loss.
+- **You can resize the window again** — frameless edge/corner resizing was
+  completely broken, and the window "walked" across the screen on scaled
+  (HiDPI) displays. Both fixed.
+- Console log no longer freezes after a lot of output.
+- "LIVE" status dots no longer linger after Roblox is closed.
+- Mouse side-buttons (back / forward / media) now work while FFM is
+  focused.
+- Minor right-click menu glitches (duplicate remove button, stray `>`
+  separator).
 
 ## [3.3.8] - 2026-05-22
 

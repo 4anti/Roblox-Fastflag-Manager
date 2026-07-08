@@ -36,6 +36,7 @@ def build():
         f"--add-data=src/gui/ui{separator}src/gui/ui",
         f"--add-data=version.json{separator}.",
         f"--add-data=src/data{separator}src/data",
+        f"--add-data=main.pyw{separator}.",
         "--name=FFM",
         "--noconfirm",
         "--clean",

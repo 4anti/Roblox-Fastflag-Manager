@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "version.json"
 SVG_FILE = ROOT / "logo.svg"
 README_FILE = ROOT / "README.md"
+INSTALLER_FILE = ROOT / "installer.iss"
 MIRROR_FFLAGS = ROOT / "data" / "FFlags.hpp"
 BUNDLED_BASELINE = ROOT / "src" / "data" / "FFlags_baseline.hpp"
 
@@ -117,6 +118,23 @@ def refresh_baseline() -> bool:
     return True
 
 
+def patch_installer(version: str) -> bool:
+    """Keep the Inno Setup installer's #define MyAppVersion in sync with
+    version.json so the produced installer always reports the right version."""
+    if not INSTALLER_FILE.is_file():
+        return False
+    text = INSTALLER_FILE.read_text(encoding="utf-8")
+    updated = re.sub(
+        r'(#define\s+MyAppVersion\s+")[\d.]+(")',
+        rf"\g<1>{version}\g<2>",
+        text,
+    )
+    if updated == text:
+        return False
+    INSTALLER_FILE.write_text(updated, encoding="utf-8")
+    return True
+
+
 def patch_readme(version: str) -> bool:
     text = README_FILE.read_text(encoding="utf-8")
     updated = re.sub(
@@ -142,11 +160,13 @@ def main() -> None:
     svg_changed = patch_svg(version)
     svg_count_changed = patch_svg_flag_count()
     readme_changed = patch_readme(version)
+    installer_changed = patch_installer(version)
     baseline_changed = refresh_baseline()
 
     print(f"  logo.svg (version)       -> {'updated' if svg_changed else 'no change'}")
     print(f"  logo.svg (flag count)    -> {'updated' if svg_count_changed else 'no change'}")
     print(f"  README.md                -> {'updated' if readme_changed else 'no change'}")
+    print(f"  installer.iss            -> {'updated' if installer_changed else 'no change'}")
     print(f"  src/data/FFlags_baseline -> {'updated' if baseline_changed else 'no change'}")
 
 
