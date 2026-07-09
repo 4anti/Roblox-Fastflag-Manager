@@ -476,6 +476,40 @@ class Api:
                     self.flag_manager.load_offsets(force_cdn=True)
         except Exception:
             pass
+        # Auto-download the latest Roblox build when the installed one is
+        # behind. Silent, background. Guardrails:
+        #   - Skip when Roblox is running (never yank the process out from
+        #     under the user).
+        #   - Skip when a fix worker is already in flight (start_roblox_download's
+        #     own in-flight guard would refuse anyway, but avoid the log churn).
+        #   - Never downgrade (start_roblox_download's decision is upgrade-only).
+        # The apply-flow's version-mismatch guard handles the follow-up window
+        # where offsets haven't caught up to the freshly-installed build.
+        try:
+            if self._fix_state != "running":
+                _rbx_running = False
+                try:
+                    _rbx_running = bool(
+                        self.roblox_manager
+                        and self.roblox_manager.find_roblox_process()
+                    )
+                except Exception:
+                    pass
+                if not _rbx_running:
+                    _latest = deployment.get_latest_production_guid()
+                    if _latest and installed != _latest:
+                        log(
+                            f"[*] Auto-updating Roblox to latest ({_latest[:16]}…)",
+                            (100, 200, 255),
+                        )
+                        # start_roblox_download re-verifies the running/latest
+                        # state itself and spawns its own daemon thread.
+                        self.start_roblox_download()
+        except Exception as _auto_dl_exc:
+            log(
+                f"[!] Auto-update skipped ({type(_auto_dl_exc).__name__})",
+                (255, 200, 100),
+            )
         # B1-fast: keep the join fast-path cache warm so the (separate) protocol
         # handler can skip its pre-launch network checks when we're already on the
         # latest production build. Best-effort; never blocks anything.
@@ -566,6 +600,48 @@ class Api:
             version_mismatch = fixer.is_version_mismatch(roblox_version, offsets_version)
         except Exception:
             version_mismatch = baseline_stale
+        # Do we honestly know what build the offsets target? Startup used to
+        # leave this None (only apply/attach populated it) and the frontend
+        # then declared "matches" from nothing. Now the loader seeds it from
+        # the same body it parsed for the preset list, so this is a genuine
+        # "we have an answer" signal — not just "flag list finished loading".
+        offsets_ready = bool(offsets_version)
+
+        # Roblox CDN's LATEST production build — the truth for "what should
+        # the user be on". None when the CDN was unreachable this tick;
+        # the frontend treats None as "unknown", not as "everything's fine".
+        latest_production = None
+        try:
+            from src.core.version_changer import deployment
+            _lp = deployment.get_latest_production_guid()
+            if _lp:
+                latest_production = _lp
+        except Exception:
+            pass
+
+        # Two orthogonal informational signals for the six-row version card:
+        #   roblox_is_latest — installed matches Roblox's latest production
+        #   offsets_current  — the loaded offset dump targets that same
+        #                      latest build (feed has caught up to Roblox)
+        # Either False alone is a soft-warn (JSON still applies; live memory
+        # gated by apply_flags_hybrid).
+        roblox_is_latest = bool(
+            roblox_version and latest_production
+            and roblox_version == latest_production
+        )
+        offsets_current = bool(
+            offsets_version and latest_production
+            and offsets_version == latest_production
+        )
+
+        # Source health: True when the winning offset source is imtheo's
+        # primary (dev or stable mirror). Any other value means FFM had to
+        # fall through to the GitHub mirror, workers.dev, disk cache, or
+        # the bundled baseline — informational for the source row.
+        source_healthy = bool(
+            offset_source and offset_source.startswith("imtheo_")
+        )
+
         return {
             'ready': self.flag_manager.offsets_loaded,
             'loading': self.flag_manager.offsets_loading,
@@ -579,6 +655,11 @@ class Api:
             'version_mismatch': version_mismatch,
             'roblox_version': roblox_version,
             'offsets_version': offsets_version,
+            'offsets_ready': offsets_ready,
+            'latest_production': latest_production,
+            'roblox_is_latest': roblox_is_latest,
+            'offsets_current': offsets_current,
+            'source_healthy': source_healthy,
         }
 
     def start_roblox_fix(self):
@@ -645,15 +726,28 @@ class Api:
         return True
 
     def start_roblox_download(self):
-        """Decide direction (upgrade-only, production-only) and, if an upgrade is
-        warranted, download+install the latest production build in a background
-        thread, then refresh offsets. Returns the initial decision; the modal then
-        polls get_roblox_fix_progress."""
+        """Sync the installed Roblox build to Roblox's LATEST production build.
+
+        Design notes on target choice:
+          - Never downgrade. Roblox rejects clients too far behind, so a stale
+            offset mirror telling us to install version-XXX from days ago would
+            break joining. Fishstrap/Bloxstrap/Froststrap all do the same:
+            sync Roblox to Roblox's own truth (the CDN's latest production
+            build), never to a third-party's opinion of what the current
+            build is.
+          - When the resulting installed build doesn't match the loaded
+            offsets, the apply-flow guard in `flag_manager.apply_flags_hybrid`
+            skips live-memory writes (safe fallback: JSON only), so a
+            transient offset-feed lag never crashes injection.
+
+        Returns the initial decision; the modal then polls
+        `get_roblox_fix_progress` for the worker's state transitions.
+        """
         import os as _os
         import threading as _threading
         from src.core.roblox_manager import RobloxManager
-        from src.core import offset_loader
         from src.core.version_changer import fixer, deployment
+        from src.core import offset_loader
 
         # Single in-flight guard: don't start a second worker over the same state.
         if self._fix_state == "running":
@@ -668,23 +762,13 @@ class Api:
             pass
 
         installed = RobloxManager.get_roblox_version_string()
-        offsets_target = offset_loader.fetch_latest_build()
         latest = deployment.get_latest_production_guid()
-        if not offsets_target or not latest:
+        if not latest:
             return {"state": "error",
-                    "message": "Could not reach Roblox/offset servers. Try again."}
-
-        decision = fixer.plan_upgrade(installed, offsets_target,
-                                      is_older=lambda target, _inst: target != latest)
-        action = decision["action"]
-        if action == "already_matching":
+                    "message": "Could not reach the Roblox version servers. Try again."}
+        if installed and installed == latest:
             return {"state": "already_matching",
-                    "message": "Your Roblox build already matches. Nothing to do."}
-        if action != "upgrade":
-            # no_target / blocked_downgrade -> offsets not aligned with latest prod
-            return {"state": "out_of_sync",
-                    "message": "Offsets aren't aligned with the latest Roblox build "
-                               "yet. Try again shortly."}
+                    "message": "Your Roblox build is already up to date. Nothing to do."}
 
         version_dir = RobloxManager.get_roblox_version_dir()
         if not version_dir:
@@ -700,12 +784,13 @@ class Api:
         self._fix_state = "running"
         self._fix_message = "Starting download…"
         self._fix_cancel = False
+        target_build = latest
 
         def _worker():
             def _progress(done, total, name):
                 self._fix_progress = int((done / total) * 100) if total else 0
                 self._fix_message = f"{done}/{total} packages"
-            result = fixer.run_upgrade(latest, versions_root, cache_dirs,
+            result = fixer.run_upgrade(target_build, versions_root, cache_dirs,
                                        progress=_progress,
                                        should_cancel=lambda: self._fix_cancel)
             if result.get("ok"):
@@ -724,7 +809,8 @@ class Api:
                 self._fix_message = result.get("message", "Download failed.")
 
         _threading.Thread(target=_worker, daemon=True).start()
-        return {"state": "started", "message": "Downloading the matching Roblox build…"}
+        return {"state": "started",
+                "message": "Downloading the latest Roblox build…"}
 
     # ─── Settings ───
 
@@ -908,14 +994,17 @@ class Api:
         import sys as _sys
         import os as _os
         from src.core.roblox_manager import RobloxManager
-        from src.core import offset_loader
         from src.core.version_changer import bootstrapper, deployment
 
         installed = RobloxManager.get_roblox_version_string()
-        offsets_target = offset_loader.fetch_latest_build()
         latest = deployment.get_latest_production_guid()
-        fixable = bool(offsets_target and latest and offsets_target == latest
-                       and installed != offsets_target)
+        # Fixable = we know Roblox's latest production build AND the installed
+        # Roblox is on a DIFFERENT build. Downloading always targets `latest`
+        # (never the offset dump's opinion — that would risk downgrading to a
+        # build Roblox servers no longer accept). The apply-flow guard in
+        # flag_manager.apply_flags_hybrid handles the follow-up case where
+        # offsets don't yet match the freshly-installed build.
+        fixable = bool(latest and installed and installed != latest)
         handler_class = bootstrapper.current_handler_class()
         if not bootstrapper.should_seize(handler_class, fixable):
             if handler_class == "ffm":

@@ -834,6 +834,18 @@
                 color: var(--error);
                 animation: rvc-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
             }
+            .rvc-ico.warn {
+                border-color: var(--warning);
+                background: color-mix(in srgb, var(--warning) 14%, transparent);
+                color: var(--warning);
+                animation:
+                    rvc-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+                    rvc-pulse-warn 2.4s ease-in-out 0.4s infinite;
+            }
+            @keyframes rvc-pulse-warn {
+                0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning) 50%, transparent); }
+                50%      { box-shadow: 0 0 0 6px transparent; }
+            }
             @keyframes rvc-pulse {
                 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
                 50% { box-shadow: 0 0 0 4px transparent; }
@@ -852,6 +864,7 @@
             }
             .rvc-row.running .rvc-label,
             .rvc-row.ok .rvc-label { color: var(--text); }
+            .rvc-row.warn .rvc-label  { color: var(--warning); }
             .rvc-value {
                 font-size: 10.5px;
                 font-family: var(--font-mono);
@@ -860,8 +873,10 @@
                 transition: opacity 0.3s ease 0.05s;
             }
             .rvc-row.ok .rvc-value,
-            .rvc-row.fail .rvc-value { opacity: 1; }
+            .rvc-row.fail .rvc-value,
+            .rvc-row.warn .rvc-value { opacity: 1; }
             .rvc-row.fail .rvc-value { color: var(--error); }
+            .rvc-row.warn .rvc-value { color: var(--warning); }
 
             /* download stage detail (live bar + MB + packages) */
             .rvc-dl {
@@ -7516,11 +7531,28 @@
             //  • Replays on app open (first Advanced view) + Refresh button.
             // ─────────────────────────────────────────────────────────────
             const RVC_CHECKS = [
-                { key: "api", label: "Fetching API version" },
-                { key: "cs", label: "Reading ClientSettings" },
-                { key: "local", label: "Verifying local build" },
+                { key: "api",     label: "Fetching API version" },
+                { key: "cs",      label: "Reading ClientSettings" },
+                { key: "local",   label: "Verifying local build" },
                 { key: "compare", label: "Comparing version hashes" },
+                { key: "feed",    label: "Offset feed matches Roblox latest" },
+                { key: "source",  label: "Offset source health" },
             ];
+            // Fallback source labels — mirrors offset_sources.py IDs. The
+            // frontend rewrites the winning source id to a readable name so
+            // users can see WHICH mirror we're on instead of a source key.
+            const RVC_SOURCE_LABEL = {
+                imtheo_dev_requests: { text: "imtheo (primary)",   healthy: true  },
+                imtheo_dev_curl:     { text: "imtheo (primary)",   healthy: true  },
+                imtheo_requests:     { text: "imtheo (mirror)",    healthy: true  },
+                imtheo_curl:         { text: "imtheo (mirror)",    healthy: true  },
+                github_requests:     { text: "GitHub mirror",      healthy: false },
+                github_curl:         { text: "GitHub mirror",      healthy: false },
+                workers_dev_requests:{ text: "workers.dev mirror", healthy: false },
+                workers_dev_curl:    { text: "workers.dev mirror", healthy: false },
+                disk_cache:          { text: "disk cache",         healthy: false },
+                bundled_baseline:    { text: "bundled baseline",   healthy: false },
+            };
             const RVC_FIX_STAGES = [
                 { key: "manifest", label: "Fetching package manifest" },
                 { key: "disk", label: "Checking disk space" },
@@ -7623,9 +7655,10 @@
                 if (!ico) return;
                 ico.className = "rvc-ico " + state;
                 row.className = "rvc-row visible " + state;
-                if (state === "ok") { ico.textContent = "✓"; if (val) val.textContent = value || ""; }
+                if (state === "ok")        { ico.textContent = "✓"; if (val) val.textContent = value || ""; }
                 else if (state === "fail") { ico.textContent = "✗"; if (val) val.textContent = value || ""; }
-                else { ico.textContent = ""; }
+                else if (state === "warn") { ico.textContent = "!"; if (val) val.textContent = value || ""; }
+                else                       { ico.textContent = ""; }
             }
 
             // Record the settled phase. The re-check button (pinned to the
@@ -7710,18 +7743,62 @@
                 const robloxVersion = status && status.roblox_version ? status.roblox_version : null;
                 const mismatch = !!(status && (status.version_mismatch || status.baseline_stale));
                 const detected = !!robloxVersion;
+                // `offsets_ready` is TRUE only once the loader knows which
+                // Roblox build the current offsets were dumped against. Before
+                // that, "no mismatch" is a NULL result, not a green light — so
+                // we must NOT claim "matches" yet. Older builds of FFM shipped
+                // without this field, so fall back to the legacy behaviour (ready
+                // implies verdict is real) when the key is absent.
+                const offsetsReady = status
+                    ? (typeof status.offsets_ready === "boolean"
+                        ? status.offsets_ready
+                        : !!status.ready)
+                    : false;
+                const verdictKnown = detected && offsetsReady;
+                const latest = status && status.latest_production ? status.latest_production : null;
+                // Two informational (soft-warn) signals. Missing => unknown, not
+                // healthy — the frontend gates warn on TRUTHY known bad rather
+                // than falsy unknown so a transient no-data tick doesn't paint
+                // the row amber.
+                const feedBehind = !!(status && latest && status.offsets_version
+                    && typeof status.offsets_current === "boolean" && !status.offsets_current);
+                const sourceInfo = (status && status.offset_source && RVC_SOURCE_LABEL[status.offset_source])
+                    || null;
+                const sourceUnhealthy = !!(status && status.offset_source
+                    && ((typeof status.source_healthy === "boolean" && !status.source_healthy)
+                        || (sourceInfo && sourceInfo.healthy === false)));
+
+                const compareValue = !detected
+                    ? "no build"
+                    : (!offsetsReady ? "checking…" : (mismatch ? "Mismatch" : "Match"));
+                const compareState = !detected
+                    ? "fail"
+                    : (!offsetsReady ? "running" : (mismatch ? "fail" : "ok"));
+                const feedValue = !offsetsReady
+                    ? "checking…"
+                    : (feedBehind
+                        ? "Behind: " + (latest ? latest.slice(0, 14) + "…" : "roblox latest")
+                        : "Current");
+                const feedState = !offsetsReady
+                    ? "running"
+                    : (feedBehind ? "warn" : "ok");
+                const sourceValue = sourceInfo ? sourceInfo.text
+                    : (status && status.offset_source ? status.offset_source : "resolving…");
+                const sourceState = sourceUnhealthy ? "warn"
+                    : (sourceInfo && sourceInfo.healthy === true ? "ok"
+                        : (!status || !status.offset_source ? "running" : "ok"));
 
                 const steps = [
-                    { key: "api", run: 420, value: "ok", state: "ok" },
-                    { key: "cs", run: 360, value: "ClientSettings OK", state: "ok" },
-                    { key: "local", run: 320,
+                    { key: "api",     run: 380, value: "ok",                                                  state: "ok" },
+                    { key: "cs",      run: 300, value: "ClientSettings OK",                                   state: "ok" },
+                    { key: "local",   run: 300,
                       value: detected ? (robloxVersion.slice(0, 18) + "…") : "not found",
                       state: detected ? "ok" : "fail" },
-                    { key: "compare", run: 380,
-                      value: !detected ? "no build" : (mismatch ? "Mismatch" : "Match"),
-                      state: !detected ? "fail" : (mismatch ? "fail" : "ok") },
+                    { key: "compare", run: 340, value: compareValue, state: compareState },
+                    { key: "feed",    run: 320, value: feedValue,    state: feedState    },
+                    { key: "source",  run: 300, value: sourceValue,  state: sourceState  },
                 ];
-                const pcts = [25, 50, 75, 100];
+                const pcts = [16, 32, 50, 68, 84, 100];
                 for (let i = 0; i < steps.length; i++) {
                     rvcSetRow(steps[i].key, "running");
                     await rvcSleep(steps[i].run); if (!alive()) return;
@@ -7740,10 +7817,51 @@
                     rvcSettle("result");
                     return;
                 }
+                if (!verdictKnown) {
+                    // Offsets still resolving — no honest verdict yet. Settle
+                    // on a neutral "verifying" card so the user isn't told
+                    // "matches" from nothing, and the poll's rvcSyncVerdict
+                    // updates the card once a real answer arrives.
+                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
+                        "Verifying with the offset server…",
+                        "Your Roblox: " + robloxVersion, alive);
+                    rvcSettle("result");
+                    return;
+                }
                 if (mismatch) {
                     // Chained call — pass OUR alive so we share the same
                     // token; a cancel/newer run aborts both check + fix.
                     await rvcRunFix(alive); // auto-start the real download
+                    return;
+                }
+                // No mismatch — decide the collapse copy from the two
+                // informational signals. Injection works right now in every
+                // branch below; the copy tells the user WHY the card is amber
+                // (feed lag / fallback source) or green (everything current).
+                if (feedBehind && sourceUnhealthy) {
+                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
+                        "Injection ready — imtheo unreachable, mirror is catching up",
+                        "Source: " + sourceValue + "  |  Latest: "
+                            + (latest ? latest.slice(0, 18) + "…" : "unknown"),
+                        alive);
+                    rvcSettle("result");
+                    return;
+                }
+                if (sourceUnhealthy) {
+                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
+                        "Injection ready — using fallback offset source",
+                        "imtheo unreachable — currently on " + sourceValue + ".",
+                        alive);
+                    rvcSettle("result");
+                    return;
+                }
+                if (feedBehind) {
+                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
+                        "Injection ready — offset feed is catching up",
+                        "Roblox: " + robloxVersion.slice(0, 18) + "…  |  Latest: "
+                            + (latest ? latest.slice(0, 18) + "…" : "unknown"),
+                        alive);
+                    rvcSettle("result");
                     return;
                 }
                 await rvcCollapse(rvcEl("rvc-scan"), "ok",
@@ -7763,19 +7881,13 @@
                 await rvcMorphToFix(alive); if (!alive()) return;
                 rvcEl("rvc-card").classList.add("busy");
 
-                // pre-ticks (backend does these internally before reporting %)
-                rvcSetRow("manifest", "running");
-                await rvcSleep(380); if (!alive()) return;
-                rvcSetRow("manifest", "ok", "");
-                rvcEl("rvc-fix-progress").style.width = "8%";
-                rvcSetRow("disk", "running");
-                await rvcSleep(280); if (!alive()) return;
-                rvcSetRow("disk", "ok", "");
-                rvcEl("rvc-fix-progress").style.width = "14%";
-
-                // kick off the real download
-                rvcSetRow("download", "running");
-                rvcEl("rvc-dl").classList.add("open");
+                // Ask the backend BEFORE the cosmetic manifest/disk ticks.
+                // The old flow ticked ✓ manifest and ✓ disk unconditionally,
+                // then let a refusal from the backend paint a red ✗ on the
+                // "Downloading Roblox" row — so a refusal (which never even
+                // reached the download step) looked like a failed download.
+                // Now: probe first, and if the backend refuses, settle into
+                // a state-specific card WITHOUT the fake precheck ticks.
                 let start = null;
                 try {
                     if (window.pywebview && pywebview.api) {
@@ -7786,8 +7898,23 @@
                 }
                 if (!alive()) return;
                 const st = start && start.state;
+
+                if (st === "no_target" || st === "error") {
+                    return rvcFixError(
+                        (start && start.message) ||
+                            "Couldn't reach the offset servers — check your "
+                            + "connection.", alive);
+                }
+                if (st === "roblox_running") {
+                    return rvcFixWait(
+                        "Close Roblox first",
+                        (start && start.message) ||
+                            "Please close Roblox, then try again.", alive);
+                }
                 if (st === "already_matching") {
                     // Nothing to download; treat as resolved.
+                    rvcSetRow("manifest", "ok", "");
+                    rvcSetRow("disk", "ok", "");
                     rvcSetRow("download", "ok", "up to date");
                     await rvcFinishFix(alive);
                     return;
@@ -7796,6 +7923,20 @@
                     return rvcFixError(
                         (start && start.message) || "Could not start the download.", alive);
                 }
+
+                // Backend committed to a real download — now paint the framing
+                // ticks the download engine performs internally before the
+                // first % report lands.
+                rvcSetRow("manifest", "running");
+                await rvcSleep(380); if (!alive()) return;
+                rvcSetRow("manifest", "ok", "");
+                rvcEl("rvc-fix-progress").style.width = "8%";
+                rvcSetRow("disk", "running");
+                await rvcSleep(280); if (!alive()) return;
+                rvcSetRow("disk", "ok", "");
+                rvcEl("rvc-fix-progress").style.width = "14%";
+                rvcSetRow("download", "running");
+                rvcEl("rvc-dl").classList.add("open");
 
                 // poll real progress
                 const poll = async () => {
@@ -7879,6 +8020,30 @@
                 const sub = rvcEl("rvc-fix-sub");
                 sub.textContent = message;
                 sub.style.color = "var(--error)";
+                rvcEl("rvc-card").classList.remove("busy");
+                rvcEl("rvc-card").classList.add("done-warn");
+                rvcEl("rvc-retry").style.display = "";
+                rvcSettle("fix");
+            }
+
+            // Amber informational state — used when the backend refuses BEFORE
+            // a download starts (offset dump lags Roblox, Roblox is running,
+            // etc). Distinct from rvcFixError so the user isn't told a download
+            // failed when in reality one never began.
+            function rvcFixWait(title, message, alive) {
+                if (alive && !alive()) return;
+                // Leave any precheck rows in their neutral pending state — no
+                // ✗ Failed, because nothing has actually failed.
+                const dl = rvcEl("rvc-dl");
+                if (dl) dl.classList.remove("open");
+                const bar = rvcEl("rvc-dl-bar");
+                if (bar) bar.style.background = "";
+                rvcEl("rvc-fix-head").className = "rvc-headline";
+                rvcEl("rvc-fix-spinner").style.display = "none";
+                rvcEl("rvc-fix-label").textContent = title;
+                const sub = rvcEl("rvc-fix-sub");
+                sub.textContent = message;
+                sub.style.color = "";
                 rvcEl("rvc-card").classList.remove("busy");
                 rvcEl("rvc-card").classList.add("done-warn");
                 rvcEl("rvc-retry").style.display = "";

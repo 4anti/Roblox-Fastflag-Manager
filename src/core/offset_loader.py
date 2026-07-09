@@ -601,23 +601,32 @@ def _load_from_history(base_addr: int, build_version: str) -> tuple[dict, dict, 
     return {}, {}, None
 
 
-def _known_names_from_disk_cache() -> dict[str, str]:
-    """UI preset list when offline: derive from cached flags only."""
+def _known_names_from_disk_cache() -> tuple[dict[str, str], Optional[str]]:
+    """UI preset list when offline: derive from cached flags only.
+
+    Returns (names_by_full_ident, source_build_version_or_None). The build
+    version comes from the cache header if present, so callers can seed the
+    session-level "build the offsets target" marker on a warm start with no
+    network.
+    """
     _migrate_legacy_cache_if_needed()
     if not os.path.isfile(CACHE_PATH):
-        return {}
+        return {}, None
     try:
         with open(CACHE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
-        return {}
+        return {}, None
     out = {}
     for clean, info in data.get("flags", {}).items():
         if isinstance(info, dict):
             fn = info.get("full_name", clean)
             if isinstance(fn, str):
                 out[fn] = info.get("type", infer_type_from_name(fn) or "unknown")
-    return out
+    cache_build = data.get("source_build_version") or data.get("build_version") or None
+    if not isinstance(cache_build, str) or not cache_build:
+        cache_build = None
+    return out, cache_build
 
 
 # ───────────────────────── public API ─────────────────────────
@@ -663,19 +672,36 @@ def load_known_flag_names() -> dict[str, str]:
 
     Uses the same fallback chain as load_offsets for body fetch, then disk
     cache as a final fallback for the preset list.
+
+    Side effect: seeds `_last_source_build` / `_last_source_id` from whichever
+    source wins, so a startup that only ever calls this function still has an
+    honest "build the offsets target" answer before the first apply/attach.
+    Never clobbers a value already set by `load_offsets` — that path is
+    authoritative.
     """
+    global _last_source_build, _last_source_id
     body, source_id = _fetch_body_via_chain()
     if body:
         names = _parse_imtheo_known_names_only(body)
         if len(names) >= MIN_VALID_FLAGS:
             log(f"[+] Known names from {source_id}: {len(names)}", (100, 255, 100))
+            if _last_source_build is None:
+                build_version = _extract_imtheo_client_version(body)
+                if build_version:
+                    _last_source_build = build_version
+                if not _last_source_id:
+                    _last_source_id = source_id or None
             return names
         else:
             log(f"[!] {source_id}: only {len(names)} names - falling back", (255, 200, 100))
 
-    fallback = _known_names_from_disk_cache()
+    fallback, cache_build = _known_names_from_disk_cache()
     if fallback:
         log(f"[+] Known names from disk cache: {len(fallback)}", (255, 200, 100))
+        if _last_source_build is None and cache_build:
+            _last_source_build = cache_build
+        if not _last_source_id:
+            _last_source_id = SRC_DISK_CACHE
         return fallback
 
     log("[!] No offset source returned a usable name list - UI search limited", (255, 100, 100))

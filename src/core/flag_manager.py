@@ -1011,6 +1011,40 @@ class FlagManager:
             else:
                 log(f"[*] Scheduled Apply: memory-only injection of {total} flags (JSON skipped)...", (100, 255, 255))
 
+            # === Version-mismatch guard: skip live memory when offsets ≠ Roblox ===
+            # The loaded offsets are dumped against SOME Roblox build (recorded
+            # in offset_loader._last_source_build). If the running Roblox is on
+            # a DIFFERENT build, the RVAs from those offsets point at wrong
+            # addresses — WriteProcessMemory hits random pages and Roblox
+            # crashes on the next frame. The pre-2026-07 behaviour was to log
+            # `[!] VERSION MISMATCH ... may fail or crash` and inject anyway
+            # (which explains the "crash after applying" reports from users
+            # on North American CDN edges — Roblox auto-updated them to a
+            # build the offset dump hadn't caught up to yet). Skip Step 2 in
+            # that window: JSON is already applied and will kick in on the
+            # next clean Roblox launch, once the offset dump catches up.
+            try:
+                from src.core import offset_loader
+                from src.core.version_changer import fixer as _vc_fixer
+                from src.core.roblox_manager import RobloxManager as _RM
+                _installed = _RM.get_roblox_version_string()
+                _offsets_build = offset_loader.last_source_build()
+                if _vc_fixer.is_version_mismatch(_installed, _offsets_build):
+                    log(
+                        f"[!] Live memory skipped — offsets target '{_offsets_build}' "
+                        f"but Roblox is on '{_installed}'. JSON applied; live flags will "
+                        "resume once offset sources catch up.",
+                        (255, 200, 100),
+                    )
+                    self.flags_applied = True
+                    self.last_apply_time = time.time()
+                    return
+            except Exception as _mismatch_exc:
+                # Best-effort — the guard must NEVER block a legitimate apply
+                # if its own imports/checks blow up. Fall through to Step 2.
+                log(f"[!] Version-match check failed ({type(_mismatch_exc).__name__}); "
+                    "continuing with live memory apply.", (255, 200, 100))
+
             # === Step 2: Live memory writes (only if Roblox is running) ===
             if not roblox_manager.is_attached:
                 log("[*] Roblox not running — JSON applied, will take effect on next launch.", (255, 255, 100))

@@ -67,7 +67,6 @@ def launch_join(uri):
     afterwards so the bootstrapper's mods keep working on later launches.
     """
     from src.core.roblox_manager import RobloxManager
-    from src.core import offset_loader
     from src.core.version_changer import fixer, deployment, fastpath
 
     try:
@@ -86,13 +85,17 @@ def launch_join(uri):
                 log(f"[!] Fast join failed, falling back: {e}", (255, 200, 100))
 
         try:
-            offsets_target = offset_loader.fetch_latest_build()
+            # Sync to Roblox's LATEST production build (never downgrade). Live
+            # memory injection may still miss when the offset dump lags this
+            # build; the apply-flow guard skips memory writes in that window,
+            # falling back to JSON-only. See flag_manager.apply_flags_hybrid.
             latest = deployment.get_latest_production_guid()
-            if offsets_target and latest and offsets_target == latest and installed != latest:
+            if latest and installed != latest:
                 root = RobloxManager.get_versions_root()
                 cache = RobloxManager.get_all_roblox_version_dirs() or []
                 if root:
-                    log("[*] Updating Roblox to latest before join...", (100, 255, 255))
+                    log(f"[*] Syncing Roblox to latest production build ({latest}) "
+                        "before join...", (100, 255, 255))
                     result = fixer.run_upgrade(latest, root, cache)
                     if result.get("ok"):
                         target = latest

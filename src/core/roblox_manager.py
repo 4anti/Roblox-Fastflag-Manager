@@ -337,32 +337,78 @@ class RobloxManager:
         return os.path.basename(vdir)
 
     @staticmethod
-    def apply_fflags_json(flags_dict):
-        """Write FFlags to ClientAppSettings.json across STOCK Roblox versions only.
-        Third-party bootstrapper installs are intentionally skipped (their settings
-        are theirs — FFM applies to their launches via memory injection)."""
-        vdirs = RobloxManager.get_writable_version_dirs()
-        if not vdirs:
-            return False, "No Roblox version directories found"
-
+    def _write_flags_to_dirs(flags_dict, vdirs, merge=False):
+        """Write ClientAppSettings.json into every dir. When merge=True and a
+        file already exists there, read it, overlay `flags_dict` on top (FFM
+        wins conflicts), write back — preserving whatever else lived there
+        (e.g. a bootstrapper's own flag settings)."""
         success_count = 0
         errors = []
-        
         for vdir in vdirs:
             settings_dir = os.path.join(vdir, "ClientSettings")
             settings_file = os.path.join(settings_dir, "ClientAppSettings.json")
-            
             try:
                 os.makedirs(settings_dir, exist_ok=True)
+                payload = dict(flags_dict)  # never mutate the caller's map
+                if merge and os.path.isfile(settings_file):
+                    try:
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            existing = json.load(f)
+                        if isinstance(existing, dict):
+                            merged = dict(existing)
+                            merged.update(payload)
+                            payload = merged
+                    except Exception:
+                        # Unreadable existing file → just overwrite with ours
+                        # rather than block the apply on a corrupt sibling.
+                        pass
                 with open(settings_file, 'w', encoding='utf-8') as f:
-                    json.dump(flags_dict, f, indent=4)
+                    json.dump(payload, f, indent=4)
                 success_count += 1
             except Exception as e:
                 errors.append(f"{os.path.basename(vdir)}: {e}")
-        
-        if success_count > 0:
-            return True, f"Synced flags to {success_count} Roblox versions"
-        return False, f"Failed to write to any versions: {', '.join(errors)}"
+        return success_count, errors
+
+    @staticmethod
+    def apply_fflags_json(flags_dict):
+        """Write FFlags to ClientAppSettings.json across STOCK Roblox versions.
+
+        If no stock install exists (e.g. Fishstrap-only / Bloxstrap-only user),
+        fall back to the most-recent bootstrapper install and MERGE our flags
+        into whatever settings file the bootstrapper already wrote there. This
+        is the only sane path for those users: without it, the JSON step
+        silently fails and the live-memory step then risks crashing when
+        offsets don't match (see flag_manager.apply_flags_hybrid guard).
+
+        The bootstrapper caveat: on every Roblox update the bootstrapper
+        creates a fresh `version-YYY/` and re-writes ITS own mods there,
+        so FFM's flags need re-applying after each update. Same lifecycle
+        constraint as stock installs — no worse.
+        """
+        stock_dirs = RobloxManager.get_writable_version_dirs()
+        if stock_dirs:
+            success, errors = RobloxManager._write_flags_to_dirs(
+                flags_dict, stock_dirs, merge=False,
+            )
+            if success > 0:
+                return True, f"Synced flags to {success} Roblox versions"
+            return False, f"Failed to write to any versions: {', '.join(errors)}"
+
+        # No stock install — try the bootstrapper install FFM detected.
+        all_dirs = RobloxManager.get_all_roblox_version_dirs() or []
+        if not all_dirs:
+            return False, "No Roblox version directories found"
+        all_dirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        target = [all_dirs[0]]
+        success, errors = RobloxManager._write_flags_to_dirs(
+            flags_dict, target, merge=True,
+        )
+        if success > 0:
+            return True, (
+                "Synced flags to bootstrapper install "
+                f"({os.path.basename(target[0])}) — merged with existing settings"
+            )
+        return False, f"Failed to write bootstrapper install: {', '.join(errors)}"
 
     @staticmethod
     def global_clientapp_path():

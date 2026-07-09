@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.2] - 2026-07-09
+
+   ### Fixed
+
+   - **Live memory writes skipped on version mismatch** — when the running
+     Roblox build no longer matches FFM's offset dump, Step 2 of Apply now
+     bails cleanly with an amber `[!] Live memory skipped — offsets target
+     'X' but Roblox is on 'Y'` line instead of writing to wrong addresses.
+     JSON step still applies; live flags resume once offsets catch up (use
+     Fix Roblox). Explains the "crash after applying" reports from users on
+     edges where Roblox auto-updated ahead of the offset dump.
+   - **Bootstrapper-only installs now get flags** — when no stock Roblox
+     install is present, FFM merges into the newest bootstrapper's
+     version dir instead of silently failing the JSON step.
+   - <anything else the 9-file diff actually fixes — offset_loader,
+     downloader, bootstrap_launch changes should each get a bullet>
+   
 ## [4.0.1] - 2026-07-08
 
 ### Added

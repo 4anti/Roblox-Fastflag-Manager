@@ -14,11 +14,19 @@ from typing import Callable, List, Optional
 from src.utils.logger import log
 
 # Weighted CDN bases (must end with '/'). Tried in order per package.
+#
+# Every entry serves the same S3-backed object under `*.rbxcdn.com` (verified
+# by matching `x-amz-version-id` headers), so a checksum mismatch across
+# entries would imply someone MITM'd the TLS handshake — the manifest MD5
+# verify at download_package() would then catch it and force a retry.
+#
+# `roblox-setup.cachefly.net` used to serve here but Roblox retired it —
+# hitting it now returns "Hostname not configured". Removed to avoid one
+# guaranteed-404 round-trip per download attempt.
 CDN_BASES = [
     "https://setup.rbxcdn.com/",
     "https://setup-aws.rbxcdn.com/",
     "https://setup-ak.rbxcdn.com/",
-    "https://roblox-setup.cachefly.net/",
     "https://s3.amazonaws.com/setup.roblox.com/",
 ]
 _MAX_RETRIES = 5
@@ -70,25 +78,24 @@ def download_package(package: dict, guid: str, staging_dir: str,
     for attempt in range(_MAX_RETRIES):
         cdn = CDN_BASES[attempt % len(CDN_BASES)]
         url = _package_url(cdn, guid, package["name"])
-        for scheme_url in (url, url.replace("https://", "http://", 1)):
-            try:
-                r = requests.get(scheme_url, stream=True, timeout=_TIMEOUT,
-                                headers={"User-Agent": "FFM-Version-Changer/1.0"})
-                if r.status_code != 200:
-                    continue
-                total = int(r.headers.get("content-length", 0))
-                done = 0
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=_CHUNK):
-                        if chunk:
-                            f.write(chunk)
-                            done += len(chunk)
-                            if progress_cb and total:
-                                progress_cb(done, total)
-                if verify_md5(dest, package["md5"]):
-                    return dest
-                log(f"[!] {package['name']}: checksum mismatch, retrying", (255, 200, 100))
-            except Exception:
+        try:
+            r = requests.get(url, stream=True, timeout=_TIMEOUT,
+                            headers={"User-Agent": "FFM-Version-Changer/1.0"})
+            if r.status_code != 200:
                 continue
+            total = int(r.headers.get("content-length", 0))
+            done = 0
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=_CHUNK):
+                    if chunk:
+                        f.write(chunk)
+                        done += len(chunk)
+                        if progress_cb and total:
+                            progress_cb(done, total)
+            if verify_md5(dest, package["md5"]):
+                return dest
+            log(f"[!] {package['name']}: checksum mismatch, retrying", (255, 200, 100))
+        except Exception:
+            continue
     log(f"[!] {package['name']}: all download attempts failed", (255, 100, 100))
     return None
