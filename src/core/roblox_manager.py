@@ -96,6 +96,13 @@ _k32.CreateProcessW.restype = wintypes.BOOL
 _k32.ResumeThread.argtypes = [wintypes.HANDLE]
 _k32.ResumeThread.restype = wintypes.DWORD
 
+# Full process image name — used by get_running_build_string() to identify
+# the attached PID's own binary rather than the disk-newest install.
+_k32.QueryFullProcessImageNameW.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)
+]
+_k32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+
 # NtQueryInformationProcess — get PEB address for base resolution
 _ntdll.NtQueryInformationProcess.argtypes = [
     wintypes.HANDLE, ctypes.c_ulong, ctypes.c_void_p,
@@ -335,6 +342,42 @@ class RobloxManager:
         vdir = RobloxManager.get_roblox_version_dir()
         if not vdir: return "unknown"
         return os.path.basename(vdir)
+
+    def get_running_build_string(self):
+        """Version string (e.g. version-a1b2c3...) of the RUNNING attached
+        Roblox process — the exe FFM currently holds a handle to.
+
+        Distinct from ``get_roblox_version_string()``, which returns the
+        disk-newest build dir. That disk-latest value drifts ahead of the
+        attached PID when a bootstrapper writes a fresh ``version-YYY/``
+        while the old build is still running; a check that uses it would
+        pass, and the following live-memory write would target wrong RVAs
+        in the running build and crash it. This helper reads the attached
+        PID's own on-disk exe path via QueryFullProcessImageNameW and
+        takes the parent directory's basename, so it always matches the
+        running binary.
+
+        Returns 'unknown' when we can't determine it (no handle, no PID,
+        API failed). Callers must treat 'unknown' as "no signal" — do NOT
+        false-alarm a version mismatch on an unknown reading.
+        """
+        h = getattr(self, "_h_process", None)
+        if not h:
+            return "unknown"
+        try:
+            buf = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(1024)
+            if not _k32.QueryFullProcessImageNameW(
+                    h, 0, buf, ctypes.byref(size)):
+                return "unknown"
+            exe_path = buf.value
+            if not exe_path:
+                return "unknown"
+            vdir = os.path.dirname(exe_path)
+            base = os.path.basename(vdir) if vdir else ""
+            return base or "unknown"
+        except Exception:
+            return "unknown"
 
     @staticmethod
     def _write_flags_to_dirs(flags_dict, vdirs, merge=False):
@@ -754,40 +797,48 @@ class RobloxManager:
         return None
 
     def write_memory_external(self, addr, data):
-        """Write raw bytes to a target address in the Roblox process with robust safety."""
+        """Write raw bytes to a target address in the Roblox process with robust safety.
+
+        Serialised via ``_mem_lock`` so an AOB-driven external write can't
+        race an apply-thread or hotkey-loop write on the same page. Without
+        this, two threads could enter VirtualProtectEx / WriteProcessMemory
+        concurrently on the same 4 KB region and produce a torn write —
+        seen historically as preset-switch corruption crashing Roblox.
+        """
         if not self._h_process:
             if not self.open_process_for_write():
                 return False, "Cannot open process"
-        
+
         size = len(data)
         buf = ctypes.create_string_buffer(data)
         bytes_written = ctypes.c_size_t(0)
-        
-        # 1. Try Stealth NtWrite first
-        status = _ntdll.NtWriteVirtualMemory(
-            self._h_process, ctypes.c_void_p(addr),
-            ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bytes_written)
-        )
-        
-        if status == 0 and bytes_written.value == size:
-            return True, f"OK|NtWrite (0x{addr:X})"
-        
-        # 2. Fallback: VirtualProtectEx + WriteProcessMemory
-        old_protect = wintypes.DWORD(0)
-        # Use 0x40 (PAGE_EXECUTE_READWRITE) to be absolutely sure we can write
-        if _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), 0x40, ctypes.byref(old_protect)):
-            success = _k32.WriteProcessMemory(
+
+        with _mem_lock:
+            # 1. Try Stealth NtWrite first
+            status = _ntdll.NtWriteVirtualMemory(
                 self._h_process, ctypes.c_void_p(addr),
                 ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bytes_written)
             )
-            # Restore original protection
-            _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), old_protect, ctypes.byref(wintypes.DWORD(0)))
-            
-            if success and bytes_written.value == size:
-                return True, f"OK|VP+WPM (0x{addr:X})"
-        
-        err = ctypes.get_last_error()
-        return False, f"ERR|NtStatus:0x{status:X}|WinErr:{err} (0x{addr:X})"
+
+            if status == 0 and bytes_written.value == size:
+                return True, f"OK|NtWrite (0x{addr:X})"
+
+            # 2. Fallback: VirtualProtectEx + WriteProcessMemory
+            old_protect = wintypes.DWORD(0)
+            # Use 0x40 (PAGE_EXECUTE_READWRITE) to be absolutely sure we can write
+            if _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), 0x40, ctypes.byref(old_protect)):
+                success = _k32.WriteProcessMemory(
+                    self._h_process, ctypes.c_void_p(addr),
+                    ctypes.byref(buf), ctypes.c_size_t(size), ctypes.byref(bytes_written)
+                )
+                # Restore original protection
+                _k32.VirtualProtectEx(self._h_process, ctypes.c_void_p(addr), ctypes.c_size_t(size), old_protect, ctypes.byref(wintypes.DWORD(0)))
+
+                if success and bytes_written.value == size:
+                    return True, f"OK|VP+WPM (0x{addr:X})"
+
+            err = ctypes.get_last_error()
+            return False, f"ERR|NtStatus:0x{status:X}|WinErr:{err} (0x{addr:X})"
 
 
     # ================================================================
@@ -1158,7 +1209,11 @@ class RobloxManager:
             obj = raw + b"\x00" * (16 - n)
             obj += struct.pack("<Q", n)
             obj += struct.pack("<Q", SSO_CAP)
+            log(f"[str-write] SSO {n}B at 0x{abs_addr:X}", (140, 200, 255))
             return self._write_raw(abs_addr, obj)
+
+        log(f"[str-write] REFUSED long string ({n}B > {SSO_CAP}B) at 0x{abs_addr:X} — JSON path only",
+            (255, 200, 100))
 
         # Heap branch (value > 15 bytes): a safe LIVE write is not possible, so
         # we refuse it and let the JSON path carry the flag at next launch.

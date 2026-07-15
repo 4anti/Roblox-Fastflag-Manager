@@ -1,13 +1,10 @@
 <div align="center">
-  <p>⚠️・ Educational Purposes Only</p>
-</div>
-<div align="center">
   <img src="logo.svg" alt="Roblox FastFlag Manager" width="600">
 </div>
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-v4.0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-v4.0.4-blue.svg)
 [![Discord][shield-discord-server]][discord-invite]
 ![Platform](https://img.shields.io/badge/platform-Windows-white.svg)
 ![Modifiable FFlags](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F4anti%2FRoblox-Fastflag-Manager%2Fmain%2Fbadges%2Ffflags.json)

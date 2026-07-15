@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.4] - 2026-07-15
+
+### Added
+
+- **GitHub-mirrored offset fallback chain.** FFM now falls through to a
+  companion mirror repository (`4anti/Roblox-Offsets-ALL`) when a primary
+  dumper is unreachable — regional blocks, dumper downtime, or corporate
+  TLS interception. The chain now has four explicit tiers:
+  imtheo direct → imtheo mirror → other direct dumpers (souloveryall,
+  NtReadVirtualMemory, workers.dev) → mirrors of those, with the legacy
+  data/FFlags.hpp tail unchanged. Every mirror body is only consumed after
+  its sibling `meta.json.verified` reports `true` from a server-side
+  cross-check against imtheo, so an unverified mirror silently cascades
+  instead of serving stale offsets.
+- **"Contribute a source" hint** under the Roblox Version card in
+  Settings → Advanced. Opens a pre-filled issue on the main repo so users
+  can suggest new endpoints or dumper repos without leaving the app.
+
+### Fixed
+
+- **"Download failed — that build is already installed" false negative.**
+  When the target Roblox build was already present on disk (multiple
+  bootstrapper installs, a background Roblox auto-update, or a previous
+  successful FFM run), the version-fix modal downloaded every package,
+  hit `FileExistsError` at commit, and painted a red X over what was
+  actually the desired end state. `run_upgrade` now short-circuits when
+  the target folder is already on disk (no wasted download) and, if a
+  concurrent install lands the same build mid-download, reports it as
+  success with the correct message.
+- **Console pane could look empty for up to a second after startup.**
+  The Output panel's log poller was scheduled with `setInterval` but
+  never kicked once at boot, so its first fetch fired 800 ms after the
+  loading screen dismissed. On a slow load the app looked "dead" until
+  the first interval tick. `pollLogs()` and `updateStatus()` are now
+  called immediately alongside their `setInterval`, matching the
+  existing pattern used by `checkVersionStatus`.
+- **`build_exe.py` no longer needs `pyinstaller.exe` on PATH.** Invokes
+  PyInstaller via `sys.executable -m PyInstaller` instead of the CLI
+  shim, matching what `release.ps1` already does. Only affects the
+  optional debug-build path — `release.ps1` was unaffected.
+
+## [4.0.3] - 2026-07-09
+
+### Fixed
+
+- **Manual update path was silently broken** — with Auto Update OFF, clicking
+  "Update Now" downloaded the installer but never actually launched it. The
+  installer was being spawned through a batch script running in a detached
+  cmd child, which stripped the interactive session token needed for the UAC
+  elevation prompt (Program Files install requires admin). The consent
+  request had nowhere to bind, elevation failed silently, and nothing
+  happened. The manual path now hands the installer to the Windows shell via
+  `ShellExecuteW("open", ...)` — the same call the Auto path already uses
+  successfully. Auto behaviour unchanged.
+- **"Update Available!" pill in the title bar is now actually clickable.**
+  The pill sits inside the OS-level window drag zone
+  (`-webkit-app-region: drag` on the titlebar), which swallowed every
+  mouse-down/up on top of it — the `cursor: pointer` showed but the click
+  event never fired. Three things needed to line up for the click to land:
+  `pointer-events: auto`, `-webkit-app-region: no-drag`, and an exception in
+  the drag-shield mousedown handler. All three are now wired via a single
+  `.vc-actionable` class that toggles when the pill has something to do
+  ("Update Available!" or "Restart needed") and comes off when it's idle,
+  so window dragging still works everywhere except the actionable region.
+
+### Changed
+
+- **"Update Available!" pill now paints yellow** (theme `--warning`) instead
+  of the theme accent so a pending update is immediately readable at a
+  glance, and matches the "Restart needed" style already used post-download.
+  The dot next to it picks up the same warning color + glow.
+- **Update card moved from Settings → Application to Settings → Advanced**,
+  directly under the "Roblox Version" card. The title-bar pill now routes
+  there — it switches to Advanced first, then scroll-into-views the card,
+  so it can't land on a hidden section anymore. The "Auto Update" toggle
+  itself stays in Application → Application.
+
 ## [4.0.2] - 2026-07-09
 
    ### Fixed

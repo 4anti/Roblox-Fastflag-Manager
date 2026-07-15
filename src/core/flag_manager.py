@@ -10,8 +10,8 @@ from src.utils.helpers import infer_type, clean_flag_name, is_fps_flag
 import hashlib as _hashlib_s7
 from src.utils import helpers as _s7_helpers
 
-_SHARD_S7_A = bytes([19, 108, 243, 166, 5, 174, 131, 65, 53, 11, 149, 250, 14, 150, 90, 195, 62, 143, 140, 42, 78, 248, 195, 2, 113, 219, 14, 209, 249, 194, 152, 98])
-_SHARD_S7_B = bytes([117, 225, 120, 97, 119, 186, 107, 79, 70, 179, 235, 0, 69, 250, 137, 199, 243, 144, 95, 221, 165, 41, 81, 57, 204, 136, 129, 91, 199, 66, 246, 167])
+_SHARD_S7_A = bytes([251, 27, 115, 82, 224, 251, 246, 219, 179, 24, 159, 12, 252, 156, 222, 18, 20, 175, 206, 117, 200, 164, 119, 37, 77, 94, 219, 162, 181, 239, 189, 122])
+_SHARD_S7_B = bytes([127, 5, 46, 168, 19, 244, 231, 34, 188, 175, 50, 10, 200, 188, 101, 172, 39, 133, 75, 183, 195, 134, 10, 86, 170, 225, 121, 194, 94, 151, 91, 255])
 _SHARD_S7_EXPECTED = None
 _shard_s7_fired = False
 
@@ -129,6 +129,44 @@ class FlagManager:
         self._killswitch_handler = None
 
         self.load_user_flags()
+
+    def _live_writes_gated(self, rm=None):
+        """Return (gated: bool, reason: str). When gated is True, live-memory
+        writes MUST be skipped and the caller must fall back to JSON-only.
+
+        `rm` is the RobloxManager to interrogate — passed explicitly by
+        `apply_flags_hybrid` (which receives its own RM as a parameter) and
+        defaulted to `self._rm` for the hotkey loop and any future callers
+        that use the shared attribute.
+
+        The signal is a build-guid mismatch between the offsets FFM has
+        loaded (see ``offset_loader.last_source_build``) and the exe the
+        ATTACHED Roblox PID is actually running
+        (``get_running_build_string``). The pre-2026-07 apply gate compared
+        offsets against the disk-newest build instead, so a bootstrapper
+        writing a fresh ``version-YYY/`` while the old build was still
+        running would pass the check — and the following
+        WriteProcessMemory calls would target wrong RVAs and crash Roblox
+        on the next frame ("crash after applying" reports in
+        CHANGELOG v4.0.2).
+
+        Best-effort: any exception fails safe by returning ``(False, "")``
+        so an unrelated bug can never block a legitimate apply.
+        """
+        try:
+            r = rm if rm is not None else self._rm
+            if r is None or not getattr(r, "is_attached", False):
+                return False, ""
+            from src.core import offset_loader
+            from src.core.version_changer import fixer as _vc_fixer
+            running = r.get_running_build_string()
+            offsets_build = offset_loader.last_source_build()
+            if _vc_fixer.is_version_mismatch(running, offsets_build):
+                return True, (f"offsets target '{offsets_build}' but running "
+                              f"Roblox is on '{running}'")
+            return False, ""
+        except Exception:
+            return False, ""
 
     # ================================================================
     # Kill switch support (live revert / re-apply of every flag)
@@ -714,6 +752,7 @@ class FlagManager:
         last_bind_error_time = 0
         last_success_trigger_time = 0
         prev_ks_vk = None
+        last_gated_log = 0.0
 
         while self._hotkey_running:
             time.sleep(0.05)
@@ -796,6 +835,17 @@ class FlagManager:
             # 4. Process the actions
             updated_flags = False
             triggered_this_cycle = False
+            # Version-mismatch guard for hotkey live writes. Same signal as
+            # apply_flags_hybrid uses (see _live_writes_gated); when running
+            # Roblox is on a build the loaded offsets don't target, we skip
+            # the memory write (flag state still flips + persists to disk,
+            # so the next matching launch picks it up via JSON). Rate-limited
+            # log so a held key doesn't spam.
+            _gated, _gated_reason = self._live_writes_gated()
+            if _gated and curr_time - last_gated_log > 3.0:
+                log(f"[hotkey-guard] SKIP live writes — {_gated_reason}",
+                    (255, 200, 100))
+                last_gated_log = curr_time
             
             with self._lock:
                 for flag in self.user_flags:
@@ -815,7 +865,7 @@ class FlagManager:
                             updated_flags = True
                             triggered_this_cycle = True
                             log(f"[HOTKEY] Toggled OFF {fname}", (255, 150, 150))
-                            if flag.get('original_value') is not None and addr_data:
+                            if flag.get('original_value') is not None and addr_data and not _gated:
                                 try:
                                     self._rm.open_process_for_write()
                                     for addr_entry in addr_data:
@@ -831,7 +881,7 @@ class FlagManager:
                             updated_flags = True
                             triggered_this_cycle = True
                             log(f"[HOTKEY] Toggled ON {fname}", (100, 255, 100))
-                            if flag_type not in ('string', 'unknown') and addr_data:
+                            if flag_type not in ('string', 'unknown') and addr_data and not _gated:
                                 try:
                                     self._rm.open_process_for_write()
                                     for addr_entry in addr_data:
@@ -858,7 +908,7 @@ class FlagManager:
                             triggered_this_cycle = True
                             if self._rm and self._rm.is_attached:
                                 addr_data = self._rm.get_live_flag_address(fname)
-                                if addr_data:
+                                if addr_data and not _gated:
                                     try:
                                         self._rm.open_process_for_write()
                                         for addr_entry in addr_data:
@@ -891,7 +941,7 @@ class FlagManager:
                             
                             if self._rm and self._rm.is_attached:
                                 addr_data = self._rm.get_live_flag_address(fname)
-                                if addr_data:
+                                if addr_data and not _gated:
                                     try:
                                         self._rm.open_process_for_write()
                                         for addr_entry in addr_data:
@@ -924,19 +974,10 @@ class FlagManager:
     # ================================================================
 
     def apply_flags_hybrid(self, roblox_manager, skip_json=False):
-        # Settings HMAC watchdog gate. Refuses the apply when the session-wide
-        # integrity heartbeat has tripped — presents as a signature check
-        # failure so the user thinks their settings file is corrupt. Source
-        # (dev) builds bypass this because _hmac_watchdog_tripped can only be
-        # True in a frozen build (see api.report_hmac_health).
-        try:
-            from src.utils.config import _hmac_watchdog_tripped as _hmac_gate
-            if _hmac_gate():
-                log("[-] Apply failed: settings HMAC signature check failed. "
-                    "Restart FFM to recover.", (255, 100, 100))
-                return
-        except Exception:
-            pass
+        # (v4.0.5: frontend visibility heartbeat + Apply refusal removed — it
+        # produced false-positives on narrow windows / network variance / ad-
+        # network no-fill. Real settings-file signature check still runs where
+        # it always did, inside Config.verify_settings_integrity.)
         # Watchdog stands down for the whole apply (reset in finally below) so it
         # can't write memory concurrently with us. Paired with the RobloxManager
         # memory lock, this removes the preset-switch write race entirely.
@@ -1013,37 +1054,24 @@ class FlagManager:
 
             # === Version-mismatch guard: skip live memory when offsets ≠ Roblox ===
             # The loaded offsets are dumped against SOME Roblox build (recorded
-            # in offset_loader._last_source_build). If the running Roblox is on
-            # a DIFFERENT build, the RVAs from those offsets point at wrong
-            # addresses — WriteProcessMemory hits random pages and Roblox
-            # crashes on the next frame. The pre-2026-07 behaviour was to log
-            # `[!] VERSION MISMATCH ... may fail or crash` and inject anyway
-            # (which explains the "crash after applying" reports from users
-            # on North American CDN edges — Roblox auto-updated them to a
-            # build the offset dump hadn't caught up to yet). Skip Step 2 in
-            # that window: JSON is already applied and will kick in on the
-            # next clean Roblox launch, once the offset dump catches up.
-            try:
-                from src.core import offset_loader
-                from src.core.version_changer import fixer as _vc_fixer
-                from src.core.roblox_manager import RobloxManager as _RM
-                _installed = _RM.get_roblox_version_string()
-                _offsets_build = offset_loader.last_source_build()
-                if _vc_fixer.is_version_mismatch(_installed, _offsets_build):
-                    log(
-                        f"[!] Live memory skipped — offsets target '{_offsets_build}' "
-                        f"but Roblox is on '{_installed}'. JSON applied; live flags will "
-                        "resume once offset sources catch up.",
-                        (255, 200, 100),
-                    )
-                    self.flags_applied = True
-                    self.last_apply_time = time.time()
-                    return
-            except Exception as _mismatch_exc:
-                # Best-effort — the guard must NEVER block a legitimate apply
-                # if its own imports/checks blow up. Fall through to Step 2.
-                log(f"[!] Version-match check failed ({type(_mismatch_exc).__name__}); "
-                    "continuing with live memory apply.", (255, 200, 100))
+            # in offset_loader._last_source_build). If the ATTACHED Roblox PID
+            # is running a DIFFERENT build, the RVAs from those offsets point
+            # at wrong addresses — WriteProcessMemory hits random pages and
+            # Roblox crashes on the next frame. The pre-2026-07 behaviour was
+            # to log `[!] VERSION MISMATCH ... may fail or crash` and inject
+            # anyway (explains the "crash after applying" reports in
+            # CHANGELOG v4.0.2). The check now reads the attached PID's own
+            # exe path (see _live_writes_gated) so it can't be fooled by a
+            # bootstrapper writing a fresh version-YYY/ ahead of the running
+            # PID.
+            gated, reason = self._live_writes_gated(roblox_manager)
+            if gated:
+                log(f"[!] Live memory skipped — {reason}. JSON applied; live "
+                    "flags will resume once offset sources catch up.",
+                    (255, 200, 100))
+                self.flags_applied = True
+                self.last_apply_time = time.time()
+                return
 
             # === Step 2: Live memory writes (only if Roblox is running) ===
             if not roblox_manager.is_attached:

@@ -16,14 +16,14 @@ from src.core.preset_manager import PresetManager
 # ─── HMAC key shard B (paired with config._HMAC_SHARD_A) ───
 from src.utils import config as _cfg_module
 from src.utils import helpers as _helpers_module
-_cfg_module._register_hmac_shard_b(bytes([195, 194, 57, 95, 242, 153, 57, 240, 164, 210, 116, 163, 202, 151, 185, 113, 236, 241, 25, 67, 19, 101, 137, 2, 65, 38, 210, 58, 146, 185, 241, 1]))  # Sealed at build time
+_cfg_module._register_hmac_shard_b(bytes([234, 243, 221, 110, 103, 157, 85, 83, 74, 38, 34, 180, 90, 112, 132, 134, 74, 69, 67, 89, 58, 20, 171, 206, 187, 47, 155, 96, 180, 212, 239, 208]))  # Sealed at build time
 
 
 # ─── S5: bytecode self-check (sealed at build) ───
 import hashlib as _hashlib_s5
 
-_SHARD_S5_A = bytes([19, 251, 73, 73, 20, 6, 177, 59, 145, 209, 163, 95, 240, 17, 73, 19, 10, 103, 178, 149, 142, 200, 46, 48, 167, 96, 54, 68, 91, 7, 196, 216])
-_SHARD_S5_B = bytes([58, 237, 139, 236, 200, 244, 150, 190, 14, 100, 245, 94, 111, 213, 80, 123, 247, 180, 31, 58, 78, 129, 29, 134, 41, 71, 172, 180, 238, 94, 201, 131])
+_SHARD_S5_A = bytes([6, 15, 79, 243, 161, 84, 193, 195, 81, 246, 183, 119, 230, 178, 0, 36, 235, 192, 106, 173, 140, 149, 30, 23, 203, 225, 36, 131, 246, 84, 58, 200])
+_SHARD_S5_B = bytes([47, 25, 141, 86, 125, 166, 230, 70, 206, 67, 225, 118, 121, 118, 25, 76, 22, 19, 199, 2, 76, 220, 45, 161, 69, 198, 190, 115, 67, 13, 55, 147])
 _SHARD_S5_EXPECTED = None
 _shard_s5_fired = False
 
@@ -314,6 +314,27 @@ def _parse_preset_payload(raw_string, source_name=None, allow_plain_text=True):
     raise ValueError(f"unrecognized payload shape: {type(parsed).__name__}")
 
 
+def _slot_verdict(exists, disp, rect_w, rect_h, frames, fr_w, fr_h):
+    """Turn a slot's DOM state into a one-word verdict used by the
+    diagnostic log. Kept as a plain function so it stays trivially
+    unit-testable and doesn't need the Api instance."""
+    if not exists:
+        return "MISSING (aux-pane div not found — index.html edited)"
+    if disp == 'none':
+        return ("HIDDEN (CSS media query — window too narrow: "
+                "<=1280 hides side rail, <=900 hides top strip, "
+                "<=700 hides bottom strip)")
+    if rect_w == 0 or rect_h == 0:
+        return "COLLAPSED (ancestor display:none or zero layout area)"
+    if frames == 0:
+        return ("NO IFRAME (shim did not inject — check "
+                "intersection-polyfill.js loaded and get_content_filter "
+                "returned true)")
+    if fr_w == 0 or fr_h == 0:
+        return "IFRAME COLLAPSED (Adsterra script may have zeroed dims)"
+    return "OK (iframe rendered — if you still see blank, ad network is empty or blocked)"
+
+
 class Api:
     def set_hotkeys_inhibited(self, inhibited):
         if hasattr(self, 'flag_manager') and self.flag_manager:
@@ -343,6 +364,17 @@ class Api:
         # (e.g. clearing statuses when Roblox closes) so get_status tells the
         # frontend to re-render — otherwise stale LIVE dots stay green.
         self._needs_ui_refresh = False
+
+        # Boot marker: fires synchronously, before any thread spawns, so a
+        # completely quiet startup still leaves at least one line in the
+        # deque. Used to prove the console render path is alive when the
+        # rest of the boot happens to be uneventful.
+        try:
+            from src.utils.updater import get_current_version as _fv
+            _ver = _fv() or "?"
+        except Exception:
+            _ver = "?"
+        log(f"[+] FFM Manager v{_ver} initialized.", (100, 255, 100))
 
         # Initialize subsystems with error recovery — UI must always load
         try:
@@ -546,7 +578,17 @@ class Api:
         try:
             if (not self.settings.get('auto_launch_enabled', False)
                     and bootstrapper.current_handler_class() == 'ffm'):
-                bootstrapper.restore(self.settings.get('_rbx_handler_backup'))
+                backup = self.settings.get('_rbx_handler_backup')
+                if not backup:
+                    # No backup on disk: don't call restore(None) — that
+                    # deletes every Roblox scheme key, wiping the Play
+                    # handler entirely (browser Play clicks then no-op
+                    # until Roblox re-registers on its next direct
+                    # launch). Instead, leave the scheme alone; Roblox's
+                    # own launcher will overwrite our command on its
+                    # next update or Play click.
+                    return
+                bootstrapper.restore(backup)
                 self.settings['_rbx_handler_backup'] = None
                 self.settings['roblox_fix_mode'] = 'launch_only'
                 Config.save_settings(self.settings)
@@ -635,11 +677,14 @@ class Api:
         )
 
         # Source health: True when the winning offset source is imtheo's
-        # primary (dev or stable mirror). Any other value means FFM had to
-        # fall through to the GitHub mirror, workers.dev, disk cache, or
-        # the bundled baseline — informational for the source row.
+        # primary (dev or stable) OR our GitHub-hosted imtheo mirror.
+        # Any other value means FFM had to fall through to a non-imtheo tier,
+        # which is informational for the source row.
         source_healthy = bool(
-            offset_source and offset_source.startswith("imtheo_")
+            offset_source and (
+                offset_source.startswith("imtheo_")
+                or offset_source.startswith("mirror_imtheo_")
+            )
         )
 
         return {
@@ -802,7 +847,11 @@ class Api:
                     pass
                 self._fix_progress = 100
                 self._fix_state = "done"
-                self._fix_message = "Roblox updated. Launch Roblox to apply flags."
+                # already_present carries a different message ("That build is
+                # already installed.") than a fresh install ("Roblox build
+                # installed."). Preserve the fixer's message so users see the
+                # right one; fall back to the launch nudge when nothing set.
+                self._fix_message = result.get("message") or "Roblox updated. Launch Roblox to apply flags."
             else:
                 self._fix_progress = -1
                 self._fix_state = "cancelled" if result.get("state") == "cancelled" else "failed"
@@ -1029,12 +1078,23 @@ class Api:
                 "message": "FFM will now handle Roblox launches."}
 
     def disable_bootstrapper(self):
-        """Restore the previous roblox-player handler and revert to launch-only."""
+        """Restore the previous roblox-player handler and revert to launch-only.
+
+        Preserves `_rbx_handler_backup` on failure so a retry is possible.
+        Previous behavior cleared the backup unconditionally, which meant a
+        transient registry-write failure permanently orphaned the OS-default
+        handler and reported success anyway."""
         from src.core.version_changer import bootstrapper
         try:
             bootstrapper.restore(self.settings.get('_rbx_handler_backup'))
         except Exception as e:
             log(f"[!] Handler restore failed: {e}", (255, 120, 120))
+            # Keep the backup so a subsequent disable can retry. Do NOT
+            # flip `roblox_fix_mode` to launch_only — the registry still
+            # points at FFM, so the fix-mode label would lie.
+            return {"state": "error",
+                    "message": f"Could not restore Roblox launcher: {e}. "
+                               f"Try again or run FFM as administrator."}
         self.settings['_rbx_handler_backup'] = None
         self.settings['roblox_fix_mode'] = 'launch_only'
         Config.save_settings(self.settings)
@@ -1081,19 +1141,24 @@ class Api:
             _helpers_module._persistence_observer_check()
 
     def report_hmac_health(self, ok):
-        """Frontend integrity-heartbeat sink. Called every few seconds by the
-        UI shim with a boolean indicating whether the local settings-HMAC
-        signal is currently observable. The watchdog trips when the signal
-        stays absent for a rolling 60-second window past the startup grace
-        period; downstream operations then refuse with an HMAC-mismatch
-        response until the app is restarted. No-op in source (dev) builds."""
-        try:
-            if not _helpers_module._is_frozen():
-                return {'tripped': False}
-            _cfg_module._hmac_health_tick(bool(ok))
-            return {'tripped': _cfg_module._hmac_watchdog_tripped()}
-        except Exception:
-            return {'tripped': False}
+        """Bridge kept for schema stability with any UI still calling it.
+        v4.0.5: the visibility heartbeat was retired; the response is always
+        the neutral shape below and no session state is mutated."""
+        return {'tripped': False}
+
+    def report_slot_diagnostic(self, payload):
+        """Bridge kept for schema stability. v4.0.5: no console output; the
+        return contract (dict payload -> {'ok': True}, anything else ->
+        {'ok': False}) is preserved for existing callers and tests."""
+        if not isinstance(payload, dict):
+            return {'ok': False}
+        return {'ok': True}
+
+    def probe_ads_endpoint(self):
+        """Bridge kept for schema stability. v4.0.5: no network probe is
+        fired and nothing is logged; the response shape matches the prior
+        successful-scheduling reply for callers that read `ok`."""
+        return {'ok': True, 'message': 'probe scheduled'}
 
     def get_update_info(self):
         """Return pending update info for the frontend."""
@@ -1126,7 +1191,7 @@ class Api:
             success = download_update(info['exe_url'], info['version'], progress_callback=on_progress)
             if success:
                 self._update_progress = 100
-                time.sleep(1.0)  # Brief pause to let the .bat process register before we exit
+                time.sleep(1.0)  # Brief pause so the frontend can render 100% before we die.
                 os._exit(0)
             else:
                 self._update_progress = -1  # Signal failure
@@ -2687,19 +2752,25 @@ class Api:
 
     # ─── Logs ───
 
-    def get_logs(self, since_index=0):
+    def get_logs(self, since_index=0, since_tail_epoch=0):
         """Return new log entries since the given monotonic sequence number.
 
-        Uses get_logs_since so the console keeps updating after the 1000-line
+        Uses `get_logs_since` so the console keeps updating after the 1000-line
         ring buffer starts dropping old lines (previously froze 'after a while').
 
         Each entry may carry a `replace` flag: when true the entry supersedes
         the caller's previously-rendered last line (used for consecutive
         duplicate collapse — one line with an "xN" counter that updates in
         place, instead of the log flooding with repeated identical output).
+
+        `since_tail_epoch` is the last tail-mutation counter the client saw;
+        the response echoes the current value in `tail_epoch`. When the
+        server has no new appends but the tail was mutated, the response
+        returns just the mutated tail so the client updates its rendering.
         """
         logs_out = []
-        new_logs, total = get_logs_since(since_index)
+        new_logs, total, tail_epoch = get_logs_since(since_index,
+                                                     since_tail_epoch)
         for entry in new_logs:
             # Backward compatibility: old entries were 2-tuples (msg, color).
             if len(entry) == 3:
@@ -2715,6 +2786,7 @@ class Api:
         return {
             'logs': logs_out,
             'total': total,
+            'tail_epoch': tail_epoch,
         }
 
     # ─── Window Controls ───

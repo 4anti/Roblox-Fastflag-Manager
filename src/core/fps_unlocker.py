@@ -50,6 +50,7 @@ def unlock_fps():
     path = settings_path()
     if not path or not os.path.isfile(path):
         return False, "GlobalBasicSettings not found"
+    cleared_readonly = False
     try:
         was_readonly = not os.access(path, os.W_OK)
         with open(path, "r", encoding="utf-8") as f:
@@ -59,14 +60,31 @@ def unlock_fps():
             return False, "already unlocked"
         if was_readonly:
             os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            cleared_readonly = True
         new_text = set_framerate_cap(text)
         if new_text != text:
+            # Roblox may hold the file open for write (running) or an AV
+            # scanner may briefly lock it. If the open fails and we've
+            # already cleared the read-only bit, the `finally` below
+            # reasserts it so Roblox can't rewrite FramerateCap=60 back
+            # on its next launch, silently defeating the unlock.
             with open(path, "w", encoding="utf-8") as f:
                 f.write(new_text)
         os.chmod(path, stat.S_IREAD)  # lock so Roblox can't revert it
+        cleared_readonly = False       # successful lock — finally is a no-op
         return True, f"FramerateCap={UNLOCK_FPS_VALUE} (read-only)"
     except Exception as e:
         return False, str(e)
+    finally:
+        # Never leave the file writable after we cleared the read-only bit.
+        # Without this, a write failure between `chmod(IWRITE)` and the
+        # final `chmod(IREAD)` would let Roblox overwrite FramerateCap on
+        # exit — the FPS unlock would silently regress with no user signal.
+        if cleared_readonly:
+            try:
+                os.chmod(path, stat.S_IREAD)
+            except OSError:
+                pass
 
 
 def restore_fps():

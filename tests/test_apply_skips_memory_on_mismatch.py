@@ -22,6 +22,9 @@ class _StubRoblox:
     """Fake attached RobloxManager. Records whether scan/open ever ran."""
     is_attached = True
     memory_calls = 0
+    # Overridden per-test via monkeypatch on the instance; default matches
+    # "unknown" so the guard treats it as no-signal by default.
+    running_build = "unknown"
 
     def open_process_for_write(self):
         _StubRoblox.memory_calls += 1
@@ -38,6 +41,9 @@ class _StubRoblox:
     def scan_live_flags(self, *_a, **_k):
         _StubRoblox.memory_calls += 1
         return {}
+
+    def get_running_build_string(self):
+        return self.running_build
 
 
 @pytest.fixture(autouse=True)
@@ -77,6 +83,7 @@ def test_apply_skips_memory_when_offsets_target_different_build(fm, monkeypatch)
     # Real is_version_mismatch will return True for these — no need to stub.
 
     stub = _StubRoblox()
+    stub.running_build = "version-90f2fddd3b244ff6"
     fm.apply_flags_hybrid(stub, skip_json=False)
 
     assert _StubRoblox.memory_calls == 0, (
@@ -99,6 +106,7 @@ def test_apply_runs_memory_when_offsets_target_matches_running_build(fm, monkeyp
                         lambda: "version-aligned")
 
     stub = _StubRoblox()
+    stub.running_build = "version-aligned"
     fm.apply_flags_hybrid(stub, skip_json=False)
 
     # At LEAST open_process_for_write / get_roblox_base / scan_live_flags
@@ -121,6 +129,7 @@ def test_apply_guard_never_blocks_when_installed_unknown(fm, monkeypatch):
                         lambda: "version-something")
 
     stub = _StubRoblox()
+    stub.running_build = "unknown"
     fm.apply_flags_hybrid(stub, skip_json=False)
 
     # is_version_mismatch("unknown", "version-something") == False → guard doesn't trip.

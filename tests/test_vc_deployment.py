@@ -1,5 +1,14 @@
+import pytest
 from src.core.version_changer import deployment
 
+
+@pytest.fixture(autouse=True)
+def _reset_cache_between_tests():
+    """v4.0.4 added a module-level TTL cache in deployment. Reset it
+    before each test so cross-test state doesn't leak."""
+    deployment._cache_reset()
+    yield
+    deployment._cache_reset()
 
 def test_parses_clientversionupload_from_json(monkeypatch):
     # Arrange: primary JSON endpoint returns a clientVersionUpload field.

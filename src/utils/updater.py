@@ -54,7 +54,18 @@ def check_for_updates():
     return False, None, None, None
 
 def download_update(exe_url, new_version, progress_callback=None):
-    """Download the installer with progress reporting, then launch it."""
+    """Download the installer with progress reporting, then hand it to the
+    Windows shell.
+
+    Launch pattern matches ``perform_silent_update`` on purpose: the previous
+    approach wrote a batch script and spawned it with ``DETACHED_PROCESS``,
+    which stripped the interactive session token from the child. The Inno
+    Setup installer installs into Program Files (``{autopf}``) and therefore
+    needs UAC elevation — a detached-cmd child has no station/desktop for the
+    consent prompt, so elevation silently failed and the installer never ran.
+    ``ShellExecuteW("open", ...)`` routes through Explorer, which owns the
+    user's interactive session and handles elevation correctly.
+    """
     if not exe_url:
         log("[!] Update URL not found.", (255, 100, 100))
         return False
@@ -85,22 +96,20 @@ def download_update(exe_url, new_version, progress_callback=None):
             log(f"[!] Downloaded file is suspiciously small ({file_size} bytes). Aborting.", (255, 100, 100))
             return False
 
-        # Write a detached batch script to launch the installer.
-        # This is the most reliable pattern for Windows self-updates:
-        # the .bat is 100% independent of Python — it survives os._exit(0).
-        bat_path = os.path.join(os.environ.get("TEMP", "."), "ffm_update_launcher.bat")
-        with open(bat_path, "w") as f:
-            f.write("@echo off\n")
-            f.write("timeout /t 2 /nobreak >nul\n")  # wait for old app to fully close
-            f.write(f'start "" "{temp_setup}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\n')
-
-        # Launch the batch script as a fully detached, hidden process
-        subprocess.Popen(
-            ["cmd.exe", "/c", bat_path],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
-            close_fds=True
+        # Route the launch through the Windows shell so UAC (required by the
+        # Program Files install location) has a valid interactive session.
+        # Use "open" NOT "runas" — Inno Setup already carries its own UAC
+        # manifest, and "runas" fails silently from background threads.
+        import ctypes
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "open", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
         )
-        log(f"[+] Update launcher queued. App will close now.", (100, 255, 100))
+        log(f"[*] ShellExecuteW returned: {result} (>32 = success)", (100, 255, 255))
+        if result <= 32:
+            log(f"[!] ShellExecuteW failed with code {result}. Installer not launched.", (255, 100, 100))
+            return False
+
+        log(f"[+] Installer launched. App will close so the installer can replace FFM.exe.", (100, 255, 100))
         return True
 
     except Exception as e:

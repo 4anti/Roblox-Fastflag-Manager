@@ -149,12 +149,23 @@ def run_upgrade(target_guid: str, versions_root: str, cache_dirs: list,
     should_cancel() -> bool — optional; checked before each package.
 
     Returns {'ok': bool, 'state': str, 'final_path': str|None, 'message': str}.
-    States: 'installed' | 'manifest_failed' | 'download_failed' | 'cancelled'
-            | 'already_present' | 'error'.
+    Success states (ok=True): 'installed' (fresh install completed),
+    'already_present' (target build was already on disk; nothing downloaded).
+    Failure states (ok=False): 'manifest_failed', 'download_failed',
+    'cancelled', 'insufficient_space', 'error'.
     """
     from src.core.version_changer import downloader, installer
     from src.utils.logger import log
 
+    # Short-circuit: if the target build is already sitting on disk, don't
+    # waste bandwidth re-fetching it. Callers should treat this as success
+    # because the desired end-state (target build present) is already met.
+    final_name = target_guid if target_guid.startswith("version-") else f"version-{target_guid}"
+    early_path = os.path.join(versions_root, final_name)
+    if os.path.exists(early_path):
+        log(f"[*] {final_name} is already installed at {early_path}", (150, 200, 255))
+        return {"ok": True, "state": "already_present", "final_path": early_path,
+                "message": "That build is already installed."}
     packages = _get_manifest_packages(target_guid)
     if not packages:
         return {"ok": False, "state": "manifest_failed", "final_path": None,
@@ -194,7 +205,13 @@ def run_upgrade(target_guid: str, versions_root: str, cache_dirs: list,
         try:
             final_path = installer.commit_build(build_root, versions_root, target_guid)
         except FileExistsError:
-            return {"ok": False, "state": "already_present", "final_path": None,
+            # Another process (or an earlier FFM run) landed the same build
+            # while we were downloading. Target end-state is met; report
+            # success so the UI doesn't paint a red X over a good outcome.
+            existing = os.path.join(versions_root, final_name)
+            log(f"[*] {final_name} was installed concurrently at {existing}",
+                (150, 200, 255))
+            return {"ok": True, "state": "already_present", "final_path": existing,
                     "message": "That build is already installed."}
         return {"ok": True, "state": "installed", "final_path": final_path,
                 "message": "Roblox build installed."}

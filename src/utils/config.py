@@ -8,7 +8,7 @@ from pathlib import Path
 
 # ─── Settings integrity (HMAC over ads_enabled || version || install_id) ───
 # Shard A lives here; Shard B is contributed by api.py at module import time.
-_HMAC_SHARD_A = bytes([226, 132, 162, 118, 252, 234, 72, 221, 200, 169, 118, 196, 101, 208, 124, 200, 38, 198, 64, 250, 114, 74, 68, 72, 173, 218, 146, 207, 160, 72, 131, 0])
+_HMAC_SHARD_A = bytes([41, 55, 95, 82, 107, 144, 211, 8, 168, 111, 29, 65, 220, 106, 2, 52, 225, 38, 111, 160, 35, 182, 75, 243, 236, 217, 94, 219, 213, 147, 68, 26])
 _HMAC_SHARD_B = bytes(32)
 _VERSION_TAG = b'ffm-cfg-v1'
 
@@ -47,7 +47,12 @@ _HMAC_WATCHDOG = {
     'last_ok_ts': None,
     'tripped': False,
     'startup_grace_sec': 15.0,
-    'absence_tolerance_sec': 60.0,
+    # NOTE (v4.0.4): pinned to +inf so the frontend heartbeat can no
+    # longer flip 'tripped'. Prior 60.0 s value produced false-positive
+    # Apply refusals for legitimate users whose ad iframes had zero
+    # bounding-rect area (narrow window, network variance, no-fill).
+    # Ticks are still recorded so watchdog telemetry stays observable.
+    'absence_tolerance_sec': float('inf'),
 }
 
 

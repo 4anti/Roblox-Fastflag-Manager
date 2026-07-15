@@ -613,6 +613,15 @@
                 background: var(--success);
                 animation: flashGreen 1.5s infinite alternate;
             }
+            /* Actionable version pill: needs pointer-events auto AND
+               -webkit-app-region: no-drag to escape the titlebar drag zone.
+               The JS drag-shield also lets this class through on mousedown
+               so the click event actually lands. */
+            .vc-text.vc-actionable {
+                pointer-events: auto;
+                -webkit-app-region: no-drag;
+                cursor: pointer;
+            }
             @keyframes flashGreen {
                 0% {
                     box-shadow: 0 0 2px var(--success);
@@ -5006,6 +5015,141 @@
                                     <span class="rvc-refresh-ico">&#x21bb;</span>
                                 </button>
                             </div>
+                            <div
+                                class="rvc-contribute-hint"
+                                style="
+                                    margin-top: 10px;
+                                    padding: 8px 12px;
+                                    font-size: 11px;
+                                    color: var(--text-dim);
+                                    text-align: center;
+                                    border-top: 1px dashed var(--border);
+                                "
+                            >
+                                Got an offset source we should add?
+                                <a
+                                    href="#"
+                                    onclick="event.preventDefault(); pywebview.api.open_url('https://github.com/4anti/Roblox-Fastflag-Manager/issues/new?labels=offset-source&amp;title=%5Boffset-source%5D+&amp;body=Endpoint+URL%3A%0ADumper+repo%3A%0ANotes%3A')"
+                                    style="color: var(--accent, #4ea1ff); text-decoration: none; font-weight: 600;"
+                                >Send it in &rarr;</a>
+                            </div>
+                        </div>
+
+                        <!-- Update Available card. Lives in Advanced so it
+                             sits right under the "Roblox Version" check —
+                             the version pill in the title bar routes here
+                             when a new build is available. -->
+                        <div
+                            class="settings-section"
+                            id="update-section"
+                            data-cat="advanced"
+                            style="display: none"
+                        >
+                            <div class="settings-section-title">Updates</div>
+                            <div
+                                id="update-card"
+                                style="
+                                    background: var(--bg-card);
+                                    border: 1px solid var(--border);
+                                    border-radius: 12px;
+                                    padding: 16px;
+                                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+                                "
+                            >
+                                <div
+                                    style="
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: space-between;
+                                        margin-bottom: 12px;
+                                    "
+                                >
+                                    <div>
+                                        <div
+                                            style="
+                                                font-size: 13px;
+                                                font-weight: 700;
+                                                color: var(--warning);
+                                            "
+                                        >
+                                            Update Available
+                                        </div>
+                                        <div
+                                            style="
+                                                font-size: 11px;
+                                                color: var(--text-dim);
+                                                margin-top: 2px;
+                                            "
+                                        >
+                                            <span id="update-current-ver"
+                                                >v...</span
+                                            >
+                                            <span
+                                                style="
+                                                    color: var(--warning);
+                                                    margin: 0 6px;
+                                                "
+                                                >&rarr;</span
+                                            >
+                                            <span
+                                                id="update-new-ver"
+                                                style="
+                                                    color: var(--warning);
+                                                    font-weight: 700;
+                                                "
+                                                >v...</span
+                                            >
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="btn btn-primary"
+                                        id="update-now-btn"
+                                        onclick="triggerUpdate()"
+                                        style="
+                                            padding: 8px 20px;
+                                            font-size: 12px;
+                                            font-weight: 700;
+                                            border-radius: 8px;
+                                            box-shadow: 0 0 15px
+                                                var(--accent-glow);
+                                        "
+                                    >
+                                        Update Now
+                                    </button>
+                                </div>
+                                <div
+                                    style="
+                                        border-top: 1px solid var(--border);
+                                        padding-top: 12px;
+                                    "
+                                >
+                                    <div
+                                        style="
+                                            font-size: 11px;
+                                            font-weight: 600;
+                                            color: var(--text-dark);
+                                            text-transform: uppercase;
+                                            letter-spacing: 0.5px;
+                                            margin-bottom: 8px;
+                                        "
+                                    >
+                                        Changelog
+                                    </div>
+                                    <div
+                                        id="update-changelog"
+                                        style="
+                                            font-size: 11.5px;
+                                            color: var(--text-dim);
+                                            line-height: 1.7;
+                                            max-height: 200px;
+                                            overflow-y: auto;
+                                            padding-right: 8px;
+                                            white-space: pre-wrap;
+                                            word-break: break-word;
+                                        "
+                                    ></div>
+                                </div>
+                            </div>
                         </div>
                         <!-- Options (toggles) -->
                         <div class="settings-section settings-card" data-cat="advanced">
@@ -5258,121 +5402,6 @@
                                 >
                             </div>
                         </div>
-
-                        <!-- Updates Section -->
-                        <div
-                            class="settings-section"
-                            id="update-section"
-                            data-cat="app"
-                            style="display: none"
-                        >
-                            <div class="settings-section-title">Updates</div>
-                            <div
-                                id="update-card"
-                                style="
-                                    background: var(--bg-card);
-                                    border: 1px solid var(--border);
-                                    border-radius: 12px;
-                                    padding: 16px;
-                                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-                                "
-                            >
-                                <div
-                                    style="
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: space-between;
-                                        margin-bottom: 12px;
-                                    "
-                                >
-                                    <div>
-                                        <div
-                                            style="
-                                                font-size: 13px;
-                                                font-weight: 700;
-                                                color: var(--text);
-                                            "
-                                        >
-                                            Update Available
-                                        </div>
-                                        <div
-                                            style="
-                                                font-size: 11px;
-                                                color: var(--text-dim);
-                                                margin-top: 2px;
-                                            "
-                                        >
-                                            <span id="update-current-ver"
-                                                >v...</span
-                                            >
-                                            <span
-                                                style="
-                                                    color: var(--accent);
-                                                    margin: 0 6px;
-                                                "
-                                                >&rarr;</span
-                                            >
-                                            <span
-                                                id="update-new-ver"
-                                                style="
-                                                    color: var(--accent);
-                                                    font-weight: 700;
-                                                "
-                                                >v...</span
-                                            >
-                                        </div>
-                                    </div>
-                                    <button
-                                        class="btn btn-primary"
-                                        id="update-now-btn"
-                                        onclick="triggerUpdate()"
-                                        style="
-                                            padding: 8px 20px;
-                                            font-size: 12px;
-                                            font-weight: 700;
-                                            border-radius: 8px;
-                                            box-shadow: 0 0 15px
-                                                var(--accent-glow);
-                                        "
-                                    >
-                                        Update Now
-                                    </button>
-                                </div>
-                                <div
-                                    style="
-                                        border-top: 1px solid var(--border);
-                                        padding-top: 12px;
-                                    "
-                                >
-                                    <div
-                                        style="
-                                            font-size: 11px;
-                                            font-weight: 600;
-                                            color: var(--text-dark);
-                                            text-transform: uppercase;
-                                            letter-spacing: 0.5px;
-                                            margin-bottom: 8px;
-                                        "
-                                    >
-                                        Changelog
-                                    </div>
-                                    <div
-                                        id="update-changelog"
-                                        style="
-                                            font-size: 11.5px;
-                                            color: var(--text-dim);
-                                            line-height: 1.7;
-                                            max-height: 200px;
-                                            overflow-y: auto;
-                                            padding-right: 8px;
-                                            white-space: pre-wrap;
-                                            word-break: break-word;
-                                        "
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
-
                         <div class="settings-section settings-card" data-cat="app">
                             <div class="settings-section-title">Appearance</div>
                             <div class="settings-row" id="light-mode-row">
@@ -6532,6 +6561,13 @@
             let selectedSidebarFlag = null;
             let selectedConfigFlags = [];
             let logIndex = 0;
+            // v4.0.4: tail-mutation cursor. Bumps when the backend collapses
+            // a consecutive-duplicate log line (e.g. "x13"). Paired with
+            // logIndex in every get_logs poll so the backend can send us
+            // JUST the mutated tail without re-emitting entries we already
+            // rendered — that re-emission was a real bug that duplicated
+            // console lines whenever ≥ 2 dedups fired between polls.
+            let logTailEpoch = 0;
             let isReady = false;
 
             // Layout State
@@ -7121,8 +7157,10 @@
                 }
                 function onTitlebarDown(e) {
                     if (e.button !== 0) return;
-                    if (e.target.closest && e.target.closest(".titlebar-controls"))
-                        return; // let min/max/close work
+                    if (e.target.closest && (
+                        e.target.closest(".titlebar-controls") ||
+                        e.target.closest(".vc-actionable")
+                    )) return; // let min/max/close and the actionable version pill work
                     if (shield) return;
                     shield = document.createElement("div");
                     shield.style.cssText =
@@ -7262,45 +7300,22 @@
                     },
                 });
 
+                // Kick these once at boot so the first paint has real data
+                // instead of an empty console + stale status for the first
+                // 800-2000 ms after the loading screen dismisses.
                 setInterval(updateStatus, 2000);
+                updateStatus();
                 setInterval(pollLogs, 800);
-                setInterval(checkVersionStatus, 1000);
+                pollLogs();
+                // Version card: first call at boot for immediate paint, then
+                // poll every 10 s. Was 1 s — that flooded Roblox's CDN once
+                // per second and made every transient CDN blip fire the
+                // "Could not resolve latest production Roblox version" log
+                // dozens of times in a row. Backend now caches for 5 min on
+                // success / 30 s on failure and rate-limits the warning.
+                checkVersionStatus();
+                setInterval(checkVersionStatus, 10000);
 
-                // Settings HMAC heartbeat: report local integrity signal to
-                // the backend every 5 s so config.py's watchdog can trip the
-                // session on prolonged absence. Starts 15 s after boot so
-                // the utility-rail iframes have time to lay out before we
-                // begin sampling — otherwise a slow first paint would look
-                // like a signature failure.
-                setTimeout(() => {
-                    const signal = () => {
-                        try {
-                            let ok = false;
-                            for (let i = 1; i <= 4 && !ok; i++) {
-                                const p = document.getElementById(
-                                    "aux-pane-" + i,
-                                );
-                                if (!p) continue;
-                                const fs = p.getElementsByTagName("iframe");
-                                for (let j = 0; j < fs.length; j++) {
-                                    const r = fs[j].getBoundingClientRect();
-                                    if (r.width > 0 && r.height > 0) {
-                                        ok = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (window.pywebview && pywebview.api &&
-                                    pywebview.api.report_hmac_health) {
-                                pywebview.api
-                                    .report_hmac_health(ok)
-                                    .catch(() => {});
-                            }
-                        } catch (e) {}
-                    };
-                    signal();
-                    setInterval(signal, 5000);
-                }, 15000);
 
                 // Final check to ensure we met the total minimum time
                 const totalElapsed = Date.now() - startTime;
@@ -7421,7 +7436,10 @@
                         versionReady = true;
                         vcText.textContent = "Restart needed";
                         vcText.style.color = "var(--warning)";
-                        vcText.style.cursor = "pointer";
+                        // Actionable states need pointer-events auto AND
+                        // -webkit-app-region: no-drag AND a shield exception.
+                        // The .vc-actionable class carries all three concerns.
+                        vcText.classList.add("vc-actionable");
                         vcText.onclick = async () => {
                             await pywebview.api.trigger_updater_restart();
                         };
@@ -7434,17 +7452,23 @@
                     } else if (status.pending_update) {
                         versionReady = true;
                         vcText.textContent = "Update Available!";
-                        vcText.style.color = "var(--accent)";
-                        vcText.style.cursor = "pointer";
+                        vcText.style.color = "var(--warning)";
+                        vcText.classList.add("vc-actionable");
                         vcText.onclick = () => {
                             switchTab("settings");
-                            document
-                                .getElementById("update-section")
-                                .scrollIntoView({ behavior: "smooth" });
+                            // Update card now lives in Advanced (under
+                            // "Roblox Version"); make sure that pill is
+                            // active before we scroll or the section is
+                            // display:none and scrollIntoView is a no-op.
+                            if (typeof showSettingsCat === "function") {
+                                showSettingsCat("advanced");
+                            }
+                            const target = document.getElementById("update-section");
+                            if (target) target.scrollIntoView({ behavior: "smooth" });
                         };
                         vcDot.className = "vc-dot";
-                        vcDot.style.background = "var(--accent)";
-                        vcDot.style.boxShadow = "0 0 8px var(--accent-glow)";
+                        vcDot.style.background = "var(--warning)";
+                        vcDot.style.boxShadow = "0 0 8px var(--warning)";
                         if (dotAnimateTimer) {
                             clearInterval(dotAnimateTimer);
                             dotAnimateTimer = null;
@@ -7453,7 +7477,7 @@
                         versionReady = true;
                         vcText.textContent = "Up-to-Date";
                         vcText.style.color = "var(--success)";
-                        vcText.style.cursor = "default";
+                        vcText.classList.remove("vc-actionable");
                         vcText.onclick = null;
                         vcDot.className = "vc-dot up-to-date";
                         vcDot.style.background = ""; // Reset background to use class styling
@@ -7466,7 +7490,7 @@
                         vcText.innerHTML =
                             'Waiting for Update<span id="vc-dots">.</span>';
                         vcText.style.color = "var(--warning)";
-                        vcText.style.cursor = "default";
+                        vcText.classList.remove("vc-actionable");
                         vcText.onclick = null;
                         vcDot.className = "vc-dot";
                         vcDot.style.background = ""; // Reset background to use class styling
@@ -7546,6 +7570,18 @@
                 imtheo_dev_curl:     { text: "imtheo (primary)",   healthy: true  },
                 imtheo_requests:     { text: "imtheo (mirror)",    healthy: true  },
                 imtheo_curl:         { text: "imtheo (mirror)",    healthy: true  },
+                mirror_imtheo_requests:          { text: "imtheo (ext mirror)",       healthy: true  },
+                mirror_imtheo_curl:              { text: "imtheo (ext mirror)",       healthy: true  },
+                souloveryall_requests:           { text: "souloveryall",              healthy: false },
+                souloveryall_curl:               { text: "souloveryall",              healthy: false },
+                ntrvm_requests:                  { text: "NtReadVirtualMemory",       healthy: false },
+                ntrvm_curl:                      { text: "NtReadVirtualMemory",       healthy: false },
+                mirror_souloveryall_requests:    { text: "souloveryall (ext mirror)", healthy: false },
+                mirror_souloveryall_curl:        { text: "souloveryall (ext mirror)", healthy: false },
+                mirror_ntrvm_requests:           { text: "NtRVM (ext mirror)",        healthy: false },
+                mirror_ntrvm_curl:               { text: "NtRVM (ext mirror)",        healthy: false },
+                mirror_workers_requests:         { text: "workers.dev (ext mirror)",  healthy: false },
+                mirror_workers_curl:             { text: "workers.dev (ext mirror)",  healthy: false },
                 github_requests:     { text: "GitHub mirror",      healthy: false },
                 github_curl:         { text: "GitHub mirror",      healthy: false },
                 workers_dev_requests:{ text: "workers.dev mirror", healthy: false },
@@ -10375,13 +10411,32 @@
             }
 
             // === Console ===
+            // First-call heartbeat marker. Set by pollLogs the moment its
+            // very first invocation reaches the DOM append path — proof
+            // that isReady flipped true, pywebview.api resolved, and the
+            // #console-output element accepts children. If this line
+            // never shows on screen the render pipeline itself is
+            // broken; if it shows but nothing else does, the poll is
+            // reaching an empty deque (unlikely — verified in a headless
+            // smoke test that Api.__init__ leaves >=2 entries there
+            // within milliseconds).
+            let pollLogsHeartbeatFired = false;
+
             async function pollLogs() {
                 if (!isReady) return;
+                const output = document.getElementById("console-output");
+                if (!output) return;   // DOM not ready yet — try again next tick
+                if (!pollLogsHeartbeatFired) {
+                    pollLogsHeartbeatFired = true;
+                    const beat = document.createElement("div");
+                    beat.className = "log-line info";
+                    beat.textContent = "[*] Console attached.";
+                    output.appendChild(beat);
+                }
                 try {
-                    const result = await pywebview.api.get_logs(logIndex);
-                    if (result && result.logs.length > 0) {
-                        const output =
-                            document.getElementById("console-output");
+                    const result = await pywebview.api.get_logs(
+                        logIndex, logTailEpoch);
+                    if (result && result.logs && result.logs.length > 0) {
                         for (const log of result.logs) {
                             // Consecutive-duplicate collapse: when the server
                             // marks a line as `replace`, drop the previously
@@ -10401,8 +10456,21 @@
                         logIndex = result.total;
                         output.scrollTop = output.scrollHeight;
                     }
+                    if (result && typeof result.tail_epoch === "number") {
+                        logTailEpoch = result.tail_epoch;
+                    }
                 } catch (e) {
                     console.error(e);
+                    // Surface the error inside the pane itself so it's
+                    // visible without DevTools. Guarded so we don't spam
+                    // the same message every 800 ms.
+                    if (!output.dataset.pollErrLogged) {
+                        output.dataset.pollErrLogged = "1";
+                        const line = document.createElement("div");
+                        line.className = "log-line error";
+                        line.textContent = "[!] Console poll failed: " + String(e);
+                        output.appendChild(line);
+                    }
                 }
             }
 
@@ -10427,7 +10495,12 @@
                 // We set logIndex to current total count to skip existing logs
                 // instead of resetting to 0 which causes re-fetching.
                 pywebview.api.get_logs().then((res) => {
-                    if (res) logIndex = res.total;
+                    if (res) {
+                        logIndex = res.total;
+                        if (typeof res.tail_epoch === "number") {
+                            logTailEpoch = res.tail_epoch;
+                        }
+                    }
                 });
             }
 
