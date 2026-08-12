@@ -162,15 +162,13 @@ Join the official Discord for support, preset sharing, and community discussion.
 
 ## <a name="star-history"></a>⭐ Star History
 
-<a href="https://www.star-history.com/?repos=4anti%2FRoblox-Fastflag-Manager&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=4anti%2FRoblox-Fastflag-Manager&type=timeline&legend=bottom-right">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=timeline&theme=dark&legend=bottom-right&sealed_token=xgPKRazom_r-a2oO6wMpovaLVDfDLRzznnKRijber25QM5NzfXkYf3pYCOA-m92NejtEHnjsxDz-ZNMbWpDqh9m2LSDjIPWI7V6pgFoeF0piPiXBliMQSznMHFjR85MitR4ELoY7UyYbXJlX9zFYICBjJoLnmNxiAGaHffNQKF-vy1Y3m8hExJePUx99" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=timeline&legend=bottom-right&sealed_token=xgPKRazom_r-a2oO6wMpovaLVDfDLRzznnKRijber25QM5NzfXkYf3pYCOA-m92NejtEHnjsxDz-ZNMbWpDqh9m2LSDjIPWI7V6pgFoeF0piPiXBliMQSznMHFjR85MitR4ELoY7UyYbXJlX9zFYICBjJoLnmNxiAGaHffNQKF-vy1Y3m8hExJePUx99" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=4anti/Roblox-Fastflag-Manager&type=timeline&legend=bottom-right&sealed_token=xgPKRazom_r-a2oO6wMpovaLVDfDLRzznnKRijber25QM5NzfXkYf3pYCOA-m92NejtEHnjsxDz-ZNMbWpDqh9m2LSDjIPWI7V6pgFoeF0piPiXBliMQSznMHFjR85MitR4ELoY7UyYbXJlX9zFYICBjJoLnmNxiAGaHffNQKF-vy1Y3m8hExJePUx99" />
  </picture>
 </a>
-
-</div>
 
 ---
 
