@@ -15,7 +15,7 @@ class TestShardS6(unittest.TestCase):
         helpers._rot_reset()
         logger_mod._shard_s6_reset()
         self.tmp = tempfile.mkdtemp()
-        rel = os.path.join('src', 'gui', 'ui', 'intersection-polyfill.js')
+        rel = os.path.join('src', 'gui', 'ui', 'Sortable.min.js')
         target = os.path.join(self.tmp, rel)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy(os.path.join(FIXTURES, 'clean_polyfill.js'), target)
@@ -34,7 +34,7 @@ class TestShardS6(unittest.TestCase):
 
     def test_one_tick_tampered_does_not_subtract(self):
         target = os.path.join(self.tmp, 'src', 'gui', 'ui',
-                              'intersection-polyfill.js')
+                              'Sortable.min.js')
         shutil.copy(os.path.join(FIXTURES, 'tampered_polyfill.js'), target)
         with mock.patch.object(helpers._sys, '_MEIPASS', self.tmp, create=True), \
              mock.patch.object(helpers, '_is_frozen', return_value=True):

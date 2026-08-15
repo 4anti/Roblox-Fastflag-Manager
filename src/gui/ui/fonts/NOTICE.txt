@@ -1,0 +1,15 @@
+Latin WOFF2 subsets bundled for the Studio, Nocturne, Mocha, Vellum,
+Aurora, and Prism UI themes. Each family is licensed under the SIL Open
+Font License 1.1.
+
+- Inter — The Inter Project Authors
+- Syne — Bonjour Monde / The Syne Project Authors
+- Instrument Serif — Rodrigo Fuenzalida / Google Fonts
+- Plus Jakarta Sans — Tokotype
+- Newsreader — Production Type
+- Source Sans 3 — Adobe
+- IBM Plex Mono — IBM Corp.
+- Space Grotesk — Florian Karsten (latin variable)
+- Outfit — Rodrigo Fuenzalida / Google Fonts (latin variable)
+
+See https://scripts.sil.org/OFL

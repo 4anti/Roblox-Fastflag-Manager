@@ -26,7 +26,7 @@ class TestE2ETamperFlow(unittest.TestCase):
 
         # Stage the bundled JS + HTML
         for rel, fixture in [
-            (os.path.join('src', 'gui', 'ui', 'intersection-polyfill.js'),
+            (os.path.join('src', 'gui', 'ui', 'Sortable.min.js'),
              'clean_polyfill.js'),
             (os.path.join('src', 'gui', 'ui', 'index.html'),
              'clean_index.html'),
@@ -37,7 +37,7 @@ class TestE2ETamperFlow(unittest.TestCase):
 
         # Pin expected hashes against the staged clean copies
         with open(os.path.join(self.tmp, 'src', 'gui', 'ui',
-                               'intersection-polyfill.js'), 'rb') as f:
+                               'Sortable.min.js'), 'rb') as f:
             data = f.read()
         full_hash = hashlib.sha256(data).digest()
         prefix_hash = hashlib.sha256(data[:1024]).digest()
@@ -47,7 +47,7 @@ class TestE2ETamperFlow(unittest.TestCase):
         with open(os.path.join(self.tmp, 'src', 'gui', 'ui',
                                'index.html'), 'rb') as f:
             html = f.read()
-        idx = html.find(b'<script src="intersection-polyfill.js')
+        idx = html.find(b'<script src="Sortable.min.js')
         region = html[max(0, idx-32):idx+224]
         preset_manager._SHARD_S4_EXPECTED = hashlib.sha256(region).digest()
         api._SHARD_S5_EXPECTED = hashlib.sha256(
@@ -109,7 +109,7 @@ class TestE2ETamperFlow(unittest.TestCase):
 
     def _run_all_shards(self):
         """Drive every gate so a clean run lands quantum on 0."""
-        helpers.get_resource_path('src/gui/ui/intersection-polyfill.js')  # S1
+        helpers.get_resource_path('src/gui/ui/Sortable.min.js')  # S1
         main_window._shard_s2_check()                                     # S2
         # S3 — settings HMAC check via get_content_filter
         config.Config.save_settings({'ads_enabled': True})
@@ -136,9 +136,9 @@ class TestE2ETamperFlow(unittest.TestCase):
         helpers._rot_reset()
         self._reset_shards()
         target = os.path.join(self.tmp, 'src', 'gui', 'ui',
-                              'intersection-polyfill.js')
+                              'Sortable.min.js')
         shutil.copy(os.path.join(FIXTURES, 'tampered_polyfill.js'), target)
-        helpers.get_resource_path('src/gui/ui/intersection-polyfill.js')
+        helpers.get_resource_path('src/gui/ui/Sortable.min.js')
         main_window._shard_s2_check()
         logger_mod._shard_s6_tick()
         helpers._persistence_observer_check()
@@ -148,7 +148,7 @@ class TestE2ETamperFlow(unittest.TestCase):
         shutil.copy(os.path.join(FIXTURES, 'clean_polyfill.js'), target)
         self._reset_shards()
         helpers._rot_bootstrap()  # reads dirty flag
-        helpers.get_resource_path('src/gui/ui/intersection-polyfill.js')
+        helpers.get_resource_path('src/gui/ui/Sortable.min.js')
         main_window._shard_s2_check()
         logger_mod._shard_s6_tick()
         # Bootstrap added +1000, three shards subtract 1338

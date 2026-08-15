@@ -45,6 +45,16 @@ def test_commit_moves_staging_into_versions_root(tmp_path):
     assert final == str(versions_root / "version-abc")
 
 
+def test_commit_creates_missing_versions_root(tmp_path):
+    versions_root = tmp_path / "Roblox" / "Versions"
+    staged = tmp_path / "staged-build"
+    staged.mkdir()
+    (staged / "RobloxPlayerBeta.exe").write_bytes(b"exe")
+    final = installer.commit_build(str(staged), str(versions_root), "version-abc")
+    assert os.path.isfile(os.path.join(final, "RobloxPlayerBeta.exe"))
+    assert os.path.isdir(str(versions_root))
+
+
 def test_target_subdir_includes_libraries_and_redist():
     # Regression: real player packages that extract to root. They were missing
     # from the map (install would abort on them). Verified against

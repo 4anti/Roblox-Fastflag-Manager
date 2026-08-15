@@ -46,6 +46,31 @@ def is_version_mismatch(installed: Optional[str],
     return installed != offsets_target
 
 
+def classify_version_card(installed: Optional[str],
+                          offsets_target: Optional[str],
+                          latest_production: Optional[str]) -> str:
+    """Pick the Advanced-tab card state from three independent build strings.
+
+    installed          - disk-newest Roblox folder, or None / 'unknown'
+    offsets_target     - build the loaded offset dump was taken from
+    latest_production  - Roblox CDN LATEST, or None if unreachable
+
+    A download can only help when this install is behind CDN latest.
+    When the install already IS latest and the dump has not caught up,
+    Refresh must not pretend a Roblox download 'fixed' anything.
+    """
+    if not installed or installed == "unknown":
+        return "no_roblox"
+    if not offsets_target:
+        return "offsets_pending"
+    aligned = installed == offsets_target
+    if latest_production:
+        if installed == latest_production:
+            return "aligned" if aligned else "offsets_lagging"
+        return "aligned_update_available" if aligned else "needs_roblox_update"
+    return "aligned" if aligned else "mismatch_offline"
+
+
 def plan_upgrade(installed: Optional[str], target: Optional[str],
                  is_older) -> dict:
     """Decide whether to upgrade, refuse a downgrade, no-op, or bail.
@@ -94,6 +119,111 @@ def _get_manifest_packages(target_guid: str) -> Optional[list]:
 
 def _format_mb(n: float) -> str:
     return f"{n / (1024 * 1024):.0f} MB"
+
+
+def _is_complete_player_build(build_dir: str) -> bool:
+    """True when a version folder has a non-empty player exe.
+
+    A leftover `version-{guid}/` from a crashed or cancelled install is not a
+    finished build. Treating it as already-present would skip the real
+    download forever.
+    """
+    if not build_dir or not os.path.isdir(build_dir):
+        return False
+    for name in ("RobloxPlayerBeta.exe", "RobloxPlayer.exe"):
+        exe = os.path.join(build_dir, name)
+        try:
+            if os.path.isfile(exe) and os.path.getsize(exe) > 0:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _remove_leftover_build(path: str) -> Optional[str]:
+    """Delete an incomplete leftover at `path`. Returns an error string on
+    failure, else None."""
+    try:
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        elif os.path.isfile(path):
+            os.remove(path)
+        return None
+    except OSError as e:
+        return str(e)
+
+
+def _production_folder_name(production_guid: str) -> str:
+    g = (production_guid or "").strip()
+    if not g:
+        return ""
+    return g if g.startswith("version-") else f"version-{g}"
+
+
+def prune_non_production_builds(versions_root: str, production_guid: str) -> dict:
+    """Delete version-* folders in `versions_root` that are not production latest.
+
+    Only runs when the production folder already has a player exe, so a failed
+    delete can never leave the user with zero Roblox. Leftover other-channel or
+    previous-production folders are what keep Launch/Play on the wrong client.
+    """
+    from src.utils.logger import log
+    empty = {"removed": [], "failed": [], "kept": None}
+    keep_name = _production_folder_name(production_guid)
+    if not versions_root or not keep_name or not os.path.isdir(versions_root):
+        return empty
+    keep_path = os.path.join(versions_root, keep_name)
+    if not _is_complete_player_build(keep_path):
+        return empty
+    removed = []
+    failed = []
+    try:
+        names = os.listdir(versions_root)
+    except OSError:
+        return {"removed": [], "failed": [], "kept": keep_path}
+    for name in names:
+        if name == keep_name or not name.startswith("version-"):
+            continue
+        path = os.path.join(versions_root, name)
+        if not os.path.isdir(path):
+            continue
+        err = _remove_leftover_build(path)
+        if err:
+            failed.append(name)
+            log(f"[!] Could not remove leftover {name}: {err}", (255, 200, 100))
+        else:
+            removed.append(name)
+            log(f"[*] Removed leftover Roblox build {name}", (150, 200, 255))
+    # A leftover launcher sitting next to the version folders can still start
+    # an old client after we launch the production player exe.
+    for extra in ("RobloxPlayerLauncher.exe", "RobloxPlayerInstaller.exe"):
+        extra_path = os.path.join(versions_root, extra)
+        if not os.path.isfile(extra_path):
+            continue
+        err = _remove_leftover_build(extra_path)
+        if err:
+            failed.append(extra)
+            log(f"[!] Could not remove leftover {extra}: {err}", (255, 200, 100))
+        else:
+            removed.append(extra)
+            log(f"[*] Removed leftover {extra}", (150, 200, 255))
+    return {"removed": removed, "failed": failed, "kept": keep_path}
+
+
+def prune_stock_non_production(production_guid: str) -> dict:
+    """Prune leftover version folders in the stock Roblox Versions tree only.
+
+    Third-party launcher trees are left alone. Best-effort: never raises.
+    """
+    empty = {"removed": [], "failed": [], "kept": None}
+    try:
+        from src.core.roblox_manager import RobloxManager
+        stock = RobloxManager.get_stock_versions_root()
+        if not stock or not os.path.isdir(stock):
+            return empty
+        return prune_non_production_builds(stock, production_guid)
+    except Exception:
+        return empty
 
 
 def disk_space_precheck(packages, versions_root, cache_dirs):
@@ -150,7 +280,7 @@ def run_upgrade(target_guid: str, versions_root: str, cache_dirs: list,
 
     Returns {'ok': bool, 'state': str, 'final_path': str|None, 'message': str}.
     Success states (ok=True): 'installed' (fresh install completed),
-    'already_present' (target build was already on disk; nothing downloaded).
+    'already_present' (target folder already has a player exe; nothing downloaded).
     Failure states (ok=False): 'manifest_failed', 'download_failed',
     'cancelled', 'insufficient_space', 'error'.
     """
@@ -163,9 +293,16 @@ def run_upgrade(target_guid: str, versions_root: str, cache_dirs: list,
     final_name = target_guid if target_guid.startswith("version-") else f"version-{target_guid}"
     early_path = os.path.join(versions_root, final_name)
     if os.path.exists(early_path):
-        log(f"[*] {final_name} is already installed at {early_path}", (150, 200, 255))
-        return {"ok": True, "state": "already_present", "final_path": early_path,
-                "message": "That build is already installed."}
+        if _is_complete_player_build(early_path):
+            log(f"[*] {final_name} is already installed at {early_path}", (150, 200, 255))
+            return {"ok": True, "state": "already_present", "final_path": early_path,
+                    "message": "That build is already installed."}
+        log(f"[!] {final_name} exists but has no player exe; removing leftover "
+            f"and continuing the download", (255, 200, 100))
+        err = _remove_leftover_build(early_path)
+        if err:
+            return {"ok": False, "state": "error", "final_path": None,
+                    "message": f"Could not replace leftover {final_name}: {err}"}
     packages = _get_manifest_packages(target_guid)
     if not packages:
         return {"ok": False, "state": "manifest_failed", "final_path": None,
@@ -206,13 +343,25 @@ def run_upgrade(target_guid: str, versions_root: str, cache_dirs: list,
             final_path = installer.commit_build(build_root, versions_root, target_guid)
         except FileExistsError:
             # Another process (or an earlier FFM run) landed the same build
-            # while we were downloading. Target end-state is met; report
-            # success so the UI doesn't paint a red X over a good outcome.
+            # while we were downloading. Only treat that as success when the
+            # dest actually has a player exe; an empty leftover is replaced.
             existing = os.path.join(versions_root, final_name)
-            log(f"[*] {final_name} was installed concurrently at {existing}",
-                (150, 200, 255))
-            return {"ok": True, "state": "already_present", "final_path": existing,
-                    "message": "That build is already installed."}
+            if _is_complete_player_build(existing):
+                log(f"[*] {final_name} was installed concurrently at {existing}",
+                    (150, 200, 255))
+                return {"ok": True, "state": "already_present", "final_path": existing,
+                        "message": "That build is already installed."}
+            log(f"[!] {final_name} exists but has no player exe; replacing leftover",
+                (255, 200, 100))
+            err = _remove_leftover_build(existing)
+            if err:
+                return {"ok": False, "state": "error", "final_path": None,
+                        "message": f"Could not replace leftover {final_name}: {err}"}
+            try:
+                final_path = installer.commit_build(build_root, versions_root, target_guid)
+            except Exception as e:
+                return {"ok": False, "state": "error", "final_path": None,
+                        "message": f"Could not install {final_name}: {e}"}
         return {"ok": True, "state": "installed", "final_path": final_path,
                 "message": "Roblox build installed."}
     finally:

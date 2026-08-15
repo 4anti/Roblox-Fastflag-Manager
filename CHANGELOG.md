@@ -5,240 +5,237 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.0.4] - 2026-07-15
+## [4.1.0] - 2026-08-15
 
 ### Added
 
-- **GitHub-mirrored offset fallback chain.** FFM now falls through to a
-  companion mirror repository (`4anti/Roblox-Offsets-ALL`) when a primary
-  dumper is unreachable — regional blocks, dumper downtime, or corporate
-  TLS interception. The chain now has four explicit tiers:
-  imtheo direct → imtheo mirror → other direct dumpers (souloveryall,
-  NtReadVirtualMemory, workers.dev) → mirrors of those, with the legacy
-  data/FFlags.hpp tail unchanged. Every mirror body is only consumed after
-  its sibling `meta.json.verified` reports `true` from a server-side
-  cross-check against imtheo, so an unverified mirror silently cascades
-  instead of serving stale offsets.
-- **"Contribute a source" hint** under the Roblox Version card in
-  Settings → Advanced. Opens a pre-filled issue on the main repo so users
-  can suggest new endpoints or dumper repos without leaving the app.
+- **Uninstall user data:** after the usual Yes/No prompt, Setup shows a
+  User data page on the same wizard as the rest of uninstall. Tick
+  settings, presets, custom flags, flag history, or caches to delete
+  them. Unticked items stay. Logs under `.FFlagManager\logs` are always
+  removed. Silent uninstall skips the page and only deletes logs.
+  Program Files is always removed. Roblox files are not.
 
 ### Fixed
 
-- **"Download failed — that build is already installed" false negative.**
-  When the target Roblox build was already present on disk (multiple
-  bootstrapper installs, a background Roblox auto-update, or a previous
-  successful FFM run), the version-fix modal downloaded every package,
-  hit `FileExistsError` at commit, and painted a red X over what was
-  actually the desired end state. `run_upgrade` now short-circuits when
-  the target folder is already on disk (no wasted download) and, if a
-  concurrent install lands the same build mid-download, reports it as
-  success with the correct message.
-- **Console pane could look empty for up to a second after startup.**
-  The Output panel's log poller was scheduled with `setInterval` but
-  never kicked once at boot, so its first fetch fired 800 ms after the
-  loading screen dismissed. On a slow load the app looked "dead" until
-  the first interval tick. `pollLogs()` and `updateStatus()` are now
-  called immediately alongside their `setInterval`, matching the
-  existing pattern used by `checkVersionStatus`.
-- **`build_exe.py` no longer needs `pyinstaller.exe` on PATH.** Invokes
-  PyInstaller via `sys.executable -m PyInstaller` instead of the CLI
-  shim, matching what `release.ps1` already does. Only affects the
-  optional debug-build path — `release.ps1` was unaffected.
+- **Update Now:** exits as soon as Setup starts so the installer can replace
+  FFM.exe. The app used to stay open for a second and hide the close-apps
+  prompt. Timing matches Auto Update. Canceling UAC leaves this session
+  running.
+- **Advanced version card:** no longer flashes "Roblox version fixed" then
+  snaps back to mismatch. Refresh used to always download the latest
+  client and paint "fixed" even when you were already on it; the 1-second
+  poll then compared the install to the offset dump (often still a build
+  behind). The card now splits three cases: Roblox is behind (a download
+  helps), Roblox is current and the dump is catching up (no download),
+  and a real match. Live-memory apply still skips when the dump does not
+  match the running client.
+- **Flag-file saves:** no longer bump a folder timestamp, so an older install
+  or third-party launcher tree is not picked as the current client. FFM
+  follows the running Roblox process when one is open, otherwise the
+  stock Roblox Versions folder. Updates go into stock Roblox unless that
+  folder is missing.
+- **Title-bar version chip:** matches the Advanced card. If Roblox is already
+  current and the offset dump is catching up, the chip stays green
+  instead of amber "mismatch".
+- **Available-flags sidebar:** no longer stays empty until you type a search
+  character. The first empty lookup was cached before the flag list
+  finished loading.
+- **Leftover Roblox builds:** Launch, Play, and Fix Roblox remove extra
+  `version-*` folders under stock Roblox once the current production player
+  is on disk and Roblox is closed. Stale folders (and leftover launcher
+  exes at the Versions root) could send you back to an old client.
+
+### Changed
+
+- **Launch and Play stay on production.** FFM starts `RobloxPlayerBeta.exe`
+  from the current production folder, writes the production channel so the
+  player does not hop deploys, and rewrites any `channel:` token in a join
+  URI to production.
+- **Version checker copy:** the compare label is "Comparing Roblox vs offset
+  dump". The result card lists Roblox, offset dump, and CDN latest GUIDs.
+  Match / Mismatch / Offsets behind are unchanged.
+- **App version is 4.1.0.**
 
 ## [4.0.3] - 2026-07-09
 
 ### Fixed
 
-- **Manual update path was silently broken** — with Auto Update OFF, clicking
-  "Update Now" downloaded the installer but never actually launched it. The
-  installer was being spawned through a batch script running in a detached
-  cmd child, which stripped the interactive session token needed for the UAC
-  elevation prompt (Program Files install requires admin). The consent
-  request had nowhere to bind, elevation failed silently, and nothing
-  happened. The manual path now hands the installer to the Windows shell via
-  `ShellExecuteW("open", ...)` — the same call the Auto path already uses
-  successfully. Auto behaviour unchanged.
-- **"Update Available!" pill in the title bar is now actually clickable.**
-  The pill sits inside the OS-level window drag zone
-  (`-webkit-app-region: drag` on the titlebar), which swallowed every
-  mouse-down/up on top of it — the `cursor: pointer` showed but the click
-  event never fired. Three things needed to line up for the click to land:
-  `pointer-events: auto`, `-webkit-app-region: no-drag`, and an exception in
-  the drag-shield mousedown handler. All three are now wired via a single
-  `.vc-actionable` class that toggles when the pill has something to do
-  ("Update Available!" or "Restart needed") and comes off when it's idle,
-  so window dragging still works everywhere except the actionable region.
+- **Update Now (Auto Update off):** downloaded the installer and never
+  launched it. The installer ran through a detached cmd batch, which
+  dropped the interactive session token Windows needs for UAC (Program
+  Files installs require admin). Elevation failed with no prompt. The
+  manual path now opens the installer with `ShellExecuteW("open", ...)`,
+  the same call Auto Update already uses. Auto Update is unchanged.
+- **"Update Available!" title-bar pill:** clickable again. It sat inside the
+  window drag region (`-webkit-app-region: drag`), so the pointer looked
+  clickable and the click never fired. Clicks now land via
+  `.vc-actionable` (`pointer-events: auto`, `-webkit-app-region: no-drag`,
+  and a drag-shield mousedown exception). The class is on for
+  "Update Available!" and "Restart needed", off when idle, so the rest
+  of the title bar still drags.
 
 ### Changed
 
-- **"Update Available!" pill now paints yellow** (theme `--warning`) instead
-  of the theme accent so a pending update is immediately readable at a
-  glance, and matches the "Restart needed" style already used post-download.
-  The dot next to it picks up the same warning color + glow.
-- **Update card moved from Settings → Application to Settings → Advanced**,
-  directly under the "Roblox Version" card. The title-bar pill now routes
-  there — it switches to Advanced first, then scroll-into-views the card,
-  so it can't land on a hidden section anymore. The "Auto Update" toggle
-  itself stays in Application → Application.
+- **"Update Available!" pill uses the theme `--warning` yellow instead of
+  the accent color**, matching "Restart needed". The adjacent dot uses the
+  same warning color and glow.
+- **Update card moved from Settings → Application to Settings → Advanced,
+  under the Roblox Version card.** The title-bar pill switches to Advanced
+  and scrolls the card into view. The Auto Update toggle stays in
+  Application → Application.
 
 ## [4.0.2] - 2026-07-09
 
-   ### Fixed
+### Fixed
 
-   - **Live memory writes skipped on version mismatch** — when the running
-     Roblox build no longer matches FFM's offset dump, Step 2 of Apply now
-     bails cleanly with an amber `[!] Live memory skipped — offsets target
-     'X' but Roblox is on 'Y'` line instead of writing to wrong addresses.
-     JSON step still applies; live flags resume once offsets catch up (use
-     Fix Roblox). Explains the "crash after applying" reports from users on
-     edges where Roblox auto-updated ahead of the offset dump.
-   - **Bootstrapper-only installs now get flags** — when no stock Roblox
-     install is present, FFM merges into the newest bootstrapper's
-     version dir instead of silently failing the JSON step.
-   - <anything else the 9-file diff actually fixes — offset_loader,
-     downloader, bootstrap_launch changes should each get a bullet>
-   
+- **Live memory writes skip on version mismatch.** When the running Roblox
+  build no longer matches FFM's offset dump, Step 2 of Apply bails with
+  an amber `[!] Live memory skipped` line (offsets target X, Roblox is
+  on Y) instead of writing to the wrong addresses. JSON still applies.
+  Live flags resume once offsets catch up (use Fix Roblox). This matches
+  the "crash after applying" reports from users whose Roblox auto-updated
+  ahead of the dump.
+- **Bootstrapper-only installs get flags.** With no stock Roblox install,
+  FFM merges into the newest bootstrapper version directory instead of
+  failing the JSON step with no message.
+
 ## [4.0.1] - 2026-07-08
 
 ### Added
 
-- **Automatic Launch** — opt in (Settings → Advanced) to make FFM the Roblox
-  **Play** handler. Single-exe, two-modes (Froststrap-style): Play click applies
-  flags + launches Roblox silently, no window, no admin prompt. Claims both
-  `roblox-player:` and `roblox:` schemes. Off by default; toggling off restores
-  the previous handler.
-- **DF-lock** — after live injection, the flag's metadata attribute byte is
-  patched in the heap so Roblox can't revert the value from config. Silent
-  re-verify tick catches any Roblox self-unlock.
-- **Turbo enforcement** — tight read-before-write loop catches a reverted flag
-  within one frame. Set as default for new installs.
-- **FPS unlocker** — file-based `FramerateCap = 9999` on `GlobalBasicSettings_13.xml`,
-  marked read-only. Runs silently at startup. FPS-cap FastFlags automatically
-  ignored so they can't fight it. Toggle in Advanced.
-- **Fix Roblox** — one click: refresh offsets, then download + install the
-  matching Roblox build if still mismatched. Disk-space check before download.
-  Never downgrades.
-- **Cherry Blossom theme** + themed loading screens + Matrix animation speed
-  persisted.
-- **Apply sound** — chime on manual apply and first auto-apply. Toggle + volume
-  in Appearance.
-- **Right-click preset** → opens the settings menu at cursor. New "Show in
-  folder" item reveals `presets.json` in Explorer.
-- **Kill Switch** — pause every flag at once with a global hotkey and a
+- **Automatic Launch:** opt in under Settings → Advanced to make FFM the
+  Roblox Play handler. Single exe, two modes (Froststrap-style): a Play
+  click applies flags and launches Roblox with no window and no admin
+  prompt. Claims both `roblox-player:` and `roblox:` schemes. Off by
+  default. Turning it off restores the previous handler.
+- **DF-lock:** after live injection, the flag's metadata attribute byte
+  is patched in the heap so Roblox cannot revert the value from config.
+  A silent re-verify tick catches a Roblox self-unlock.
+- **Turbo enforcement:** a tight read-before-write loop catches a
+  reverted flag within one frame. Default for new installs.
+- **FPS unlocker:** writes `FramerateCap = 9999` on
+  `GlobalBasicSettings_13.xml` and marks the file read-only. Runs at
+  startup with no prompt. FPS-cap FastFlags are ignored so they cannot
+  fight it. Toggle in Advanced.
+- **Fix Roblox:** one click when the installed build no longer matches
+  FFM's offsets (live memory stops applying). Refreshes offsets first,
+  then downloads and installs the matching Roblox build if still off.
+  Disk-space check before download. Cancelable progress bar. Production
+  builds only, and it only upgrades. It will not install an older build
+  that cannot join.
+- Cherry Blossom theme, themed loading screens, and persisted Matrix
+  animation speed.
+- Apply sound: a chime on manual apply and the first auto-apply. Toggle
+  and volume live in Appearance.
+- Right-click a preset to open the settings menu at the cursor. "Show in
+  folder" reveals `presets.json` in Explorer.
+- **Kill Switch:** pause every flag at once with a global hotkey and a
   one-click Restore banner, without restarting Roblox.
-- **Revert to Original** — right-click a flag to put its original in-game
+- **Revert to Original:** right-click a flag to put its original in-game
   value back without disabling it.
-- **Live String flags** — `FString` / `DFString` flags (telemetry and
-  analytics URLs, etc.) now apply live in memory, not just at launch.
-- **Editable presets** — open a preset to edit flag values inline and
-  stage flag deletions (with undo); pending change / delete counters show
-  what's unsaved, and a Save button appears only when there's something to
-  save.
-- **Scheduled Apply** — optional delay (0–60s) before flags are injected
-  after Roblox opens, in Settings, for flags or situations that need the
-  game to load first.
-- **Roblox version indicator** — the top bar shows your current Roblox
-  build, and Settings shows whether it matches the version FFM's offsets
-  target: green when injection is ready, yellow (with your version vs the
-  needed version) when they don't match.
-- **Fix Roblox** — when your Roblox build no longer matches FFM's offsets
-  (so flags stop applying via live memory), one click fixes it: FFM first
-  refreshes its offsets, and if your build still doesn't match, it downloads
-  and installs the matching Roblox build for you, with a progress bar you can
-  cancel. Production builds only, and it only ever **upgrades** — it never
-  downgrades you to a build that can't join.
-- **Editor change log** — changing a flag's value in the editor now prints
+- Live `FString` / `DFString` flags (telemetry and analytics URLs, and
+  similar) now apply in memory, not only at launch.
+- **Editable presets:** open a preset, edit flag values inline, and stage
+  deletions (with undo). Pending change and delete counters show what is
+  unsaved. Save appears only when there is something to save.
+- **Scheduled Apply:** optional 0-60s delay after Roblox opens before
+  flags are injected, for flags or situations that need the game to load
+  first. Lives in Settings.
+- **Roblox version indicator:** the top bar shows the current Roblox
+  build. Settings shows whether it matches the build FFM's offsets
+  target: green when injection is ready, yellow (installed vs needed)
+  when they differ.
+- **Editor change log:** changing a flag's value in the editor prints
   `old -> new` in the Output console.
-- **Save imported flags as a preset** — after importing in the editor you
-  can save them as a named, color-tagged preset (or cancel).
-- **Remove all unavailable flags** with one trash button (undoable).
-- **Maximize / Restore** window button in the title bar.
-- Presets can now be imported from `.txt` files, not just `.json`.
+- After importing flags in the editor, save them as a named, color-tagged
+  preset, or cancel.
+- One trash button removes all unavailable flags (undoable).
+- Maximize / Restore button in the title bar.
+- Presets can be imported from `.txt` files, not only `.json`.
 
 ### Changed
 
-- **Settings** re-organized into pinned category pills (Advanced / Application /
-  About), grouped into labelled cards. Search sidebar hidden on Presets and
-  Settings so those pages get the full width.
-- **Smarter preset switching** — only reverts flags the new preset doesn't use,
-  writes the new ones in place, leaves untouched flags alone. Fewer memory
+- Settings uses pinned category pills (Advanced / Application / About)
+  and labelled cards. Search sidebar is hidden on Presets and Settings
+  so those pages get the full width.
+- Preset switching only reverts flags the new preset does not use, writes
+  the new ones in place, and leaves untouched flags alone. Fewer memory
   writes, no mid-switch flicker.
-- **Preset export "JSON — flags only"** is now a flat `{ "FlagName": "value" }`
-  file, the format Roblox/Bloxstrap consume directly. The old "JSON — full"
-  option was removed; Base64 remains for full-fidelity backup.
-- **Faster website joins** — when the installed build is known-latest, the
-  Play handler skips both pre-launch network checks and launches immediately.
-- **Faster repeat Fix Roblox** — per-file hash cache; unchanged files aren't
-  re-hashed on retry.
-- **Version pill (top-right)** opens Settings → Advanced directly.
-- **Kill Switch** replaced by the **Flags on / Flags off** pill in the header,
-  matching the Auto Apply toggle's visual grammar. One click pauses every
-  flag; a second click restores them. Rapid clicks are debounced.
-- **History limit** — defaults to 20, range Off–100 (no more Unlimited).
-- **Auto-apply is now ON by default** — added flags apply to the running
-  game right away.
-- **Switching presets now reverts the previous preset first** — applying
-  preset B no longer leaves preset A's leftover flags active in the running
-  game; you get exactly the new preset's flags.
-- Adding a flag is instant now — no more freezing or "busy applying"
-  failures while a previous apply is still running.
-- The per-flag **"Un-apply" bind is now a "Toggle" bind**: press once to
-  revert the flag, press again to re-apply it.
-- **License** changed from MIT to **PolyForm Noncommercial 1.0.0**. Personal
-  and hobby use stay free; commercial redistribution or forks that ship with
-  ads removed are no longer permitted. Full text in `LICENSE`.
-- Installer version stays in sync automatically (no more stale number).
+- Preset export "JSON - flags only" is a flat `{ "FlagName": "value" }`
+  file, the format Roblox and Bloxstrap consume directly. The old
+  "JSON - full" option is gone. Base64 remains for a full backup.
+- Faster website joins: when the installed build is already latest, the
+  Play handler skips both pre-launch network checks and launches
+  immediately.
+- Faster repeat Fix Roblox via a per-file hash cache. Unchanged files are
+  not re-hashed on retry.
+- Version pill (top-right) opens Settings → Advanced directly.
+- Kill Switch is now the Flags on / Flags off pill in the header, matching
+  the Auto Apply toggle. One click pauses every flag. A second click
+  restores them. Rapid clicks are debounced.
+- History limit defaults to 20, range Off-100. Unlimited is gone.
+- Auto-apply is ON by default. Added flags apply to the running game
+  right away.
+- Switching presets reverts the previous preset first. Applying preset B
+  no longer leaves preset A's leftover flags active in the running game.
+- Adding a flag is instant. No freeze or "busy applying" failure while a
+  previous apply is still running.
+- The per-flag Un-apply bind is now Toggle: press once to revert, press
+  again to re-apply.
+- License changed from MIT to PolyForm Noncommercial 1.0.0. Personal and
+  hobby use stay free. Commercial redistribution is not permitted. Full
+  text in `LICENSE`.
+- Installer version stays in sync automatically.
 
 ### Fixed
 
-- **FFM no longer overwrites other bootstrappers' settings or mods** — flag
-  file-writes are scoped to the **stock** Roblox install only. Third-party
-  bootstrapper installs (Bloxstrap/Fishstrap/Froststrap/Voidstrap/Plexity) get
-  memory injection instead, so their `ClientAppSettings.json` + mods stay
-  untouched. If a third-party owns the Play handler, FFM takes it over only to
-  correct a version mismatch, then hands it back.
-- **Play button silently doing nothing** — a `roblox-player` scheme with a
-  launch command but no `URL Protocol` marker made browsers ignore Play. FFM
-  now self-heals the marker on startup without changing who owns the handler.
-- **Applying flags / switching presets no longer freezes Roblox** — the
-  background enforcer + apply could race on memory writes and the address
-  cache, corrupting Roblox. Writes are now serialized; the enforcer stands
-  down for the duration of an apply.
-- **`FString` / `DFString` values ≥16 chars no longer crash Roblox** on
-  in-game edit. Long strings apply via file at next launch; short strings still
-  apply live.
-- **"Launch Roblox" now actually opens Roblox** — was launching
-  `RobloxPlayerBeta.exe` with no args (which modern Roblox exits immediately).
-  Now uses `-app`, matching the official shortcut.
-- **Version indicator honesty** — top-bar pill and Settings bar now reflect a
-  real comparison of installed build vs FFM's target build, and surface the
-  amber mismatch warning + Fix Roblox button when they differ (was almost
-  always green regardless).
-- **Window blank/gray after minimize** — WebView2's native occlusion was
-  suspending render on minimize/occlude. Disabled it; view keeps painting and
+- Flag file-writes are scoped to the stock Roblox install. Third-party
+  bootstrapper installs (Bloxstrap, Fishstrap, Froststrap, Voidstrap,
+  Plexity) get memory injection instead, so their `ClientAppSettings.json`
+  and mods stay untouched. If a third-party owns the Play handler, FFM
+  takes it over only to correct a version mismatch, then hands it back.
+- Play button doing nothing. A `roblox-player` scheme with a launch
+  command but no `URL Protocol` marker made browsers ignore Play. FFM
+  writes the marker back on startup without changing who owns the handler.
+- Applying flags or switching presets no longer freezes Roblox. The
+  background enforcer and apply could race on memory writes and the
+  address cache. Writes are serialized. The enforcer stands down for the
+  duration of an apply.
+- `FString` / `DFString` values of 16 characters or more no longer crash
+  Roblox on in-game edit. Long strings apply via file at next launch.
+  Short strings still apply live.
+- Launch Roblox actually opens Roblox. It was starting
+  `RobloxPlayerBeta.exe` with no args, which modern Roblox exits
+  immediately. Now uses `-app`, matching the official shortcut.
+- Top-bar pill and Settings bar compare the installed build to FFM's
+  target build and show the amber mismatch warning plus Fix Roblox when
+  they differ. They were almost always green regardless.
+- Window blank or gray after minimize. WebView2's native occlusion was
+  suspending render on minimize. That is off. The view keeps painting and
   restores cleanly.
-- **Leftover flags on disk** — with Auto Apply off + Roblox closed, every
-  `ClientAppSettings.json` (each launcher's version folder + legacy global) is
-  now cleared instantly. Was only cleared on specific events, so manual apply
-  or close-to-tray could leave flags behind.
-- **Editor tab open** — virtualized list, ~7× faster with hundreds of flags.
-- **Presets tab flicker** — cards no longer blank out then repopulate; single
+- Leftover flags on disk. With Auto Apply off and Roblox closed, every
+  `ClientAppSettings.json` (each launcher's version folder plus the
+  legacy global) is cleared immediately. Clearing only ran on specific
+  events, so a manual apply or close-to-tray could leave flags behind.
+- Editor tab uses a virtualized list. About 7x faster with hundreds of
+  flags.
+- Presets tab flicker. Cards no longer blank out then repopulate. One
   refresh update.
-- **Reordering presets auto-scrolls** near the list edges.
-- **Clearer launch failure messages** — "closed right after launch" vs "running
-  but memory unreadable" vs Windows-level errors (access denied, missing exe).
-- **Clearer apply count for FPS flags** — Output notes the count skipped by the
-  FPS unlocker so the number doesn't look like a silent loss.
-- **You can resize the window again** — frameless edge/corner resizing was
-  completely broken, and the window "walked" across the screen on scaled
-  (HiDPI) displays. Both fixed.
+- Reordering presets auto-scrolls near the list edges.
+- Launch failure messages distinguish "closed right after launch",
+  "running but memory unreadable", and Windows-level errors (access
+  denied, missing exe).
+- Apply count for FPS flags. Output notes how many the FPS unlocker
+  skipped, so the number does not look like a silent loss.
+- Window resizing works again. Frameless edge and corner resizing was
+  broken, and the window walked across the screen on scaled (HiDPI)
+  displays.
 - Console log no longer freezes after a lot of output.
-- "LIVE" status dots no longer linger after Roblox is closed.
-- **CI:** install `pytest` in the release workflow so the sealed-source
-  verify step no longer fails with `No module named pytest`. (This is the
-  reason 4.0.0 never shipped; 4.0.1 is the first published 4.x release.)
-
+- LIVE status dots no longer linger after Roblox is closed.
+- CI: install `pytest` in the release workflow so the verify step no
+  longer fails with `No module named pytest`. That is why 4.0.0 never
+  shipped. 4.0.1 is the first published 4.x release.
 - Mouse side-buttons (back / forward / media) now work while FFM is
   focused.
 - Minor right-click menu glitches (duplicate remove button, stray `>`
@@ -249,63 +246,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Offset source priority: the GitHub mirror (`data/FFlags.hpp`) is now
-  tried **before** `offsets.ntgetwritewatch.workers.dev` in the fetch
-  chain (`offset_sources.py`). On Roblox builds where imtheo's dumper is
-  offline, workers.dev serves a dump whose **numeric (FInt/FFloat)
-  pointers are wrong** — they resolve into read-only `.rdata`, so those
-  flags silently fell back to JSON-only instead of applying via live
-  memory. Prioritizing our verified mirror fixes this. Revert when
-  imtheo's dumper is back for the current build.
+  tried before `offsets.ntgetwritewatch.workers.dev` in the fetch chain
+  (`offset_sources.py`). On Roblox builds where imtheo's dumper is
+  offline, workers.dev serves a dump whose numeric (FInt/FFloat)
+  pointers are wrong. They resolve into read-only `.rdata`, so those
+  flags fell back to JSON-only instead of live memory. Prioritizing the
+  verified mirror fixes this. Revert when imtheo's dumper is back for
+  the current build.
 - `data/FFlags.hpp` updated to a Polaris-format dump for
-  `version-4b6315bf1f0a4dbb` (13,227 offsets). Every pointer was verified
+  `version-4b6315bf1f0a4dbb` (13,227 offsets). Every pointer was checked
   against the live executable to resolve to writable `.data` with the
   correct default value (e.g. CameraMaxZoomDistance=400,
   VoiceChatVolumeThousandths=1000). A small `FFlagOffsets` struct block
-  is included so the existing loader/validator accepts it with no code
-  change; the bundled baseline is refreshed to match.
+  is included so the existing loader accepts it with no code change. The
+  bundled baseline is refreshed to match.
 - Offset fetch chain now uses `offsets.imtheo.lol/FFlags.hpp` as the
   secondary imtheo source in place of `imtheo.lol/Offsets/FFlags.hpp`.
-  Both serve byte-identical Format A content; the new host is the
+  Both serve byte-identical Format A content. The new host is the
   current canonical mirror. Applied to the in-app loader
   (`offset_sources.py`) and the `mirror-offsets.yml` GitHub Action
   (both the `.hpp` and `.json` chains).
-- The logo's "NNK+ FastFlags Available!" count is now generated from
+- The logo's "NNK+ FastFlags Available!" count is generated from
   `data/FFlags.hpp` by `update_version.py` at release time (was a
   hardcoded "13K+"), so it stays in sync with the actual offset count.
 
 ### Fixed
 
-- Numeric flags (FInt/FFloat — camera zoom, simulation radius, sender
-  rates, etc.) apply via **live memory** again instead of being marked
-  "JSON-only". They were JSON-only because the workers.dev mirror pointed
-  them at read-only `.rdata`; the corrected `data/FFlags.hpp` points them
-  at the real writable storage. (Boolean flags were unaffected — their
-  pointers were always correct.)
-- `JSON-ONLY` log lines now include the region detail (flag type,
-  address, page protection) instead of just the flag name, so an
-  unwritable pointer can be diagnosed at a glance (`flag_manager.py`).
-- AOB scanner robustness: `find_pattern` now walks committed, readable
-  memory regions via `VirtualQueryEx` and tolerates partial reads
-  (`STATUS_PARTIAL_COPY`) instead of skipping an entire 10 MB chunk
-  whenever a single page in it is unreadable. The old all-or-nothing
-  read silently skipped large spans of the (Hyperion-protected) Roblox
-  image, which could make valid signatures unfindable. Adds a `[scan]`
-  coverage log line (regions scanned / read failures) to distinguish a
-  genuinely-absent pattern from a scan foiled by unreadable memory.
+- Numeric flags (FInt/FFloat: camera zoom, simulation radius, sender
+  rates, and similar) apply via live memory again instead of being marked
+  JSON-only. They were JSON-only because the workers.dev mirror pointed
+  them at read-only `.rdata`. The corrected `data/FFlags.hpp` points them
+  at the real writable storage. Boolean flags were unaffected. Their
+  pointers were always correct.
+- `JSON-ONLY` log lines now include region detail (flag type, address,
+  page protection) instead of just the flag name, so an unwritable
+  pointer can be diagnosed from the log (`flag_manager.py`).
+- AOB scanner: `find_pattern` now walks committed, readable memory
+  regions via `VirtualQueryEx` and tolerates partial reads
+  (`STATUS_PARTIAL_COPY`) instead of skipping an entire 10 MB chunk when
+  a single page in it is unreadable. The old all-or-nothing read skipped
+  large spans of the Hyperion-protected Roblox image, which could hide
+  valid signatures. Adds a `[scan]` coverage log line (regions scanned /
+  read failures) to distinguish a missing pattern from a scan blocked by
+  unreadable memory.
 - FPS unlock (`TaskSchedulerTargetFps`) applies again. It now writes the
   flag's dumped offset via the normal live-memory path (a dynamic value
-  Roblox re-reads at runtime) instead of a hardcoded byte-pattern hook whose
-  signature went stale on current (Hyperion) builds. The stale hook made the
-  flag wrongly show as "failed / Unavailable" even though the value is
-  writable and takes effect. Note: the JSON FFlag method for FPS no longer
-  works on current Roblox — FFM applies this one via memory.
-- Mirror workflow no longer commits truncated/stub offset dumps. When the
-  upstream dumper serves a near-empty file mid-Roblox-update (only the 3
-  `FFlagList` struct offsets), the auto-refresh used to accept it — nuking
-  `data/FFlags.hpp` and collapsing the README badge to "3". The fetch now
-  requires >=500 offsets, the badge is derived from the committed `.hpp`
-  (not the JSON, which some mirrors don't provide a count for), and
-  `update_version.py` refuses to bundle a <500-offset baseline at release.
+  Roblox re-reads at runtime) instead of a hardcoded byte-pattern hook
+  whose signature went stale on current Hyperion builds. The stale hook
+  made the flag show as failed / Unavailable even though the value is
+  writable and takes effect. The JSON FFlag method for FPS no longer
+  works on current Roblox. FFM applies this one via memory.
+- Mirror workflow no longer commits truncated or stub offset dumps. When
+  the upstream dumper serves a near-empty file mid-Roblox-update (only
+  the 3 `FFlagList` struct offsets), auto-refresh used to accept it,
+  wiping `data/FFlags.hpp` and collapsing the README badge to "3". Fetch
+  now requires at least 500 offsets. The badge is derived from the
+  committed `.hpp` (not the JSON, which some mirrors do not count).
+  `update_version.py` refuses to bundle a baseline under 500 offsets at
+  release.
 
 ## [3.3.7] - 2026-05-20
 
@@ -319,70 +317,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   3. GitHub mirror via Python requests
   4. GitHub mirror via `curl.exe`
   5. Disk cache (`~/.FFlagManager/offsets_cache.json`)
-  6. Bundled baseline (shipped inside the .exe — guaranteed to work
-     even on first run with no network)
-- `data/FFlags.hpp` GitHub mirror, auto-refreshed every ~6 hours by a
-  new `.github/workflows/mirror-offsets.yml` workflow.
-- `src/data/FFlags_baseline.hpp` shipped with every installer build;
+  6. Bundled baseline (shipped inside the .exe, works on first run with
+     no network)
+- `data/FFlags.hpp` GitHub mirror, auto-refreshed every ~6 hours by
+  `.github/workflows/mirror-offsets.yml`.
+- `src/data/FFlags_baseline.hpp` shipped with every installer build,
   refreshed at release time by `scripts/update_version.py`.
 - Captive-portal / proxy-error rejection: a fetched body must parse to
-  >=500 flags AND a valid `FFlagList.Pointer` before being accepted,
-  preventing AV intercept HTML from poisoning the disk cache.
-- Per-source startup telemetry line (`[OK] Offsets source: <id>, ...`)
-  plus `offset_source` and `baseline_stale` fields on the loading
-  status API for the UI to surface.
+  at least 500 flags and a valid `FFlagList.Pointer` before being
+  accepted, so AV intercept HTML cannot poison the disk cache.
+- Per-source startup log line (`[OK] Offsets source: <id>, ...`) plus
+  `offset_source` and `baseline_stale` fields on the loading status API
+  for the UI.
 
 ### Changed
 
-- Cache file relocated from the install directory (`Program Files\...`)
-  to `~/.FFlagManager/offsets_cache.json`. The old in-repo location was
-  not writable by non-admin processes after Inno install, which
-  silently disabled the cache fallback for many users. One-shot
-  migration copies the old file forward on first run.
-- Cache writes are now atomic (write-to-tmp + `os.replace`) so a crash
+- Cache file moved from the install directory (`Program Files\...`) to
+  `~/.FFlagManager/offsets_cache.json`. The old in-repo location was not
+  writable by non-admin processes after Inno install, which silently
+  disabled the cache fallback for many users. First run copies the old
+  file forward once.
+- Cache writes are atomic (write-to-tmp + `os.replace`) so a crash
   mid-write cannot corrupt the cache.
-- Cleaner error messages: long `HTTPSConnectionPool(...)` tracebacks
-  are replaced with short per-source `[!] host via path: reason` lines.
-- Redesigned GitHub and Discord buttons in Settings > About with SVG
-  icons (Octocat and Discord mark) in a tall card-style layout.
-- Developer avatar in About section now fetches the real GitHub profile
-  picture, falling back to the static "4" if offline.
+- Long `HTTPSConnectionPool(...)` tracebacks are replaced with short
+  per-source `[!] host via path: reason` lines.
+- GitHub and Discord buttons in Settings > About use SVG icons (Octocat
+  and Discord mark) in a tall card layout.
+- Developer avatar in About fetches the real GitHub profile picture,
+  falling back to the static "4" if offline.
 
 ### Fixed
 
-- White-on-white hover bug affecting all subtle buttons in light theme
-  (text and SVG icons were invisible on hover).
+- White-on-white hover on all subtle buttons in light theme (text and
+  SVG icons were invisible on hover).
 
 ## [3.3.6] - 2026-05-16
 
 ### Added
 
 - "Clear allowed FFlags on exit / when Roblox closes" toggle in
-  Settings (default ON for new installs). When enabled, FFM
-  overwrites `ClientAppSettings.json` with `{}` across every
-  detected Roblox version directory in three situations:
+  Settings (default ON for new installs). When enabled, FFM overwrites
+  `ClientAppSettings.json` with `{}` across every detected Roblox
+  version directory in three situations:
   - the app exits (UI exit button or tray Exit),
   - Auto Apply is turned OFF while Roblox is not running, and
-  - the running Roblox process exits (one-shot transition
-    detected by the background monitor).
-  This ensures no leftover allowed FFlags take effect on the next
-  Roblox launch when FFM isn't actively applying.
-- `RobloxManager.clear_fflags_json()` helper that mirrors the
-  existing scatter-sync write path used by `apply_fflags_json`.
+  - the running Roblox process exits (one-shot transition detected by
+    the background monitor).
+  Leftover allowed FFlags then cannot take effect on the next Roblox
+  launch when FFM is not applying.
+- `RobloxManager.clear_fflags_json()` helper that mirrors the existing
+  scatter-sync write path used by `apply_fflags_json`.
 
 ### Removed
 
-- "Emergency Revert" / "Execute Panic Revert" button and the
-  underlying `panic_revert` API method. Restoring the original
-  values of arbitrary FFlags requires a complete defaults table,
-  which FFM does not have, so the button could not honour its
-  promise. The new auto-clear toggle is the supported kill-switch.
-- "Rescan FFlag Offsets" button (and its `rescan_offsets` API
-  method). FFM has sourced offsets from Imtheo since 3.3.5, so the
-  user-facing rescan no longer reflects how the app actually
-  discovers flag locations. The Settings → Safety & Reset section
-  is removed as a result. Internal scanning helpers used by the
-  normal apply flow are unchanged.
+- "Emergency Revert" / "Execute Panic Revert" button and the underlying
+  `panic_revert` API method. Restoring original values of arbitrary
+  FFlags needs a complete defaults table, which FFM does not have, so
+  the button could not do what it claimed. The auto-clear toggle is the
+  supported kill-switch.
+- "Rescan FFlag Offsets" button (and its `rescan_offsets` API method).
+  FFM has sourced offsets from Imtheo since 3.3.5, so the user-facing
+  rescan no longer matches how the app finds flag locations. Settings →
+  Safety & Reset is removed as a result. Internal scanning helpers used
+  by the normal apply flow are unchanged.
 
 ## [3.3.5] - 2026-05-03
 

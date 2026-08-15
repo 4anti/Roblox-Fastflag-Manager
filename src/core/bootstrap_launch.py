@@ -57,6 +57,20 @@ def _restore_third_party_if_transient():
         log(f"[!] Transient handler restore skipped: {e}", (255, 200, 100))
 
 
+def _prune_stock_if_closed(production_guid):
+    """Remove leftover stock version folders when no Roblox process is live."""
+    if not production_guid:
+        return
+    try:
+        from src.core.roblox_manager import RobloxManager
+        if RobloxManager.is_roblox_running():
+            return
+        from src.core.version_changer import fixer
+        fixer.prune_stock_non_production(production_guid)
+    except Exception:
+        pass
+
+
 def launch_join(uri):
     """
     Version-fix (only on a fixable mismatch) then launch the matching Roblox build
@@ -74,10 +88,12 @@ def launch_join(uri):
         installed = RobloxManager.get_roblox_version_string()
         target = installed
 
-        # Fast path: build already confirmed latest -> launch now, no network.
+        # Fast path: build already confirmed latest -> write flags, launch, no network.
         if fastpath.is_up_to_date(installed):
             try:
                 log("[*] Fast join: build already up to date, launching...", (100, 255, 255))
+                _prune_stock_if_closed(installed)
+                write_startup_flags()
                 ok, _ = rm.launch_specific_version(installed, args=uri)
                 if ok:
                     return
@@ -90,18 +106,25 @@ def launch_join(uri):
             # build; the apply-flow guard skips memory writes in that window,
             # falling back to JSON-only. See flag_manager.apply_flags_hybrid.
             latest = deployment.get_latest_production_guid()
-            if latest and installed != latest:
-                root = RobloxManager.get_versions_root()
-                cache = RobloxManager.get_all_roblox_version_dirs() or []
-                if root:
-                    log(f"[*] Syncing Roblox to latest production build ({latest}) "
-                        "before join...", (100, 255, 255))
-                    result = fixer.run_upgrade(latest, root, cache)
-                    if result.get("ok"):
-                        target = latest
+            if latest:
+                if (not installed or installed == "unknown" or installed != latest):
+                    root = RobloxManager.resolve_download_versions_root()
+                    cache = RobloxManager.get_all_roblox_version_dirs() or []
+                    if root:
+                        log(f"[*] Syncing Roblox to latest production build ({latest}) "
+                            "before join...", (100, 255, 255))
+                        result = fixer.run_upgrade(latest, root, cache)
+                        if result.get("ok"):
+                            target = latest
+                else:
+                    target = latest
+                _prune_stock_if_closed(latest)
         except Exception as e:
             log(f"[!] Pre-join update skipped: {e}", (255, 200, 100))
 
+        # Flags AFTER any upgrade so a freshly created version folder gets
+        # ClientAppSettings.json. A failure here never blocks the join.
+        write_startup_flags()
         try:
             ok, _ = rm.launch_specific_version(target or installed, args=uri)
             if not ok and target != installed:
@@ -114,7 +137,8 @@ def launch_join(uri):
 
 
 def bootstrap_join(uri):
-    """Standalone path (full app NOT running): apply file-based flags, then
-    launch. This is what makes clicking Play apply flags without opening FFM."""
-    write_startup_flags()
+    """Standalone path (full app NOT running): version-sync, then write
+    file-based flags, then launch. Flags live inside launch_join so a newly
+    created version folder gets ClientAppSettings.json before the player starts.
+    This is what makes clicking Play apply flags without opening FFM."""
     launch_join(uri)

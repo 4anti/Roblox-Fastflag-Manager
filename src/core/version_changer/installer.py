@@ -80,6 +80,7 @@ def commit_build(staging_root: str, versions_root: str, guid: str) -> str:
     Raises if the destination already exists (caller decides on re-install).
     """
     final_name = guid if guid.startswith("version-") else f"version-{guid}"
+    os.makedirs(versions_root, exist_ok=True)
     final_path = os.path.join(versions_root, final_name)
     if os.path.exists(final_path):
         raise FileExistsError(final_path)

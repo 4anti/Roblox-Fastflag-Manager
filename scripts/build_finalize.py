@@ -29,7 +29,7 @@ def hash_first_n(path, n):
 def hash_html_script_region(path):
     with open(path, 'rb') as f:
         data = f.read()
-    idx = data.find(b'<script src="intersection-polyfill.js')
+    idx = data.find(b'<script src="Sortable.min.js')
     if idx < 0:
         raise ValueError(f'script tag not found in {path}')
     region = data[max(0, idx - 32):idx + 224]
@@ -96,7 +96,7 @@ def finalize_project(project_root):
     """Computes checksums and stamps every placeholder in the source tree."""
     p = os.path.join
 
-    js_path = p(project_root, 'src', 'gui', 'ui', 'intersection-polyfill.js')
+    js_path = p(project_root, 'src', 'gui', 'ui', 'Sortable.min.js')
     html_path = p(project_root, 'src', 'gui', 'ui', 'index.html')
     main_pyw_path = p(project_root, 'main.pyw')
 
@@ -188,7 +188,7 @@ def validate(project_root):
         import unittest.mock as mock
         with mock.patch.object(helpers, '_is_frozen', return_value=True):
             helpers._rot_reset()
-            helpers.get_resource_path('src/gui/ui/intersection-polyfill.js')
+            helpers.get_resource_path('src/gui/ui/Sortable.min.js')
             main_window._shard_s2_check()
             preset_manager._shard_s4_check()
             api._shard_s5_check()

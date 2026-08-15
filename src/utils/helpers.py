@@ -5,8 +5,8 @@ import sys
 # ─── S1: First-1024-bytes polyfill check (sealed at build) ───
 # Placeholders below are overwritten by scripts/build_finalize.py.
 # In dev they are all-zero (no check effective).
-_SHARD_S1_A = bytes([45, 7, 180, 41, 83, 63, 10, 195, 27, 75, 247, 20, 141, 196, 31, 165, 96, 41, 88, 142, 175, 59, 53, 92, 224, 255, 233, 86, 24, 49, 211, 156])
-_SHARD_S1_B = bytes([164, 156, 154, 36, 162, 178, 156, 90, 172, 102, 182, 226, 63, 25, 207, 124, 137, 166, 243, 55, 198, 229, 119, 99, 207, 40, 229, 164, 51, 70, 112, 45])
+_SHARD_S1_A = bytes([3, 190, 173, 118, 93, 159, 142, 114, 78, 71, 111, 254, 80, 70, 185, 33, 208, 108, 16, 214, 2, 77, 158, 205, 109, 29, 77, 190, 124, 144, 40, 129])
+_SHARD_S1_B = bytes([80, 42, 3, 201, 124, 30, 142, 31, 116, 92, 106, 32, 209, 70, 201, 199, 213, 233, 158, 174, 187, 62, 189, 68, 62, 12, 72, 196, 77, 248, 64, 94])
 _SHARD_S1_EXPECTED = None
 _shard_s1_fired = False
 
@@ -50,7 +50,7 @@ def get_resource_path(relative_path):
 
     full = _os.path.join(base_path, relative_path)
     if _is_frozen() and relative_path.replace('\\', '/').endswith(
-            'src/gui/ui/intersection-polyfill.js'):
+            'src/gui/ui/Sortable.min.js'):
         _shard_s1_check(full)
     return full
 

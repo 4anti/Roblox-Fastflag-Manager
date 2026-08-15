@@ -3,7 +3,7 @@
 
 #define MyAppName "Roblox FFlag Manager"
 ; Kept in sync with version.json by scripts/update_version.py at release time.
-#define MyAppVersion "4.0.4"
+#define MyAppVersion "4.1.0"
 #define MyAppPublisher "4anti"
 #define MyAppURL "https://github.com/4anti/Roblox-Fastflag-Manager"
 #define MyAppExeName "FFM.exe"
@@ -79,57 +79,94 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait
 
 [Code]
-{ Uninstall clean-up. Two jobs:
-   1) Remove FFM's own roblox:// and roblox-player:// handlers so we don't leave
-      an orphaned launcher behind. Only deletes a key if it still points at FFM
-      (the in-app "disable bootstrapper" restores a backed-up third-party handler
-      via a different code path — this is the safety net for uninstall).
-   2) Wipe user SETTINGS and LOGS from %USERPROFILE%\.FFlagManager\, but KEEP
-      user's saved presets so a reinstall picks up right where they left off.
-      This mirrors the intent: "clean install other than the user's saved
-      presets." Runs in usPostUninstall so Inno's own file removal has already
-      completed and can't fight with ours. }
+var
+  RemoveSettings: Boolean;
+  RemovePresets: Boolean;
+  RemoveCustomFlags: Boolean;
+  RemoveHistory: Boolean;
+  RemoveCaches: Boolean;
+  UserDataBox: TNewCheckListBox;
+  UserDataPage, DetailsPage: TNewNotebookPage;
+  UninstallButton, DetailsBtn: TNewButton;
+  OrigPageName, OrigPageDesc: String;
+  OrigCancelEnabled: Boolean;
+  OrigCancelModal: Integer;
 
-{ Best-effort delete: swallow failures (missing file, locked file, permission)
-  so a single hiccup doesn't abort the whole uninstall clean-up. }
 procedure TryDeleteFile(const Path: String);
 begin
   if FileExists(Path) then
     DeleteFile(Path);
 end;
 
-procedure WipeUserDataKeepingPresets;
+procedure WipeUserLogs(const UserDir: String);
 var
-  UserDir, LogsDir: String;
+  LogsDir: String;
+begin
+  LogsDir := UserDir + '\logs';
+  if DirExists(LogsDir) then
+    DelTree(LogsDir, True, True, True);
+end;
+
+procedure WipeUserSettings(const UserDir: String);
+begin
+  TryDeleteFile(UserDir + '\settings.json');
+  TryDeleteFile(UserDir + '\last_version.txt');
+  TryDeleteFile(UserDir + '\install.id');
+  TryDeleteFile(UserDir + '\install.id.tmp');
+end;
+
+procedure WipeUserPresets(const UserDir: String);
+begin
+  TryDeleteFile(UserDir + '\presets.json');
+end;
+
+procedure WipeUserCustomFlags(const UserDir: String);
+begin
+  TryDeleteFile(UserDir + '\user_flags.json');
+end;
+
+procedure WipeUserHistory(const UserDir: String);
+begin
+  TryDeleteFile(UserDir + '\fflags_history.json');
+end;
+
+procedure WipeUserCaches(const UserDir: String);
+var
+  I: Integer;
+begin
+  TryDeleteFile(UserDir + '\known_flags.json');
+  TryDeleteFile(UserDir + '\FFlags.h');
+  TryDeleteFile(UserDir + '\offsets_cache.json');
+  for I := 1 to 10 do
+    TryDeleteFile(UserDir + '\offsets_cache_v' + IntToStr(I) + '.json');
+  TryDeleteFile(UserDir + '\download_hashcache.json');
+  TryDeleteFile(UserDir + '\join_fastpath.json');
+end;
+
+procedure WipeUserData(const DoSettings, DoPresets, DoCustomFlags, DoHistory, DoCaches: Boolean);
+var
+  UserDir: String;
 begin
   UserDir := ExpandConstant('{%USERPROFILE}\.FFlagManager');
   if not DirExists(UserDir) then
     Exit;
 
-  { Settings / session-state files — all removed. }
-  TryDeleteFile(UserDir + '\settings.json');
-  TryDeleteFile(UserDir + '\fflags_history.json');
-  TryDeleteFile(UserDir + '\known_flags.json');
-  TryDeleteFile(UserDir + '\user_flags.json');
-  TryDeleteFile(UserDir + '\FFlags.h');
-  TryDeleteFile(UserDir + '\last_version.txt');
-  TryDeleteFile(UserDir + '\install.id');
-  { HMAC-integrity companion file, if present. }
-  TryDeleteFile(UserDir + '\install.id.tmp');
+  WipeUserLogs(UserDir);
 
-  { Entire logs directory (fflag_manager.log + .log_state + rotated files). }
-  LogsDir := UserDir + '\logs';
-  if DirExists(LogsDir) then
-    DelTree(LogsDir, True, True, True);
+  if DoSettings then
+    WipeUserSettings(UserDir);
+  if DoPresets then
+    WipeUserPresets(UserDir);
+  if DoCustomFlags then
+    WipeUserCustomFlags(UserDir);
+  if DoHistory then
+    WipeUserHistory(UserDir);
+  if DoCaches then
+    WipeUserCaches(UserDir);
 
-  { INTENTIONALLY LEFT ALONE: presets.json — the user's saved preset packs.
-    Reinstalling FFM restores their previously saved presets so their work
-    survives an uninstall. This is the whole point of the "keep presets"
-    behaviour. }
+  RemoveDir(UserDir);
 end;
 
-{ Delete one Roblox URL-scheme key, but ONLY if it still points at FFM. Leaves a
-  third-party bootstrapper's handler untouched. }
 procedure RemoveFFMHandler(const Scheme: String);
 var
   Cmd: String;
@@ -141,17 +178,219 @@ begin
   end;
 end;
 
+procedure ShowUserDataPage(Sender: TObject); forward;
+procedure ShowDetailsPage(Sender: TObject); forward;
+
+procedure FillDetailsList(Box: TNewCheckListBox);
+begin
+  Box.AddGroup('Always removed', 'logs\', 0, nil);
+  Box.AddGroup('Application settings', 'settings.json, last_version.txt, install.id', 0, nil);
+  Box.AddGroup('Saved presets', 'presets.json', 0, nil);
+  Box.AddGroup('Custom flags', 'user_flags.json', 0, nil);
+  Box.AddGroup('Flag history', 'fflags_history.json', 0, nil);
+  Box.AddGroup('Caches', 'known_flags.json, FFlags.h, offsets_cache*.json, hash cache, join fast path', 0, nil);
+  Box.AddGroup('Not offered', 'Roblox ClientAppSettings.json, Roblox install folders', 0, nil);
+end;
+
+procedure ShowUserDataPage(Sender: TObject);
+begin
+  UninstallProgressForm.InnerNotebook.ActivePage := UserDataPage;
+  UninstallProgressForm.PageNameLabel.Caption := 'User data';
+  UninstallProgressForm.PageDescriptionLabel.Caption :=
+    'Choose extra files to remove from your profile.';
+  UninstallButton.Visible := True;
+  DetailsBtn.Caption := 'Details...';
+  DetailsBtn.OnClick := @ShowDetailsPage;
+end;
+
+procedure ShowDetailsPage(Sender: TObject);
+begin
+  UninstallProgressForm.InnerNotebook.ActivePage := DetailsPage;
+  UninstallProgressForm.PageNameLabel.Caption := 'Details';
+  UninstallProgressForm.PageDescriptionLabel.Caption :=
+    'Files under the user data folder.';
+  UninstallButton.Visible := True;
+  DetailsBtn.Caption := 'Back';
+  DetailsBtn.OnClick := @ShowUserDataPage;
+end;
+
+procedure InitializeUninstallProgressForm();
+var
+  Intro, AlsoLbl, Footer: TNewStaticText;
+  FolderImg: TBitmapImage;
+  PathEdit: TNewEdit;
+  DetailsBox: TNewCheckListBox;
+  IconFile: String;
+  Left, Width, NextTop, BtnW: Integer;
+begin
+  if UninstallSilent then
+    Exit;
+
+  OrigPageName := UninstallProgressForm.PageNameLabel.Caption;
+  OrigPageDesc := UninstallProgressForm.PageDescriptionLabel.Caption;
+  OrigCancelEnabled := UninstallProgressForm.CancelButton.Enabled;
+  OrigCancelModal := UninstallProgressForm.CancelButton.ModalResult;
+
+  IconFile := ExpandConstant('{app}\{#MyAppExeName}');
+  if FileExists(IconFile) then
+    InitializeBitmapImageFromIcon(
+      UninstallProgressForm.WizardSmallBitmapImage, IconFile, clNone, [32, 48, 64]);
+
+  BtnW := UninstallProgressForm.CancelButton.Width;
+  UninstallButton := TNewButton.Create(UninstallProgressForm);
+  UninstallButton.Parent := UninstallProgressForm;
+  UninstallButton.Width := BtnW;
+  UninstallButton.Height := UninstallProgressForm.CancelButton.Height;
+  UninstallButton.Left :=
+    UninstallProgressForm.CancelButton.Left - ScaleX(10) - UninstallButton.Width;
+  UninstallButton.Top := UninstallProgressForm.CancelButton.Top;
+  UninstallButton.Caption := 'Uninstall';
+  UninstallButton.ModalResult := mrOk;
+  UninstallButton.Default := True;
+  UninstallButton.TabOrder := UninstallProgressForm.CancelButton.TabOrder;
+  UninstallProgressForm.CancelButton.TabOrder := UninstallButton.TabOrder + 1;
+
+  DetailsBtn := TNewButton.Create(UninstallProgressForm);
+  DetailsBtn.Parent := UninstallProgressForm;
+  DetailsBtn.Width := BtnW;
+  DetailsBtn.Height := UninstallProgressForm.CancelButton.Height;
+  DetailsBtn.Left := UninstallProgressForm.StatusLabel.Left;
+  DetailsBtn.Top := UninstallProgressForm.CancelButton.Top;
+  DetailsBtn.Caption := 'Details...';
+  DetailsBtn.OnClick := @ShowDetailsPage;
+
+  UserDataPage := TNewNotebookPage.Create(UninstallProgressForm);
+  UserDataPage.Notebook := UninstallProgressForm.InnerNotebook;
+  UserDataPage.Parent := UninstallProgressForm.InnerNotebook;
+  UserDataPage.Align := alClient;
+
+  DetailsPage := TNewNotebookPage.Create(UninstallProgressForm);
+  DetailsPage.Notebook := UninstallProgressForm.InnerNotebook;
+  DetailsPage.Parent := UninstallProgressForm.InnerNotebook;
+  DetailsPage.Align := alClient;
+
+  Left := UninstallProgressForm.StatusLabel.Left;
+  Width := UninstallProgressForm.StatusLabel.Width;
+  NextTop := UninstallProgressForm.StatusLabel.Top;
+
+  Intro := TNewStaticText.Create(UninstallProgressForm);
+  Intro.Parent := UserDataPage;
+  Intro.Left := Left;
+  Intro.Top := NextTop;
+  Intro.Width := Width;
+  Intro.AutoSize := True;
+  Intro.WordWrap := True;
+  Intro.ShowAccelChar := False;
+  Intro.ParentFont := True;
+  Intro.Caption :=
+    'The program is always removed. Tick extra items to delete them too.';
+  NextTop := Intro.Top + Intro.Height + ScaleY(10);
+
+  FolderImg := TBitmapImage.Create(UninstallProgressForm);
+  FolderImg.Parent := UserDataPage;
+  FolderImg.Left := Left;
+  FolderImg.Width := ScaleX(16);
+  FolderImg.Height := ScaleY(16);
+  FolderImg.BackColor := clNone;
+  InitializeBitmapImageFromStockIcon(FolderImg, SIID_FOLDER, clNone, [16, 20, 24]);
+
+  PathEdit := TNewEdit.Create(UninstallProgressForm);
+  PathEdit.Parent := UserDataPage;
+  PathEdit.Left := FolderImg.Left + FolderImg.Width + ScaleX(6);
+  PathEdit.Top := NextTop;
+  PathEdit.Width := Width - FolderImg.Width - ScaleX(6);
+  PathEdit.Height := ScaleY(21);
+  PathEdit.ReadOnly := True;
+  PathEdit.Text := ExpandConstant('{%USERPROFILE}\.FFlagManager');
+  FolderImg.Top := PathEdit.Top + ((PathEdit.Height - FolderImg.Height) div 2);
+  NextTop := PathEdit.Top + PathEdit.Height + ScaleY(10);
+
+  AlsoLbl := TNewStaticText.Create(UninstallProgressForm);
+  AlsoLbl.Parent := UserDataPage;
+  AlsoLbl.Left := Left;
+  AlsoLbl.Top := NextTop;
+  AlsoLbl.Width := Width;
+  AlsoLbl.AutoSize := True;
+  AlsoLbl.ShowAccelChar := False;
+  AlsoLbl.ParentFont := True;
+  AlsoLbl.Font.Style := [fsBold];
+  AlsoLbl.Caption := 'Also remove:';
+  NextTop := AlsoLbl.Top + AlsoLbl.Height + ScaleY(6);
+
+  UserDataBox := TNewCheckListBox.Create(UninstallProgressForm);
+  UserDataBox.Parent := UserDataPage;
+  UserDataBox.Left := Left;
+  UserDataBox.Top := NextTop;
+  UserDataBox.Width := Width;
+  UserDataBox.Height := ScaleY(5 * 22 + 10);
+  UserDataBox.Flat := True;
+  UserDataBox.ShowLines := False;
+  UserDataBox.WantTabs := False;
+  UserDataBox.MinItemHeight := ScaleY(22);
+  UserDataBox.AddCheckBox('Application settings', 'Theme, window, options', 0, False, True, False, True, nil);
+  UserDataBox.AddCheckBox('Saved presets', 'Preset packs', 0, False, True, False, True, nil);
+  UserDataBox.AddCheckBox('Custom flags', 'Editor flag list', 0, False, True, False, True, nil);
+  UserDataBox.AddCheckBox('Flag history', 'Undo snapshots', 0, False, True, False, True, nil);
+  UserDataBox.AddCheckBox('Caches', 'Offsets, hashes, known flags', 0, False, True, False, True, nil);
+  NextTop := UserDataBox.Top + UserDataBox.Height + ScaleY(8);
+
+  Footer := TNewStaticText.Create(UninstallProgressForm);
+  Footer.Parent := UserDataPage;
+  Footer.Left := Left;
+  Footer.Top := NextTop;
+  Footer.Width := Width;
+  Footer.AutoSize := True;
+  Footer.WordWrap := True;
+  Footer.ShowAccelChar := False;
+  Footer.ParentFont := True;
+  Footer.Font.Color := clGrayText;
+  Footer.Caption := 'Roblox game files are not touched.';
+
+  DetailsBox := TNewCheckListBox.Create(UninstallProgressForm);
+  DetailsBox.Parent := DetailsPage;
+  DetailsBox.Left := Left;
+  DetailsBox.Top := UninstallProgressForm.StatusLabel.Top;
+  DetailsBox.Width := Width;
+  DetailsBox.Height := UninstallProgressForm.ProgressBar.Top +
+    UninstallProgressForm.ProgressBar.Height - DetailsBox.Top;
+  DetailsBox.Flat := True;
+  DetailsBox.ShowLines := False;
+  DetailsBox.WantTabs := False;
+  DetailsBox.MinItemHeight := ScaleY(22);
+  FillDetailsList(DetailsBox);
+
+  UninstallProgressForm.CancelButton.Enabled := True;
+  UninstallProgressForm.CancelButton.ModalResult := mrCancel;
+  ShowUserDataPage(nil);
+
+  UninstallProgressForm.Hide;
+  if UninstallProgressForm.ShowModal = mrCancel then
+    Abort;
+
+  RemoveSettings := UserDataBox.Checked[0];
+  RemovePresets := UserDataBox.Checked[1];
+  RemoveCustomFlags := UserDataBox.Checked[2];
+  RemoveHistory := UserDataBox.Checked[3];
+  RemoveCaches := UserDataBox.Checked[4];
+
+  UninstallButton.Visible := False;
+  DetailsBtn.Visible := False;
+  UninstallProgressForm.PageNameLabel.Caption := OrigPageName;
+  UninstallProgressForm.PageDescriptionLabel.Caption := OrigPageDesc;
+  UninstallProgressForm.CancelButton.Enabled := OrigCancelEnabled;
+  UninstallProgressForm.CancelButton.ModalResult := OrigCancelModal;
+  UninstallProgressForm.InnerNotebook.ActivePage :=
+    UninstallProgressForm.InstallingPage;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
   begin
-    { FFM claims both schemes (matching Froststrap) — clean up both. }
     RemoveFFMHandler('roblox-player');
     RemoveFFMHandler('roblox');
   end;
 
   if CurUninstallStep = usPostUninstall then
-  begin
-    WipeUserDataKeepingPresets;
-  end;
+    WipeUserData(RemoveSettings, RemovePresets, RemoveCustomFlags, RemoveHistory, RemoveCaches);
 end;

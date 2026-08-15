@@ -35,8 +35,12 @@ def _stub_common(monkeypatch):
     import src.gui.api as api_module
     monkeypatch.setattr(api_module, "get_current_version", lambda: "test")
     # fastpath is invoked at the end of _auto_version_once — neuter it.
-    from src.core.version_changer import fastpath
+    from src.core.version_changer import fastpath, fixer
     monkeypatch.setattr(fastpath, "write_known_good", lambda *_a, **_k: None)
+    # Never delete real Roblox folders from a unit test.
+    monkeypatch.setattr(fixer, "prune_stock_non_production",
+                        lambda *_a, **_k: {"removed": [], "failed": [], "kept": None})
+    monkeypatch.setattr(RobloxManager, "is_roblox_running", staticmethod(lambda: False))
     # Stub offset_loader.fetch_latest_build so the offset-refresh branch
     # doesn't do network work either.
     from src.core import offset_loader
@@ -67,8 +71,13 @@ def test_auto_version_triggers_download_when_installed_lags_latest(api, monkeypa
 
 
 def test_auto_version_skips_download_when_installed_equals_latest(api, monkeypatch):
-    """Installed already matches latest_production → no work to do."""
+    """Installed already matches latest_production → no download, but leftover
+    folders are still cleared."""
     _stub_common(monkeypatch)
+    from src.core.version_changer import fixer
+    pruned = []
+    monkeypatch.setattr(fixer, "prune_stock_non_production",
+                        lambda g: pruned.append(g) or {"removed": [], "failed": [], "kept": None})
     monkeypatch.setattr(RobloxManager, "get_roblox_version_string",
                         staticmethod(lambda: "version-same"))
     monkeypatch.setattr(deployment, "get_latest_production_guid",
@@ -82,6 +91,7 @@ def test_auto_version_skips_download_when_installed_equals_latest(api, monkeypat
     api._auto_version_once()
 
     assert called["n"] == 0
+    assert pruned == ["version-same"]
 
 
 def test_auto_version_skips_download_when_roblox_is_running(api, monkeypatch):
@@ -110,6 +120,26 @@ def test_auto_version_skips_download_when_roblox_is_running(api, monkeypatch):
         "Auto-download must defer when Roblox is running; "
         f"got {called['n']} start_roblox_download calls."
     )
+
+
+def test_auto_version_does_not_prune_when_roblox_is_running(api, monkeypatch):
+    _stub_common(monkeypatch)
+    from src.core.version_changer import fixer
+    pruned = []
+    monkeypatch.setattr(fixer, "prune_stock_non_production",
+                        lambda g: pruned.append(g) or {"removed": [], "failed": [], "kept": None})
+    monkeypatch.setattr(RobloxManager, "get_roblox_version_string",
+                        staticmethod(lambda: "version-same"))
+    monkeypatch.setattr(deployment, "get_latest_production_guid",
+                        lambda: "version-same")
+
+    class _RunningRoblox:
+        def find_roblox_process(self):
+            return 12345
+
+    api.roblox_manager = _RunningRoblox()
+    api._auto_version_once()
+    assert pruned == []
 
 
 def test_auto_version_skips_download_when_fix_already_running(api, monkeypatch):
@@ -147,3 +177,22 @@ def test_auto_version_skips_download_when_cdn_unreachable(api, monkeypatch):
     api._auto_version_once()
 
     assert called["n"] == 0
+
+
+def test_auto_version_triggers_download_when_no_roblox_install(api, monkeypatch):
+    """No version folders (unknown install) must still kick off a production
+    download so a wiped Roblox tree can be restored from scratch."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(RobloxManager, "get_roblox_version_string",
+                        staticmethod(lambda: "unknown"))
+    monkeypatch.setattr(deployment, "get_latest_production_guid",
+                        lambda: "version-newLATEST")
+
+    called = {"n": 0}
+    monkeypatch.setattr(api, "start_roblox_download",
+                        lambda: (called.__setitem__("n", called["n"] + 1),
+                                 {"state": "started"})[1])
+
+    api._auto_version_once()
+
+    assert called["n"] == 1

@@ -14,7 +14,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures')
 def _expected_region_hash(html_path):
     with open(html_path, 'rb') as f:
         data = f.read()
-    idx = data.find(b'<script src="intersection-polyfill.js')
+    idx = data.find(b'<script src="Sortable.min.js')
     region = data[max(0, idx-32):idx+224]
     return hashlib.sha256(region).digest()
 

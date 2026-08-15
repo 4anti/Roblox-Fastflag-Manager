@@ -38,11 +38,173 @@
                 --warning: #fbbf24;
                 --font-ui:
                     "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+                --font-display:
+                    "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
                 --font-mono:
                     "Cascadia Code", "Consolas", "Courier New", monospace;
+                --btn-ink: #040406;
+                --title-weight: 600;
+                --title-track: 0;
                 --radius: 8px;
                 --radius-lg: 12px;
                 --transition: 200ms cubic-bezier(0.2, 0, 0, 1);
+            }
+
+            /* Local latin subsets. Loaded from disk so file:// WebView2
+               does not depend on a font CDN. Unused faces stay idle. */
+            @font-face {
+                font-family: "FFM Inter";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/inter-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Inter";
+                font-style: normal;
+                font-weight: 500;
+                font-display: swap;
+                src: url("fonts/inter-500.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Inter";
+                font-style: normal;
+                font-weight: 600;
+                font-display: swap;
+                src: url("fonts/inter-600.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Inter";
+                font-style: normal;
+                font-weight: 700;
+                font-display: swap;
+                src: url("fonts/inter-700.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Syne";
+                font-style: normal;
+                font-weight: 600;
+                font-display: swap;
+                src: url("fonts/syne-600.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Syne";
+                font-style: normal;
+                font-weight: 700;
+                font-display: swap;
+                src: url("fonts/syne-700.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Syne";
+                font-style: normal;
+                font-weight: 800;
+                font-display: swap;
+                src: url("fonts/syne-800.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Instrument Serif";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/instrument-serif-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Jakarta";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/plus-jakarta-sans-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Jakarta";
+                font-style: normal;
+                font-weight: 500;
+                font-display: swap;
+                src: url("fonts/plus-jakarta-sans-500.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Jakarta";
+                font-style: normal;
+                font-weight: 600;
+                font-display: swap;
+                src: url("fonts/plus-jakarta-sans-600.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Jakarta";
+                font-style: normal;
+                font-weight: 700;
+                font-display: swap;
+                src: url("fonts/plus-jakarta-sans-700.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Newsreader";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/newsreader-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Newsreader";
+                font-style: normal;
+                font-weight: 600;
+                font-display: swap;
+                src: url("fonts/newsreader-600.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Source Sans";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/source-sans-3-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Source Sans";
+                font-style: normal;
+                font-weight: 500;
+                font-display: swap;
+                src: url("fonts/source-sans-3-500.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Source Sans";
+                font-style: normal;
+                font-weight: 600;
+                font-display: swap;
+                src: url("fonts/source-sans-3-600.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Source Sans";
+                font-style: normal;
+                font-weight: 700;
+                font-display: swap;
+                src: url("fonts/source-sans-3-700.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Plex Mono";
+                font-style: normal;
+                font-weight: 400;
+                font-display: swap;
+                src: url("fonts/ibm-plex-mono-400.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Plex Mono";
+                font-style: normal;
+                font-weight: 500;
+                font-display: swap;
+                src: url("fonts/ibm-plex-mono-500.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Space Grotesk";
+                font-style: normal;
+                font-weight: 400 700;
+                font-display: swap;
+                src: url("fonts/space-grotesk.woff2") format("woff2");
+            }
+            @font-face {
+                font-family: "FFM Outfit";
+                font-style: normal;
+                font-weight: 400 700;
+                font-display: swap;
+                src: url("fonts/outfit.woff2") format("woff2");
             }
 
             /* === Light Theme === */
@@ -236,14 +398,6 @@
                 );
                 pointer-events: none;
                 z-index: 9999;
-            }
-            /* Keep the aux panes above the matrix scanline overlay so the
-               CRT stripes don't paint over their embedded frames. They
-               stay interactive. */
-            body.theme-matrix [id^="aux-pane-"],
-            body.theme-matrix [id^="aux-pane-"] iframe {
-                position: relative;
-                z-index: 10000;
             }
             .theme-matrix {
                 --bg-base: rgba(1, 4, 1, 0.4);
@@ -520,6 +674,510 @@
                 box-shadow: 0 0 30px var(--accent-glow) !important;
             }
 
+            /* === Studio (graphite DAW) ===
+               Mid-grey chassis. Orange is a clip marker, not a fill.
+               Strictly dark — Light Mode is hidden while this theme is on. */
+            .theme-studio {
+                --bg-base: #1a1a1a;
+                --bg-sidebar: #222222;
+                --bg-panel: #252525;
+                --bg-card: #2c2c2c;
+                --bg-elevated: #333333;
+                --bg-hover: rgba(255, 118, 77, 0.1);
+                --bg-input: #1c1c1c;
+                --bg-selected: rgba(255, 118, 77, 0.16);
+                --border: #3a3a3a;
+                --border-light: #4a4a4a;
+                --text: #d4d4d4;
+                --text-dim: #8e8e8e;
+                --text-dark: #5c5c5c;
+                --accent: #ff764d;
+                --accent-hover: #ff8d6a;
+                --accent-dim: #c85a38;
+                --accent-glow: rgba(255, 118, 77, 0.18);
+                --purple: #6ea8ff;
+                --purple-hover: #8cbcff;
+                --success: #8fd16a;
+                --error: #e85d5d;
+                --warning: #e0b04a;
+                --btn-ink: #1a1a1a;
+                --font-ui: "FFM Inter", "Segoe UI", sans-serif;
+                --font-display: "FFM Inter", "Segoe UI", sans-serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 3px;
+                --radius-lg: 4px;
+            }
+            body.theme-studio {
+                background: #1a1a1a !important;
+            }
+            .theme-studio .btn {
+                box-shadow: none;
+            }
+            .theme-studio .btn-primary {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+                box-shadow: none !important;
+            }
+            .theme-studio .titlebar-icon {
+                border-radius: 2px;
+                color: var(--btn-ink) !important;
+            }
+            .theme-studio .config-item.selected {
+                box-shadow: inset 3px 0 0 var(--accent) !important;
+                border-left-color: transparent !important;
+            }
+            .theme-studio ::-webkit-scrollbar-thumb {
+                background: #4a4a4a !important;
+            }
+            .theme-studio .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+
+            /* === Nocturne (OLED editorial) ===
+               True black, champagne gold, Syne wordmark.
+               Strictly dark — Light Mode is hidden while this theme is on. */
+            .theme-nocturne {
+                --bg-base: #050505;
+                --bg-sidebar: #090909;
+                --bg-panel: #0c0c0c;
+                --bg-card: #111111;
+                --bg-elevated: #161616;
+                --bg-hover: rgba(201, 169, 98, 0.08);
+                --bg-input: #080808;
+                --bg-selected: rgba(201, 169, 98, 0.12);
+                --border: rgba(201, 169, 98, 0.16);
+                --border-light: rgba(201, 169, 98, 0.28);
+                --text: #f3ede0;
+                --text-dim: #a89b84;
+                --text-dark: #6a6256;
+                --accent: #c9a962;
+                --accent-hover: #e0c178;
+                --accent-dim: #9a7d3e;
+                --accent-glow: rgba(201, 169, 98, 0.22);
+                --purple: #c9a962;
+                --purple-hover: #e0c178;
+                --success: #b7c99a;
+                --error: #d46a5c;
+                --warning: #c9a962;
+                --btn-ink: #0a0906;
+                --font-ui: "FFM Inter", "Segoe UI", sans-serif;
+                --font-display: "FFM Syne", "Segoe UI", sans-serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 0px;
+                --radius-lg: 0px;
+                --title-weight: 800;
+                --title-track: 0.16em;
+            }
+            body.theme-nocturne {
+                background:
+                    radial-gradient(
+                        ellipse at 50% -20%,
+                        rgba(201, 169, 98, 0.14),
+                        transparent 52%
+                    ),
+                    #050505 !important;
+            }
+            body.theme-nocturne::after {
+                content: "";
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 40;
+                opacity: 0.06;
+                mix-blend-mode: overlay;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            }
+            .theme-nocturne .titlebar {
+                border-bottom-color: var(--accent);
+            }
+            .theme-nocturne .titlebar-title {
+                text-transform: uppercase;
+                color: var(--accent);
+            }
+            .theme-nocturne .titlebar-icon {
+                border-radius: 0;
+                color: var(--btn-ink) !important;
+            }
+            .theme-nocturne .config-title {
+                font-family: "FFM Instrument Serif", Georgia, serif;
+                font-size: 18px;
+                font-weight: 400;
+                letter-spacing: 0;
+            }
+            .theme-nocturne .btn {
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                font-size: 10px;
+                box-shadow: none;
+            }
+            .theme-nocturne .btn-primary {
+                background: transparent !important;
+                color: var(--accent) !important;
+                border: 1px solid var(--accent) !important;
+                box-shadow: none !important;
+            }
+            .theme-nocturne .btn-primary:hover:not(:disabled) {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+            .theme-nocturne .btn-secondary {
+                color: var(--btn-ink) !important;
+            }
+            .theme-nocturne .config-item.selected {
+                box-shadow: none !important;
+                border-left-width: 3px !important;
+            }
+            .theme-nocturne .config-count {
+                border-radius: 0;
+            }
+            .theme-nocturne ::-webkit-scrollbar-thumb {
+                background: var(--accent-dim) !important;
+                border-radius: 0 !important;
+            }
+            .theme-nocturne .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+                border-radius: 0 !important;
+            }
+
+            /* === Mocha (Catppuccin glass) ===
+               Mauve accent, peach values, soft radii.
+               Strictly dark — Light Mode is hidden while this theme is on. */
+            .theme-mocha {
+                --bg-base: #11111b;
+                --bg-sidebar: rgba(24, 24, 37, 0.88);
+                --bg-panel: rgba(30, 30, 46, 0.82);
+                --bg-card: #313244;
+                --bg-elevated: #45475a;
+                --bg-hover: rgba(203, 166, 247, 0.12);
+                --bg-input: #181825;
+                --bg-selected: rgba(203, 166, 247, 0.16);
+                --border: #313244;
+                --border-light: #45475a;
+                --text: #cdd6f4;
+                --text-dim: #a6adc8;
+                --text-dark: #6c7086;
+                --accent: #cba6f7;
+                --accent-hover: #d4b5fa;
+                --accent-dim: #b4befe;
+                --accent-glow: rgba(203, 166, 247, 0.28);
+                --purple: #89b4fa;
+                --purple-hover: #b4befe;
+                --success: #a6e3a1;
+                --error: #f38ba8;
+                --warning: #f9e2af;
+                --btn-ink: #11111b;
+                --font-ui: "FFM Jakarta", "Segoe UI", sans-serif;
+                --font-display: "FFM Jakarta", "Segoe UI", sans-serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 10px;
+                --radius-lg: 14px;
+            }
+            body.theme-mocha {
+                background:
+                    radial-gradient(
+                        ellipse at 0% 0%,
+                        rgba(203, 166, 247, 0.16),
+                        transparent 40%
+                    ),
+                    radial-gradient(
+                        ellipse at 100% 100%,
+                        rgba(250, 179, 135, 0.1),
+                        transparent 42%
+                    ),
+                    #11111b !important;
+            }
+            .theme-mocha .titlebar-icon {
+                border-radius: 6px;
+                color: var(--btn-ink) !important;
+            }
+            .theme-mocha .btn-primary {
+                background: linear-gradient(180deg, #d4b5fa, #cba6f7) !important;
+                color: var(--btn-ink) !important;
+                box-shadow: 0 4px 14px var(--accent-glow) !important;
+            }
+            .theme-mocha .config-item .flag-value {
+                color: #fab387;
+            }
+            .theme-mocha .sidebar {
+                backdrop-filter: blur(18px);
+                -webkit-backdrop-filter: blur(18px);
+            }
+            .theme-mocha ::-webkit-scrollbar-thumb {
+                background: #585b70 !important;
+            }
+            .theme-mocha .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+
+            /* === Vellum (paper folio) ===
+               Warm cream, ink, terracotta. A real light theme, not inverted dark.
+               Strictly light — Light Mode is hidden while this theme is on. */
+            .theme-vellum {
+                --bg-base: #f3eee4;
+                --bg-sidebar: #e8e1d4;
+                --bg-panel: #f7f3ea;
+                --bg-card: #efe8da;
+                --bg-elevated: #e4dccb;
+                --bg-hover: rgba(184, 92, 56, 0.08);
+                --bg-input: #fbf8f1;
+                --bg-selected: rgba(184, 92, 56, 0.12);
+                --border: #d4cbb8;
+                --border-light: #c4b9a2;
+                --text: #1c1916;
+                --text-dim: #6b6358;
+                --text-dark: #9a9184;
+                --accent: #b85c38;
+                --accent-hover: #c96b46;
+                --accent-dim: #8e4629;
+                --accent-glow: rgba(184, 92, 56, 0.16);
+                --purple: #3d5a4a;
+                --purple-hover: #4d6e5c;
+                --success: #3d6b4f;
+                --error: #b04040;
+                --warning: #b8862a;
+                --btn-ink: #f7f3ea;
+                --font-ui: "FFM Source Sans", "Segoe UI", sans-serif;
+                --font-display: "FFM Newsreader", Georgia, serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 4px;
+                --radius-lg: 6px;
+                --title-weight: 600;
+                --title-track: 0.02em;
+            }
+            body.theme-vellum {
+                background:
+                    radial-gradient(
+                        ellipse at 80% 0%,
+                        rgba(184, 92, 56, 0.06),
+                        transparent 44%
+                    ),
+                    #f3eee4 !important;
+            }
+            body.theme-vellum::after {
+                content: "";
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 40;
+                opacity: 0.07;
+                mix-blend-mode: multiply;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            }
+            .theme-vellum .titlebar-title {
+                font-size: 14px;
+                color: var(--text);
+                letter-spacing: 0;
+            }
+            .theme-vellum .config-title {
+                font-size: 16px;
+            }
+            .theme-vellum .titlebar-icon {
+                color: var(--btn-ink) !important;
+            }
+            .theme-vellum .btn {
+                box-shadow:
+                    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+                    0 1px 2px rgba(80, 50, 20, 0.08);
+            }
+            .theme-vellum .btn-primary {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+            .theme-vellum .btn-subtle:hover:not(:disabled) {
+                color: var(--text);
+            }
+            .theme-vellum .config-item.selected {
+                box-shadow: none !important;
+                border-left: 3px solid var(--accent) !important;
+            }
+            .theme-vellum ::-webkit-scrollbar-thumb {
+                background: #c4b9a2 !important;
+            }
+            .theme-vellum .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+            .theme-vellum .flags-pill.off {
+                background: rgba(28, 25, 22, 0.06);
+                border-color: var(--border);
+                color: var(--text-dim);
+            }
+
+            /* === Aurora ===
+               Polar night + glacier. Falling-light canvas, same idea as petals. */
+            .theme-aurora {
+                --bg-base: #061018;
+                --bg-sidebar: rgba(8, 18, 28, 0.72);
+                --bg-panel: rgba(10, 22, 34, 0.7);
+                --bg-card: rgba(14, 30, 44, 0.82);
+                --bg-elevated: rgba(18, 38, 54, 0.9);
+                --bg-hover: rgba(94, 234, 212, 0.1);
+                --bg-input: rgba(6, 16, 24, 0.85);
+                --bg-selected: rgba(94, 234, 212, 0.14);
+                --border: rgba(125, 211, 252, 0.12);
+                --border-light: rgba(94, 234, 212, 0.28);
+                --text: #e8f4f2;
+                --text-dim: #8ba8b0;
+                --text-dark: #4d6a74;
+                --accent: #5eead4;
+                --accent-hover: #99f6e4;
+                --accent-dim: #2dd4bf;
+                --accent-glow: rgba(94, 234, 212, 0.32);
+                --purple: #7dd3c7;
+                --purple-hover: #99f6e4;
+                --success: #6ee7b7;
+                --error: #fb7185;
+                --warning: #fde68a;
+                --btn-ink: #04201a;
+                --font-ui: "FFM Space Grotesk", "Segoe UI", sans-serif;
+                --font-display: "FFM Space Grotesk", "Segoe UI", sans-serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 10px;
+                --radius-lg: 14px;
+                --title-weight: 600;
+                --title-track: 0.04em;
+            }
+            body.theme-aurora {
+                background: #061018 !important;
+            }
+            body.theme-aurora.light-theme {
+                --bg-base: #eef5f8;
+                --bg-sidebar: rgba(255, 255, 255, 0.78);
+                --bg-panel: rgba(255, 255, 255, 0.82);
+                --bg-card: #f7fbfc;
+                --bg-elevated: #e7eef2;
+                --bg-hover: rgba(13, 148, 136, 0.08);
+                --bg-input: #ffffff;
+                --bg-selected: rgba(13, 148, 136, 0.12);
+                --border: #c9d9e0;
+                --border-light: #b7c9d2;
+                --text: #0c1922;
+                --text-dim: #4a6570;
+                --text-dark: #7a929c;
+                --accent: #0f766e;
+                --accent-hover: #0d9488;
+                --accent-dim: #115e59;
+                --accent-glow: rgba(15, 118, 110, 0.18);
+                --purple: #0f766e;
+                --purple-hover: #0d9488;
+                --success: #047857;
+                --error: #be123c;
+                --warning: #b45309;
+                --btn-ink: #f4fffd;
+                background: #eef5f8 !important;
+            }
+            .theme-aurora .btn-primary {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+            .theme-aurora .titlebar-icon {
+                color: var(--btn-ink) !important;
+            }
+            .theme-aurora .config-item.selected {
+                box-shadow: inset 3px 0 0 var(--accent) !important;
+            }
+            .theme-aurora .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+
+            /* === Neko ===
+               Cat cafe. Falling cats on the canvas, same idea as petals. */
+            .theme-neko {
+                --bg-base: #16110e;
+                --bg-sidebar: rgba(32, 24, 20, 0.74);
+                --bg-panel: rgba(38, 28, 24, 0.72);
+                --bg-card: rgba(48, 36, 30, 0.86);
+                --bg-elevated: rgba(58, 44, 36, 0.92);
+                --bg-hover: rgba(224, 154, 106, 0.12);
+                --bg-input: rgba(18, 14, 12, 0.9);
+                --bg-selected: rgba(224, 154, 106, 0.16);
+                --border: rgba(224, 154, 106, 0.18);
+                --border-light: rgba(224, 154, 106, 0.3);
+                --text: #f3e6d8;
+                --text-dim: #b89a86;
+                --text-dark: #7a6254;
+                --accent: #e09a6a;
+                --accent-hover: #f0b489;
+                --accent-dim: #c47a4e;
+                --accent-glow: rgba(224, 154, 106, 0.28);
+                --purple: #c47a4e;
+                --purple-hover: #d4895c;
+                --success: #8fbf7a;
+                --error: #e07070;
+                --warning: #e0b04a;
+                --btn-ink: #1a120e;
+                --font-ui: "FFM Outfit", "Segoe UI", sans-serif;
+                --font-display: "FFM Outfit", "Segoe UI", sans-serif;
+                --font-mono: "FFM Plex Mono", "Cascadia Code", Consolas, monospace;
+                --radius: 10px;
+                --radius-lg: 14px;
+                --title-weight: 700;
+                --title-track: 0.02em;
+            }
+            body.theme-neko {
+                background: #16110e !important;
+            }
+            body.theme-neko.light-theme {
+                --bg-base: #f4f2f0;
+                --bg-sidebar: rgba(255, 255, 255, 0.84);
+                --bg-panel: rgba(255, 255, 255, 0.88);
+                --bg-card: #fffcfa;
+                --bg-elevated: #ece8e4;
+                --bg-hover: rgba(224, 122, 95, 0.1);
+                --bg-input: #ffffff;
+                --bg-selected: rgba(224, 122, 95, 0.12);
+                --border: #ddd6d0;
+                --border-light: #cfc6bf;
+                --text: #221c18;
+                --text-dim: #6a5e56;
+                --text-dark: #978a82;
+                --accent: #e07a5f;
+                --accent-hover: #ec8b70;
+                --accent-dim: #c45c38;
+                --accent-glow: rgba(224, 122, 95, 0.18);
+                --purple: #c45c38;
+                --purple-hover: #d46a46;
+                --success: #4d7c3e;
+                --error: #b04040;
+                --warning: #b8862a;
+                --btn-ink: #fff8f4;
+                background: #f4f2f0 !important;
+            }
+            .theme-neko .btn-primary {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+            .theme-neko .titlebar-icon {
+                color: var(--btn-ink) !important;
+            }
+            .theme-neko .config-item.selected {
+                box-shadow: inset 3px 0 0 var(--accent) !important;
+            }
+            .theme-neko .loader-logo {
+                background: var(--accent) !important;
+                color: var(--btn-ink) !important;
+            }
+
+            #aurora-canvas,
+            #neko-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                z-index: -1;
+                pointer-events: none;
+                display: none;
+            }
+            body.theme-aurora #aurora-canvas,
+            body.theme-neko #neko-canvas {
+                display: block;
+            }
+
             body {
                 font-family: var(--font-ui);
                 background: radial-gradient(
@@ -576,12 +1234,15 @@
                 justify-content: center;
                 font-size: 10px;
                 font-weight: 700;
-                color: #0a0a0f;
+                color: var(--btn-ink);
+                font-family: var(--font-display);
             }
             .titlebar-title {
                 font-size: 12px;
-                font-weight: 600;
+                font-weight: var(--title-weight);
+                letter-spacing: var(--title-track);
                 color: var(--text-dim);
+                font-family: var(--font-display);
             }
             .titlebar-version {
                 position: absolute;
@@ -634,8 +1295,8 @@
             }
 
             /* Top-bar Roblox version indicator (tab bar, far right). Styled
-               like the .vc update pill; green when the installed build matches
-               our offsets, amber (blinking) when stale/mismatched. */
+               like the .vc update pill; green when Roblox is current (match
+               or dump catching up), amber when the client itself is behind. */
             .rbx-version {
                 margin-left: auto;
                 margin-right: 12px;
@@ -880,6 +1541,10 @@
                 color: var(--text-dim);
                 opacity: 0;
                 transition: opacity 0.3s ease 0.05s;
+                max-width: 42%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
             .rvc-row.ok .rvc-value,
             .rvc-row.fail .rvc-value,
@@ -1979,6 +2644,7 @@
                 color: var(--text);
                 white-space: nowrap;
                 flex-shrink: 0;
+                font-family: var(--font-display);
             }
             .config-count {
                 font-size: 11px;
@@ -2289,7 +2955,7 @@
 
             .btn-primary {
                 background: var(--accent);
-                color: #040406;
+                color: var(--btn-ink);
                 box-shadow: 0 4px 12px rgba(0, 212, 170, 0.2);
             }
             .btn-primary:hover:not(:disabled) {
@@ -3757,94 +4423,6 @@
                     box-shadow: 0 0 15px rgba(255, 204, 0, 0.8);
                 }
             }
-            /* === Sidebar utility rail === */
-            .sidebar-utility-rail {
-                width: 320px;
-                flex-shrink: 0;
-                background: var(--bg-sidebar);
-                border-left: 1px solid var(--border);
-                display: flex;
-                flex-direction: column;
-                gap: 14px;
-                padding: 14px 10px;
-                overflow-y: auto;
-                overflow-x: hidden;
-                align-items: center;
-            }
-            .sidebar-utility-rail::-webkit-scrollbar {
-                width: 6px;
-            }
-            .sidebar-utility-rail::-webkit-scrollbar-thumb {
-                background: var(--border);
-                border-radius: 3px;
-            }
-            .sidebar-utility-rail .ux-widget-block {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                flex-shrink: 0;
-            }
-            .sidebar-utility-rail .layout-buffer-item,
-            .utility-header-strip .layout-buffer-item,
-            .utility-footer-strip .layout-buffer-item {
-                flex-shrink: 0;
-                background: rgba(255, 255, 255, 0.015);
-                border: 1px solid var(--border);
-                border-radius: 6px;
-                overflow: hidden;
-                position: relative;
-            }
-            .sidebar-utility-rail .layout-buffer-item iframe,
-            .utility-header-strip .layout-buffer-item iframe,
-            .utility-footer-strip .layout-buffer-item iframe {
-                display: block;
-                border: 0;
-            }
-            .utility-header-strip {
-                flex-shrink: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 8px 0;
-                background: var(--bg-elevated);
-                border-bottom: 1px solid var(--border);
-            }
-            .utility-footer-strip {
-                flex-shrink: 0;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 6px 0;
-                background: var(--bg-elevated);
-                border-top: 1px solid var(--border);
-            }
-            .ux-label-promoted {
-                font-size: 9px;
-                color: var(--text-dark, #555);
-                text-transform: uppercase;
-                letter-spacing: 1.2px;
-                margin-bottom: 5px;
-                text-align: center;
-                user-select: none;
-                opacity: 0.55;
-            }
-            /* Responsive collapse so smaller windows don't break the layout */
-            @media (max-width: 1280px) {
-                .sidebar-utility-rail {
-                    display: none;
-                }
-            }
-            @media (max-width: 900px) {
-                .utility-header-strip {
-                    display: none;
-                }
-            }
-            @media (max-width: 700px) {
-                .utility-footer-strip {
-                    display: none;
-                }
-            }
-
             /* === Export Preset Modal === */
             .export-modal {
                 display: none;
@@ -4201,7 +4779,6 @@
             }
         </style>
         <script src="Sortable.min.js"></script>
-        <script src="intersection-polyfill.js?v=1.2.1"></script>
     </head>
     <body style="background: var(--bg-base)">
         <!-- Apply the last-used theme to <body> BEFORE the loading screen paints
@@ -4360,6 +4937,8 @@
             <!-- Matrix Animation Layer -->
             <canvas id="matrix-canvas"></canvas>
             <canvas id="petals-canvas"></canvas>
+            <canvas id="aurora-canvas"></canvas>
+            <canvas id="neko-canvas"></canvas>
 
             <!-- Title Bar -->
             <div class="titlebar pywebview-drag-region">
@@ -4467,15 +5046,6 @@
 
                 <!-- Main Content -->
                 <div class="main-content" id="main-content">
-                    <!-- Top Ad Strip (728x90) -->
-                    <div class="utility-header-strip" data-ux-layer="top">
-                        <div
-                            class="layout-buffer-item"
-                            id="aux-pane-3"
-                            style="width: 728px; height: 90px"
-                        ></div>
-                    </div>
-
                     <!-- Flags-off banner -->
                     <div
                         id="killswitch-banner"
@@ -4738,15 +5308,6 @@
                             >
                                 Apply Flags
                             </button>
-                        </div>
-
-                        <!-- Bottom Ad Strip (468x60) -->
-                        <div class="utility-footer-strip" data-ux-layer="bottom">
-                            <div
-                                class="layout-buffer-item"
-                                id="aux-pane-4"
-                                style="width: 468px; height: 60px"
-                            ></div>
                         </div>
 
                         <div class="resizer-h" id="console-resizer"></div>
@@ -5428,7 +5989,7 @@
                                         border-radius: 6px;
                                         font-size: 12px;
                                         flex: 1;
-                                        max-width: 150px;
+                                        max-width: 220px;
                                     "
                                 >
                                     <option value="premium">
@@ -5442,6 +6003,24 @@
                                     </option>
                                     <option value="cherry">
                                         Cherry Blossom 🌸
+                                    </option>
+                                    <option value="studio">
+                                        Studio (Graphite)
+                                    </option>
+                                    <option value="nocturne">
+                                        Nocturne (Editorial)
+                                    </option>
+                                    <option value="mocha">
+                                        Mocha (Glass)
+                                    </option>
+                                    <option value="vellum">
+                                        Vellum (Paper)
+                                    </option>
+                                    <option value="aurora">
+                                        Aurora (Lights)
+                                    </option>
+                                    <option value="neko">
+                                        Neko (Cats)
                                     </option>
                                     <option value="legacy">Legacy</option>
                                 </select>
@@ -5964,26 +6543,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Right Ad Rail (300x250 + 160x600) -->
-                <aside class="sidebar-utility-rail" id="utility-rail-right" data-ux-layer="rail">
-                    <div class="ux-widget-block">
-                        <div class="ux-label-promoted">Promoted</div>
-                        <div
-                            class="layout-buffer-item"
-                            id="aux-pane-1"
-                            style="width: 300px; height: 250px"
-                        ></div>
-                    </div>
-                    <div class="ux-widget-block">
-                        <div class="ux-label-promoted">Promoted</div>
-                        <div
-                            class="layout-buffer-item"
-                            id="aux-pane-2"
-                            style="width: 160px; height: 600px"
-                        ></div>
-                    </div>
-                </aside>
             </div>
         </div>
         <!-- End app-root -->
@@ -6906,6 +7465,7 @@
 
             function setUITheme(theme, save = true) {
               try {
+                if (theme === "prism") theme = "neko";
                 currentTheme = theme;
 
                 // Remove existing theme classes
@@ -6914,6 +7474,13 @@
                     "theme-ignite",
                     "theme-matrix",
                     "theme-cherry",
+                    "theme-studio",
+                    "theme-nocturne",
+                    "theme-mocha",
+                    "theme-vellum",
+                    "theme-aurora",
+                    "theme-neko",
+                    "theme-prism",
                 );
 
                 // Apply the newly selected theme class (if it is not premium, which is the default CSS)
@@ -6923,6 +7490,8 @@
 
                 // Manage Matrix Canvas Animation
                 toggleMatrixAnim(theme === "matrix");
+                toggleAuroraAnim(theme === "aurora");
+                toggleNekoAnim(theme === "neko");
 
                 // Hide/Show Matrix speed slider
                 const matrixSpeedRow =
@@ -6949,15 +7518,22 @@
                     if (petalSpeedRow) petalSpeedRow.style.display = "none";
                 }
 
-                // Hide Light Mode for Ignite (strictly dark) and Cherry Blossom
-                // (strictly light — it sets its own pastel palette).
+                // Hide Light Mode for skins that own their palette:
+                // Ignite/Studio/Nocturne/Mocha are strictly dark; Cherry and
+                // Vellum are strictly light. Aurora and Neko keep the toggle.
                 const lightModeRow = document.getElementById("light-mode-row");
                 if (lightModeRow) {
                     const isIgnite = theme === "ignite";
-                    const hideLight = isIgnite || isCherry;
+                    const forceDark =
+                        isIgnite ||
+                        theme === "studio" ||
+                        theme === "nocturne" ||
+                        theme === "mocha";
+                    const hideLight =
+                        forceDark || isCherry || theme === "vellum";
                     lightModeRow.style.display = hideLight ? "none" : "flex";
                     if (
-                        isIgnite &&
+                        forceDark &&
                         document.body.classList.contains("light-theme")
                     ) {
                         toggleTheme(false);
@@ -7122,6 +7698,9 @@
                 screen.style.visibility = "hidden";
 
                 setTimeout(() => screen.remove(), 800);
+                if (typeof loadInitialFlags === "function") {
+                    loadInitialFlags();
+                }
             }
 
             // === Init ===
@@ -7191,6 +7770,12 @@
                 const startTime = Date.now();
                 const minTotalTime = 1150; // 1.15 seconds as requested
                 isReady = true;
+                try {
+                    if (window.pywebview && window.pywebview.api &&
+                        window.pywebview.api.get_content_filter) {
+                        window.pywebview.api.get_content_filter();
+                    }
+                } catch (e) {}
 
                 async function runStage(
                     percent,
@@ -7397,7 +7982,10 @@
                         "fflag-metrics-display",
                     );
 
-                    const flagCount = await pywebview.api.get_fflag_count();
+                    const flagCount =
+                        status && typeof status.count === "number"
+                            ? status.count
+                            : 0;
 
                     if (flagCount > 0) {
                         const kCount = Math.floor(flagCount / 1000);
@@ -7499,29 +8087,44 @@
                         }
                     }
 
-                    // Honest version verdict: a real mismatch means the
-                    // installed build differs from the build our offsets target
-                    // (version_mismatch), OR the narrow bundled-baseline-stale
-                    // case. Either way injection may fail, so warn.
-                    var versionMismatch =
-                        !!status.version_mismatch || !!status.baseline_stale;
+                    // Title-bar chip follows version_card, not the raw
+                    // install-vs-dump boolean. offsets_lagging means the
+                    // client is already current; do not paint that as
+                    // "your Roblox is old".
+                    var versionCard = (status && status.version_card) || "";
+                    var clientBehind =
+                        versionCard === "needs_roblox_update"
+                        || versionCard === "mismatch_offline";
 
-                    // Top-bar Roblox version indicator (B1b precursor).
-                    // Green (blink) = installed build matches our offsets;
-                    // amber (blink) = stale/mismatch; greyed = not detected.
                     var rv = document.getElementById("rbx-version");
                     var rvText = document.getElementById("rbx-version-text");
                     if (rv && rvText) {
-                        if (status.roblox_version) {
+                        if (status.roblox_version && versionCard !== "no_roblox") {
                             rvText.textContent =
                                 "Version: " + status.roblox_version;
-                            rv.title = status.roblox_version;
-                            if (versionMismatch) {
+                            if (clientBehind) {
                                 rv.className = "rbx-version mismatch";
+                                rv.title = status.roblox_version;
+                            } else if (versionCard === "offsets_lagging") {
+                                rv.className = "rbx-version match";
+                                rv.title =
+                                    "Roblox is up to date. Offset dump is catching up.";
+                            } else if (
+                                versionCard === "aligned"
+                                || versionCard === "aligned_update_available"
+                            ) {
+                                rv.className = "rbx-version match";
+                                rv.title =
+                                    versionCard === "aligned_update_available"
+                                        ? ("A newer Roblox is available. "
+                                            + status.roblox_version)
+                                        : status.roblox_version;
                             } else if (status.ready) {
                                 rv.className = "rbx-version match";
+                                rv.title = status.roblox_version;
                             } else {
                                 rv.className = "rbx-version";
+                                rv.title = status.roblox_version;
                             }
                         } else {
                             rvText.textContent = "Version: Not found";
@@ -7530,16 +8133,15 @@
                         }
                     }
 
-                    // Settings tab badge + animated version checker sync.
-                    var stale = versionMismatch;
+                    // Settings ping: user action needed (client behind), not dump lag.
                     var sPing = document.getElementById("settings-ping");
-                    if (sPing) sPing.style.display = stale ? "" : "none";
+                    if (sPing) sPing.style.display = clientBehind ? "" : "none";
 
                     // Keep the latest real verdict available to the checker and,
                     // when it is sitting on a settled result (not mid-animation),
                     // quietly keep that result in sync with the 1s poll.
                     if (typeof rvcSyncVerdict === "function") {
-                        rvcSyncVerdict(status, versionMismatch);
+                        rvcSyncVerdict(status, clientBehind);
                     }
                 } catch (e) {}
             }
@@ -7558,7 +8160,7 @@
                 { key: "api",     label: "Fetching API version" },
                 { key: "cs",      label: "Reading ClientSettings" },
                 { key: "local",   label: "Verifying local build" },
-                { key: "compare", label: "Comparing version hashes" },
+                { key: "compare", label: "Comparing Roblox vs offset dump" },
                 { key: "feed",    label: "Offset feed matches Roblox latest" },
                 { key: "source",  label: "Offset source health" },
             ];
@@ -7733,6 +8335,62 @@
             // check is the user pressing the re-check button.
             function rvcCancelActive() {}
 
+            function rvcGuidDetail(ver, off, latest) {
+                const parts = [];
+                if (ver) parts.push("Roblox: " + ver);
+                if (off) parts.push("Offset dump: " + off);
+                if (latest) parts.push("CDN latest: " + latest);
+                return parts.join(" | ");
+            }
+
+            function rvcCopyForStatus(status) {
+                const ver = (status && status.roblox_version) || "";
+                const off = (status && status.offsets_version) || "";
+                const latest = (status && status.latest_production) || "";
+                const guids = rvcGuidDetail(ver, off, latest);
+                let card = status && status.version_card;
+                if (!card) {
+                    const mismatch = !!(status && (status.version_mismatch || status.baseline_stale));
+                    const latestOk = !!(status && status.roblox_is_latest);
+                    if (!ver) card = "no_roblox";
+                    else if (status && typeof status.offsets_ready === "boolean" && !status.offsets_ready) card = "offsets_pending";
+                    else if (mismatch && latestOk) card = "offsets_lagging";
+                    else if (mismatch) card = "needs_roblox_update";
+                    else if (latest && ver && ver !== latest) card = "aligned_update_available";
+                    else card = "aligned";
+                }
+                switch (card) {
+                    case "no_roblox":
+                        return { card: card, kind: "warn",
+                            title: "Roblox not detected",
+                            detail: guids || "Install or launch Roblox, then Refresh." };
+                    case "offsets_pending":
+                        return { card: card, kind: "warn",
+                            title: "Verifying with the offset server…",
+                            detail: guids };
+                    case "offsets_lagging":
+                        return { card: card, kind: "warn",
+                            title: "Roblox is up to date — offset dump is catching up",
+                            detail: guids };
+                    case "needs_roblox_update":
+                        return { card: card, kind: "warn",
+                            title: "Roblox is behind — click Refresh to update",
+                            detail: guids };
+                    case "aligned_update_available":
+                        return { card: card, kind: "warn",
+                            title: "Injection ready — a newer Roblox is available",
+                            detail: guids };
+                    case "mismatch_offline":
+                        return { card: card, kind: "warn",
+                            title: "Offset dump does not match this Roblox build",
+                            detail: guids };
+                    default:
+                        return { card: "aligned", kind: "ok",
+                            title: "Roblox version matches — injection ready",
+                            detail: guids || "Injection ready." };
+                }
+            }
+
             // PUBLIC: entry point — Refresh button + on-open trigger.
             function rvcRun() {
                 const btn = rvcEl("rvc-refresh");
@@ -7806,10 +8464,14 @@
 
                 const compareValue = !detected
                     ? "no build"
-                    : (!offsetsReady ? "checking…" : (mismatch ? "Mismatch" : "Match"));
+                    : (!offsetsReady ? "checking…" : (
+                        (status && status.version_card) === "offsets_lagging" ? "Offsets behind"
+                        : (mismatch ? "Mismatch" : "Match")));
                 const compareState = !detected
                     ? "fail"
-                    : (!offsetsReady ? "running" : (mismatch ? "fail" : "ok"));
+                    : (!offsetsReady ? "running" : (
+                        (status && status.version_card) === "offsets_lagging" ? "warn"
+                        : (mismatch ? "fail" : "ok")));
                 const feedValue = !offsetsReady
                     ? "checking…"
                     : (feedBehind
@@ -7854,55 +8516,44 @@
                     return;
                 }
                 if (!verdictKnown) {
-                    // Offsets still resolving — no honest verdict yet. Settle
-                    // on a neutral "verifying" card so the user isn't told
-                    // "matches" from nothing, and the poll's rvcSyncVerdict
-                    // updates the card once a real answer arrives.
                     await rvcCollapse(rvcEl("rvc-scan"), "warn",
                         "Verifying with the offset server…",
-                        "Your Roblox: " + robloxVersion, alive);
+                        rvcGuidDetail(robloxVersion,
+                            status && status.offsets_version,
+                            latest), alive);
                     rvcSettle("result");
                     return;
                 }
-                if (mismatch) {
-                    // Chained call — pass OUR alive so we share the same
-                    // token; a cancel/newer run aborts both check + fix.
-                    await rvcRunFix(alive); // auto-start the real download
+
+                let copy = rvcCopyForStatus(status);
+                // A Roblox download only helps when this install is behind
+                // CDN latest. If the user is already current and the dump
+                // has not caught up, probe offsets instead of fake-fixing.
+                if (copy.card === "needs_roblox_update"
+                        || copy.card === "aligned_update_available") {
+                    await rvcRunFix(alive);
                     return;
                 }
-                // No mismatch — decide the collapse copy from the two
-                // informational signals. Injection works right now in every
-                // branch below; the copy tells the user WHY the card is amber
-                // (feed lag / fallback source) or green (everything current).
-                if (feedBehind && sourceUnhealthy) {
-                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
-                        "Injection ready — imtheo unreachable, mirror is catching up",
-                        "Source: " + sourceValue + "  |  Latest: "
-                            + (latest ? latest.slice(0, 18) + "…" : "unknown"),
-                        alive);
-                    rvcSettle("result");
+                if (copy.card === "offsets_lagging") {
+                    try {
+                        if (window.pywebview && pywebview.api
+                                && pywebview.api.start_roblox_fix) {
+                            const res = await pywebview.api.start_roblox_fix();
+                            if (res && res.state === "resolved") {
+                                status = await pywebview.api.get_loading_status();
+                                copy = rvcCopyForStatus(status);
+                            }
+                        }
+                    } catch (e) {}
+                    if (!alive()) return;
+                }
+                if (copy.card === "needs_roblox_update"
+                        || copy.card === "aligned_update_available") {
+                    await rvcRunFix(alive);
                     return;
                 }
-                if (sourceUnhealthy) {
-                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
-                        "Injection ready — using fallback offset source",
-                        "imtheo unreachable — currently on " + sourceValue + ".",
-                        alive);
-                    rvcSettle("result");
-                    return;
-                }
-                if (feedBehind) {
-                    await rvcCollapse(rvcEl("rvc-scan"), "warn",
-                        "Injection ready — offset feed is catching up",
-                        "Roblox: " + robloxVersion.slice(0, 18) + "…  |  Latest: "
-                            + (latest ? latest.slice(0, 18) + "…" : "unknown"),
-                        alive);
-                    rvcSettle("result");
-                    return;
-                }
-                await rvcCollapse(rvcEl("rvc-scan"), "ok",
-                    "Roblox version matches — injection ready",
-                    "Your Roblox: " + robloxVersion, alive);
+                await rvcCollapse(rvcEl("rvc-scan"), copy.kind,
+                    copy.title, copy.detail, alive);
                 rvcSettle("result");
             }
 
@@ -8030,18 +8681,18 @@
                 rvcEl("rvc-fix-spinner").style.display = "none";
                 await rvcSleep(420); if (!alive()) return;
 
-                // Re-read the now-updated build string for the result line.
-                let ver = (rvcLastVerdict && rvcLastVerdict.robloxVersion) || "";
+                // Re-read status and paint the honest card. Never claim
+                // "fixed" when the dump still lags a current Roblox install.
+                let status = null;
                 try {
                     if (window.pywebview && pywebview.api) {
-                        const s = await pywebview.api.get_loading_status();
-                        if (s && s.roblox_version) ver = s.roblox_version;
+                        status = await pywebview.api.get_loading_status();
                     }
                 } catch (e) {}
                 if (!alive()) return;
-                await rvcCollapse(rvcEl("rvc-fix"), "ok",
-                    "Roblox version fixed — injection ready",
-                    ver ? "Your Roblox: " + ver : "Injection ready.", alive);
+                const copy = rvcCopyForStatus(status);
+                await rvcCollapse(rvcEl("rvc-fix"), copy.kind,
+                    copy.title, copy.detail, alive);
                 rvcSettle("result");
             }
 
@@ -8203,24 +8854,14 @@
                 if (rvcPhase !== "result") return;
                 const card = rvcEl("rvc-card");
                 if (!card || card.getAnimations().length) return;
-                const ver = rvcLastVerdict.robloxVersion;
                 const titleEl = rvcEl("rvc-result-title");
                 const detailEl = rvcEl("rvc-result-detail");
                 if (!titleEl || !detailEl) return;
+                const copy = rvcCopyForStatus(status);
                 card.classList.remove("done-ok", "done-warn");
-                if (!ver) {
-                    card.classList.add("done-warn");
-                    titleEl.textContent = "Roblox not detected";
-                    detailEl.textContent = "Install or launch Roblox, then Refresh.";
-                } else if (mismatch) {
-                    card.classList.add("done-warn");
-                    titleEl.textContent = "Roblox version mismatch — click Refresh to fix";
-                    detailEl.textContent = "Your Roblox: " + ver;
-                } else {
-                    card.classList.add("done-ok");
-                    titleEl.textContent = "Roblox version matches — injection ready";
-                    detailEl.textContent = "Your Roblox: " + ver;
-                }
+                card.classList.add(copy.kind === "ok" ? "done-ok" : "done-warn");
+                titleEl.textContent = copy.title;
+                detailEl.textContent = copy.detail;
             }
 
             async function onFixRoblox() {
@@ -11998,6 +12639,175 @@
             // Apply the current petals on/off state while the Cherry theme is
             // active: toggle the body class (CSS shows the canvas), show/hide the
             // speed slider, and start/stop the animation.
+
+            // ===== Aurora: falling lights (petals-style canvas) =====
+            const auroraCanvas = document.getElementById("aurora-canvas");
+            const auroraCtx = auroraCanvas ? auroraCanvas.getContext("2d") : null;
+            let auroraAnimFrame;
+            let auroraBits = [];
+            let lastAuroraDraw = 0;
+            const AURORA_COLORS = ["#5eead4", "#2dd4bf", "#99f6e4", "#7dd3c7"];
+
+            function _makeAuroraBit() {
+                return {
+                    x: Math.random() * auroraCanvas.width,
+                    y: Math.random() * -auroraCanvas.height,
+                    r: 2 + Math.random() * 4,
+                    fall: 0.35 + Math.random() * 0.7,
+                    sway: Math.random() * Math.PI * 2,
+                    swayAmp: 0.4 + Math.random() * 1.1,
+                    color: AURORA_COLORS[
+                        Math.floor(Math.random() * AURORA_COLORS.length)
+                    ],
+                    alpha: 0.35 + Math.random() * 0.45,
+                };
+            }
+
+            function resizeAurora() {
+                if (!auroraCanvas) return;
+                auroraCanvas.width = window.innerWidth;
+                auroraCanvas.height = window.innerHeight;
+                const count = Math.round((auroraCanvas.width / 1000) * 28);
+                auroraBits = [];
+                for (let i = 0; i < count; i++) auroraBits.push(_makeAuroraBit());
+            }
+
+            function drawAurora() {
+                auroraAnimFrame = requestAnimationFrame(drawAurora);
+                const now = performance.now();
+                if (now - lastAuroraDraw < 24) return;
+                lastAuroraDraw = now;
+                auroraCtx.clearRect(0, 0, auroraCanvas.width, auroraCanvas.height);
+                for (const p of auroraBits) {
+                    p.y += p.fall;
+                    p.sway += 0.018;
+                    p.x += Math.sin(p.sway) * p.swayAmp * 0.35;
+                    auroraCtx.beginPath();
+                    auroraCtx.globalAlpha = p.alpha;
+                    auroraCtx.fillStyle = p.color;
+                    auroraCtx.shadowColor = p.color;
+                    auroraCtx.shadowBlur = 10;
+                    auroraCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    auroraCtx.fill();
+                    if (p.y - p.r > auroraCanvas.height) {
+                        Object.assign(p, _makeAuroraBit());
+                        p.y = -p.r * 2;
+                    } else if (p.x > auroraCanvas.width + 20) {
+                        p.x = -20;
+                    } else if (p.x < -20) {
+                        p.x = auroraCanvas.width + 20;
+                    }
+                }
+                auroraCtx.globalAlpha = 1;
+                auroraCtx.shadowBlur = 0;
+            }
+
+            function toggleAuroraAnim(enable) {
+                if (!auroraCanvas || !auroraCtx) return;
+                if (enable) {
+                    resizeAurora();
+                    window.addEventListener("resize", resizeAurora);
+                    lastAuroraDraw = performance.now();
+                    cancelAnimationFrame(auroraAnimFrame);
+                    auroraAnimFrame = requestAnimationFrame(drawAurora);
+                } else {
+                    window.removeEventListener("resize", resizeAurora);
+                    cancelAnimationFrame(auroraAnimFrame);
+                    auroraCtx.clearRect(0, 0, auroraCanvas.width, auroraCanvas.height);
+                }
+            }
+
+            // ===== Neko: falling cats (same canvas pattern as petals) =====
+            const nekoCanvas = document.getElementById("neko-canvas");
+            const nekoCtx = nekoCanvas ? nekoCanvas.getContext("2d") : null;
+            let nekoAnimFrame;
+            let nekoBits = [];
+            let lastNekoDraw = 0;
+            const NEKO_COLORS = ["#e07a5f", "#f0d0b4", "#8a7a70", "#d4a574"];
+
+            function _drawCatShape(c, s) {
+                c.beginPath();
+                c.moveTo(-s * 0.42, -s * 0.08);
+                c.lineTo(-s * 0.55, -s * 0.88);
+                c.lineTo(-s * 0.06, -s * 0.36);
+                c.lineTo(s * 0.06, -s * 0.36);
+                c.lineTo(s * 0.55, -s * 0.88);
+                c.lineTo(s * 0.42, -s * 0.08);
+                c.arc(0, s * 0.14, s * 0.58, -0.9, Math.PI + 0.9, false);
+                c.closePath();
+            }
+
+            function _makeNekoBit() {
+                return {
+                    x: Math.random() * nekoCanvas.width,
+                    y: Math.random() * -nekoCanvas.height,
+                    size: 10 + Math.random() * 10,
+                    rot: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.03,
+                    sway: Math.random() * Math.PI * 2,
+                    swayAmp: 0.5 + Math.random() * 1.2,
+                    fall: 0.5 + Math.random() * 0.8,
+                    color: NEKO_COLORS[
+                        Math.floor(Math.random() * NEKO_COLORS.length)
+                    ],
+                };
+            }
+
+            function resizeNeko() {
+                if (!nekoCanvas) return;
+                nekoCanvas.width = window.innerWidth;
+                nekoCanvas.height = window.innerHeight;
+                const count = Math.round((nekoCanvas.width / 1000) * 16);
+                nekoBits = [];
+                for (let i = 0; i < count; i++) nekoBits.push(_makeNekoBit());
+            }
+
+            function drawNeko() {
+                nekoAnimFrame = requestAnimationFrame(drawNeko);
+                const now = performance.now();
+                if (now - lastNekoDraw < 28) return;
+                lastNekoDraw = now;
+                nekoCtx.clearRect(0, 0, nekoCanvas.width, nekoCanvas.height);
+                const speedFactor = 0.85;
+                for (const p of nekoBits) {
+                    p.y += p.fall * speedFactor;
+                    p.sway += 0.02 * speedFactor;
+                    p.x += Math.sin(p.sway) * p.swayAmp * 0.4;
+                    p.rot += p.rotSpeed;
+                    nekoCtx.save();
+                    nekoCtx.translate(p.x, p.y);
+                    nekoCtx.rotate(p.rot);
+                    nekoCtx.globalAlpha = 0.82;
+                    nekoCtx.fillStyle = p.color;
+                    _drawCatShape(nekoCtx, p.size);
+                    nekoCtx.fill();
+                    nekoCtx.restore();
+                    if (p.y - p.size > nekoCanvas.height) {
+                        Object.assign(p, _makeNekoBit());
+                        p.y = -p.size * 2;
+                    } else if (p.x > nekoCanvas.width + 24) {
+                        p.x = -24;
+                    } else if (p.x < -24) {
+                        p.x = nekoCanvas.width + 24;
+                    }
+                }
+            }
+
+            function toggleNekoAnim(enable) {
+                if (!nekoCanvas || !nekoCtx) return;
+                if (enable) {
+                    resizeNeko();
+                    window.addEventListener("resize", resizeNeko);
+                    lastNekoDraw = performance.now();
+                    cancelAnimationFrame(nekoAnimFrame);
+                    nekoAnimFrame = requestAnimationFrame(drawNeko);
+                } else {
+                    window.removeEventListener("resize", resizeNeko);
+                    cancelAnimationFrame(nekoAnimFrame);
+                    nekoCtx.clearRect(0, 0, nekoCanvas.width, nekoCanvas.height);
+                }
+            }
+
             function applyPetalsState() {
                 document.body.classList.toggle("petals-on", petalsEnabled);
                 const speedRow = document.getElementById("petal-speed-row");

@@ -273,23 +273,155 @@ class RobloxManager:
         return candidates
 
     @staticmethod
-    def get_roblox_version_dir():
-        """Find the single best (most recent) Roblox version directory."""
-        candidates = RobloxManager.get_all_roblox_version_dirs()
-        if not candidates:
+    def get_running_version_dir():
+        """Version directory of a live RobloxPlayerBeta.exe process, or None.
+
+        Prefers a Toolhelp snapshot (process exists even before the game
+        window is up), then the visible "Roblox" window image path.
+        """
+        try:
+            snapshot = _k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            if snapshot != INVALID_HANDLE:
+                entry = PROCESSENTRY32W()
+                entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+                pids = []
+                try:
+                    if _k32.Process32FirstW(snapshot, ctypes.byref(entry)):
+                        while True:
+                            if entry.szExeFile.lower() == "robloxplayerbeta.exe":
+                                pids.append(entry.th32ProcessID)
+                            if not _k32.Process32NextW(snapshot, ctypes.byref(entry)):
+                                break
+                finally:
+                    _k32.CloseHandle(snapshot)
+                for pid in pids:
+                    h_proc = _k32.OpenProcess(0x1000 | 0x0010, False, pid)
+                    if not h_proc:
+                        continue
+                    try:
+                        buf = ctypes.create_unicode_buffer(1024)
+                        size = wintypes.DWORD(1024)
+                        if _k32.QueryFullProcessImageNameW(
+                                h_proc, 0, buf, ctypes.byref(size)):
+                            vdir = os.path.dirname(buf.value)
+                            if vdir and os.path.isdir(vdir):
+                                return vdir
+                    finally:
+                        _k32.CloseHandle(h_proc)
+        except Exception:
+            pass
+        try:
+            hwnd = ctypes.windll.user32.FindWindowW(None, "Roblox")
+            if hwnd:
+                pid = ctypes.c_ulong(0)
+                ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value > 0:
+                    h_proc = _k32.OpenProcess(0x1000 | 0x0010, False, pid.value)
+                    if h_proc:
+                        try:
+                            buf = ctypes.create_unicode_buffer(1024)
+                            size = wintypes.DWORD(1024)
+                            if _k32.QueryFullProcessImageNameW(
+                                    h_proc, 0, buf, ctypes.byref(size)):
+                                vdir = os.path.dirname(buf.value)
+                                if vdir and os.path.isdir(vdir):
+                                    return vdir
+                        finally:
+                            _k32.CloseHandle(h_proc)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _player_exe_mtime(vdir):
+        """mtime of RobloxPlayerBeta.exe / RobloxPlayer.exe in vdir, or 0."""
+        for name in ("RobloxPlayerBeta.exe", "RobloxPlayer.exe"):
+            exe = os.path.join(vdir, name)
+            if os.path.isfile(exe):
+                try:
+                    return os.path.getmtime(exe)
+                except OSError:
+                    return 0.0
+        return 0.0
+
+    @staticmethod
+    def _pick_newest_player_dir(dirs):
+        """Pick the dir whose player exe is newest. Folder name is only a
+        tie-break (GUID strings are not chronological). Never uses directory
+        mtime — writing ClientAppSettings.json would make leftovers win."""
+        if not dirs:
             return None
-            
-        # Sort by most recently used/modified
-        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-        return candidates[0]
+        return max(
+            dirs,
+            key=lambda p: (RobloxManager._player_exe_mtime(p), os.path.basename(p)),
+        )
+
+    @staticmethod
+    def get_roblox_version_dir():
+        """The Roblox version directory that represents "your Roblox".
+
+        Running client wins (the PID's own folder). Otherwise prefer the
+        stock %LOCALAPPDATA%\\Roblox\\Versions tree and pick by player-exe
+        mtime, not folder mtime. A bootstrapper tree is used only when
+        stock has no player exe.
+        """
+        running = RobloxManager.get_running_version_dir()
+        if running:
+            return running
+        stock = RobloxManager.get_writable_version_dirs()
+        if stock:
+            return RobloxManager._pick_newest_player_dir(stock)
+        others = RobloxManager.get_all_roblox_version_dirs()
+        if others:
+            return RobloxManager._pick_newest_player_dir(others)
+        return None
 
     @staticmethod
     def get_versions_root():
-        """The parent 'Versions' directory of the most-recent install, or None."""
+        """The parent 'Versions' directory of the current install, or None."""
         vdir = RobloxManager.get_roblox_version_dir()
         if not vdir:
             return None
         return os.path.dirname(vdir)
+
+    @staticmethod
+    def get_install_versions_root():
+        """Where FFM should download a Roblox build.
+
+        Prefer the stock Versions tree whenever that folder exists so a
+        download never lands inside a third-party launcher's Versions.
+        Fall back to another launcher's tree only when stock is absent.
+        """
+        stock = RobloxManager.get_stock_versions_root()
+        if stock and os.path.isdir(stock):
+            return stock
+        return RobloxManager.get_versions_root()
+
+    @staticmethod
+    def ensure_stock_versions_root():
+        """Create %LOCALAPPDATA%\\Roblox\\Versions if it is missing.
+
+        Used when the user has no version folders left (deleted the tree) so
+        a production download still has a stock place to land. Returns the
+        path, or None if LOCALAPPDATA is unavailable.
+        """
+        stock = RobloxManager.get_stock_versions_root()
+        if not stock:
+            return None
+        os.makedirs(stock, exist_ok=True)
+        return stock
+
+    @staticmethod
+    def resolve_download_versions_root():
+        """Existing install tree, or a freshly created stock Versions folder.
+
+        Prefer an already-present stock/bootstrapper Versions dir. If none
+        exists, create the stock tree so Roblox can be installed from scratch.
+        """
+        root = RobloxManager.get_install_versions_root()
+        if root:
+            return root
+        return RobloxManager.ensure_stock_versions_root()
 
     @staticmethod
     def get_stock_versions_root():
@@ -328,13 +460,26 @@ class RobloxManager:
     @staticmethod
     def resolve_version_exe(guid):
         """Resolve RobloxPlayerBeta.exe for a specific build guid (bare or
-        'version-...'), or None if the versions root or the exe is missing."""
-        root = RobloxManager.get_versions_root()
-        if not root:
+        'version-...'), or None if the versions root or the exe is missing.
+
+        Stock Versions is checked first so a leftover folder in another tree
+        cannot win over the production client we just installed.
+        """
+        if not guid:
             return None
         name = guid if str(guid).startswith("version-") else f"version-{guid}"
-        exe = os.path.join(root, name, "RobloxPlayerBeta.exe")
-        return exe if os.path.exists(exe) else None
+        roots = []
+        stock = RobloxManager.get_stock_versions_root()
+        if stock:
+            roots.append(stock)
+        other = RobloxManager.get_versions_root()
+        if other and other not in roots:
+            roots.append(other)
+        for root in roots:
+            exe = os.path.join(root, name, "RobloxPlayerBeta.exe")
+            if os.path.exists(exe):
+                return exe
+        return None
 
     @staticmethod
     def get_roblox_version_string():
@@ -348,8 +493,8 @@ class RobloxManager:
         Roblox process — the exe FFM currently holds a handle to.
 
         Distinct from ``get_roblox_version_string()``, which returns the
-        disk-newest build dir. That disk-latest value drifts ahead of the
-        attached PID when a bootstrapper writes a fresh ``version-YYY/``
+        stock (or running) install folder. That disk value can drift ahead of
+        the attached PID when a bootstrapper writes a fresh ``version-YYY/``
         while the old build is still running; a check that uses it would
         pass, and the following live-memory write would target wrong RVAs
         in the running build and crash it. This helper reads the attached
@@ -1278,8 +1423,21 @@ class RobloxManager:
 
     def launch_and_patch_roblox(self, flags_list):
         """Launch Roblox normally. Early patching is removed because flags are heap-allocated."""
-        # Find the exe
-        version_dir = RobloxManager.get_roblox_version_dir()
+        version_dir = None
+        latest = None
+        try:
+            from src.core.version_changer import deployment, fixer
+            latest = deployment.get_latest_production_guid()
+            if latest and not RobloxManager.is_roblox_running():
+                fixer.prune_stock_non_production(latest)
+            if latest:
+                exe = RobloxManager.resolve_version_exe(latest)
+                if exe:
+                    version_dir = os.path.dirname(exe)
+        except Exception:
+            version_dir = None
+        if not version_dir:
+            version_dir = RobloxManager.get_roblox_version_dir()
         if not version_dir:
             log("[-] Cannot find Roblox version directory", (255, 100, 100))
             return False, 0, 0, 0
@@ -1290,6 +1448,9 @@ class RobloxManager:
             return False, 0, 0, 0
             
         log("[*] Launching Roblox...", (100, 255, 255))
+
+        from src.core.version_changer.channel import pin_production_channel
+        pin_production_channel()
 
         si = STARTUPINFOW()
         si.cb = ctypes.sizeof(STARTUPINFOW)
@@ -1327,6 +1488,12 @@ class RobloxManager:
         if not exe_path:
             log(f"[-] Build not installed: {guid}", (255, 100, 100))
             return False, 0
+        from src.core.version_changer.channel import (
+            pin_production_channel,
+            rewrite_launch_args_channel,
+        )
+        pin_production_channel()
+        args = rewrite_launch_args_channel(args)
         work_dir = os.path.dirname(exe_path)
         cmdline = None
         if args:

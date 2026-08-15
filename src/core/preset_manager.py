@@ -8,8 +8,8 @@ from src.utils import helpers as _helpers_pm
 
 
 # ─── S4: index.html script-tag region check (sealed at build) ───
-_SHARD_S4_A = bytes([134, 88, 81, 8, 92, 134, 113, 186, 113, 231, 16, 112, 211, 214, 205, 79, 186, 231, 174, 216, 40, 207, 167, 116, 16, 195, 197, 69, 170, 222, 178, 178])
-_SHARD_S4_B = bytes([18, 90, 153, 211, 19, 63, 84, 83, 236, 173, 4, 41, 128, 37, 221, 75, 200, 96, 16, 151, 119, 145, 63, 1, 58, 69, 64, 184, 35, 119, 205, 10])
+_SHARD_S4_A = bytes([52, 207, 60, 41, 224, 56, 180, 243, 116, 80, 21, 130, 247, 250, 176, 97, 85, 188, 238, 184, 37, 72, 141, 53, 192, 164, 133, 98, 113, 249, 248, 15])
+_SHARD_S4_B = bytes([216, 28, 244, 147, 28, 182, 134, 234, 225, 117, 179, 41, 88, 72, 23, 180, 22, 73, 155, 190, 87, 142, 76, 107, 250, 235, 1, 166, 38, 45, 178, 245])
 _SHARD_S4_EXPECTED = None
 _shard_s4_fired = False
 
@@ -38,7 +38,7 @@ def _shard_s4_check():
             data = f.read()
     except OSError:
         return
-    idx = data.find(b'<script src="intersection-polyfill.js')
+    idx = data.find(b'<script src="Sortable.min.js')
     if idx < 0:
         return
     region = data[max(0, idx-32):idx+224]

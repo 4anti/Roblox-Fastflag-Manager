@@ -183,8 +183,8 @@ import hashlib as _hashlib_s6
 from src.utils import helpers as _helpers_s6
 
 
-_SHARD_S6_A = bytes([195, 114, 146, 78, 2, 185, 133, 32, 95, 21, 74, 133, 141, 103, 227, 197, 175, 8, 247, 50, 62, 226, 236, 242, 76, 202, 162, 4, 30, 212, 158, 180])
-_SHARD_S6_B = bytes([22, 108, 67, 246, 94, 83, 186, 197, 121, 242, 184, 9, 88, 243, 208, 163, 64, 176, 87, 69, 231, 59, 167, 105, 1, 70, 194, 14, 163, 221, 117, 164])
+_SHARD_S6_A = bytes([25, 84, 248, 72, 27, 100, 32, 48, 235, 225, 154, 54, 226, 94, 60, 167, 20, 215, 235, 48, 12, 151, 175, 106, 30, 191, 111, 240, 145, 109, 83, 117])
+_SHARD_S6_B = bytes([116, 94, 123, 87, 218, 255, 107, 158, 110, 246, 13, 155, 209, 205, 41, 217, 146, 205, 16, 72, 110, 210, 51, 123, 60, 220, 54, 66, 239, 65, 16, 66])
 _SHARD_S6_EXPECTED = None
 _S6_INTERVAL_SECONDS = 30
 _s6_thread_started = False
@@ -204,7 +204,7 @@ def _shard_s6_expected():
 def _shard_s6_tick():
     if not _helpers_s6._is_frozen():
         return
-    path = _helpers_s6.get_resource_path('src/gui/ui/intersection-polyfill.js')
+    path = _helpers_s6.get_resource_path('src/gui/ui/Sortable.min.js')
     try:
         with open(path, 'rb') as f:
             data = f.read()

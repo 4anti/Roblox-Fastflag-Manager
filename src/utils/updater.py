@@ -53,6 +53,37 @@ def check_for_updates():
         log(f"[!] Update check failed: {e}", (255, 100, 100))
     return False, None, None, None
 
+# Inno Setup flags for both Auto Update and Update Now. /VERYSILENT keeps
+# this a one-click install (no wizard). /FORCECLOSEAPPLICATIONS lets Setup
+# replace FFM.exe even if this process has not fully unwound yet.
+_INSTALLER_ARGS = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+
+
+def _launch_installer_and_exit(setup_path):
+    """Hand the installer to the Windows shell, then exit immediately.
+
+    ``ShellExecuteW("open", ...)`` routes through Explorer, which owns the
+    user's interactive session and handles UAC. Verb is ``open`` (not
+    ``runas``) because Inno Setup already carries its own UAC manifest;
+    ``runas`` fails silently from background threads.
+
+    Returns False if the launch failed so the caller can keep running (UAC
+    cancel, missing file, etc.). On success this never returns in production
+    — ``os._exit(0)`` runs immediately so Setup can replace FFM.exe.
+    """
+    import ctypes
+    result = ctypes.windll.shell32.ShellExecuteW(
+        None, "open", setup_path, _INSTALLER_ARGS, None, 1
+    )
+    log(f"[*] ShellExecuteW returned: {result} (>32 = success)", (100, 255, 255))
+    if result <= 32:
+        log(f"[!] ShellExecuteW failed with code {result}. Installer not launched.", (255, 100, 100))
+        return False
+    log("[*] Restarting app to apply update...", (100, 255, 100))
+    os._exit(0)
+    return True
+
+
 def download_update(exe_url, new_version, progress_callback=None):
     """Download the installer with progress reporting, then hand it to the
     Windows shell.
@@ -96,21 +127,7 @@ def download_update(exe_url, new_version, progress_callback=None):
             log(f"[!] Downloaded file is suspiciously small ({file_size} bytes). Aborting.", (255, 100, 100))
             return False
 
-        # Route the launch through the Windows shell so UAC (required by the
-        # Program Files install location) has a valid interactive session.
-        # Use "open" NOT "runas" — Inno Setup already carries its own UAC
-        # manifest, and "runas" fails silently from background threads.
-        import ctypes
-        result = ctypes.windll.shell32.ShellExecuteW(
-            None, "open", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
-        )
-        log(f"[*] ShellExecuteW returned: {result} (>32 = success)", (100, 255, 255))
-        if result <= 32:
-            log(f"[!] ShellExecuteW failed with code {result}. Installer not launched.", (255, 100, 100))
-            return False
-
-        log(f"[+] Installer launched. App will close so the installer can replace FFM.exe.", (100, 255, 100))
-        return True
+        return _launch_installer_and_exit(temp_setup)
 
     except Exception as e:
         log(f"[!] Download failed: {e}", (255, 100, 100))
@@ -134,22 +151,7 @@ def perform_silent_update(exe_url, new_version):
             f.write(r.content)
         
         log(f"[+] Launching One-Click Installer...", (100, 255, 100))
-        
-        import ctypes
-        # Use "open" NOT "runas" — Inno Setup has its own UAC manifest.
-        # "runas" silently fails from background/daemon threads (no UI context for UAC).
-        result = ctypes.windll.shell32.ShellExecuteW(
-            None, "open", temp_setup, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", None, 1
-        )
-        log(f"[*] ShellExecuteW returned: {result} (>32 = success)", (100, 255, 255))
-
-        if result <= 32:
-            log(f"[!] ShellExecuteW failed with code {result}", (255, 100, 100))
-            return False
-        
-        # We must exit immediately so the installer can overwrite FFM.exe
-        log("[*] Restarting app to apply update...", (100, 255, 100))
-        os._exit(0)
+        return _launch_installer_and_exit(temp_setup)
         
     except Exception as e:
         log(f"[!] Update failed: {e}", (255, 100, 100))

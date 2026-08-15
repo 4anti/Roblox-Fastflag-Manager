@@ -8,7 +8,7 @@ from pathlib import Path
 
 # ─── Settings integrity (HMAC over ads_enabled || version || install_id) ───
 # Shard A lives here; Shard B is contributed by api.py at module import time.
-_HMAC_SHARD_A = bytes([41, 55, 95, 82, 107, 144, 211, 8, 168, 111, 29, 65, 220, 106, 2, 52, 225, 38, 111, 160, 35, 182, 75, 243, 236, 217, 94, 219, 213, 147, 68, 26])
+_HMAC_SHARD_A = bytes([224, 164, 215, 39, 107, 189, 15, 231, 248, 71, 138, 113, 80, 194, 131, 144, 143, 184, 59, 158, 64, 192, 126, 236, 54, 163, 129, 153, 173, 116, 45, 166])
 _HMAC_SHARD_B = bytes(32)
 _VERSION_TAG = b'ffm-cfg-v1'
 

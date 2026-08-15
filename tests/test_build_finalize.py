@@ -38,7 +38,7 @@ class TestBuildFinalizeHelpers(unittest.TestCase):
         path = os.path.join(FIXTURES, 'clean_index.html')
         with open(path, 'rb') as f:
             data = f.read()
-        idx = data.find(b'<script src="intersection-polyfill.js')
+        idx = data.find(b'<script src="Sortable.min.js')
         region = data[max(0, idx-32):idx+224]
         self.assertEqual(build_finalize.hash_html_script_region(path),
                          hashlib.sha256(region).digest())

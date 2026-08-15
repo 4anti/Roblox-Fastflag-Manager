@@ -16,14 +16,14 @@ from src.core.preset_manager import PresetManager
 # ─── HMAC key shard B (paired with config._HMAC_SHARD_A) ───
 from src.utils import config as _cfg_module
 from src.utils import helpers as _helpers_module
-_cfg_module._register_hmac_shard_b(bytes([234, 243, 221, 110, 103, 157, 85, 83, 74, 38, 34, 180, 90, 112, 132, 134, 74, 69, 67, 89, 58, 20, 171, 206, 187, 47, 155, 96, 180, 212, 239, 208]))  # Sealed at build time
+_cfg_module._register_hmac_shard_b(bytes([89, 150, 227, 32, 105, 184, 30, 184, 195, 160, 39, 97, 6, 34, 201, 28, 26, 43, 24, 148, 79, 77, 1, 241, 77, 46, 249, 198, 17, 81, 164, 213]))  # Sealed at build time
 
 
 # ─── S5: bytecode self-check (sealed at build) ───
 import hashlib as _hashlib_s5
 
-_SHARD_S5_A = bytes([6, 15, 79, 243, 161, 84, 193, 195, 81, 246, 183, 119, 230, 178, 0, 36, 235, 192, 106, 173, 140, 149, 30, 23, 203, 225, 36, 131, 246, 84, 58, 200])
-_SHARD_S5_B = bytes([47, 25, 141, 86, 125, 166, 230, 70, 206, 67, 225, 118, 121, 118, 25, 76, 22, 19, 199, 2, 76, 220, 45, 161, 69, 198, 190, 115, 67, 13, 55, 147])
+_SHARD_S5_A = bytes([95, 202, 55, 172, 113, 34, 239, 146, 60, 212, 124, 6, 204, 161, 141, 24, 18, 13, 151, 41, 201, 124, 180, 77, 100, 192, 130, 6, 19, 134, 15, 94])
+_SHARD_S5_B = bytes([118, 220, 245, 9, 173, 208, 200, 23, 163, 97, 42, 7, 83, 101, 148, 112, 239, 222, 58, 134, 9, 53, 135, 251, 234, 231, 24, 246, 166, 223, 2, 5])
 _SHARD_S5_EXPECTED = None
 _shard_s5_fired = False
 
@@ -408,6 +408,11 @@ class Api:
         except Exception:
             self.settings = {'auto_apply': False, 'history_limit': 20, 'ui_theme': 'premium'}
 
+        try:
+            self.get_content_filter()
+        except Exception:
+            pass
+
         # Load offsets in background thread (not on main thread!)
         threading.Thread(target=self._init_offsets, daemon=True).start()
 
@@ -494,20 +499,20 @@ class Api:
         from src.core.version_changer import bootstrapper, deployment, fastpath
 
         installed = RobloxManager.get_roblox_version_string()
-        if not installed or installed == 'unknown':
-            return
+        no_install = (not installed or installed == 'unknown')
         # Offsets-first self-heal: refresh offsets so live injection recovers
         # automatically once imtheo catches up to the installed build. (Never a
         # download here — the rare "Roblox behind offsets" case stays the manual
-        # Fix Roblox button.)
-        try:
-            offsets_target = offset_loader.fetch_latest_build()
-            if offsets_target and installed != offsets_target:
-                offset_loader.reset_cache()
-                if self.flag_manager:
-                    self.flag_manager.load_offsets(force_cdn=True)
-        except Exception:
-            pass
+        # Fix Roblox button.) Skip when there is no install to compare against.
+        if not no_install:
+            try:
+                offsets_target = offset_loader.fetch_latest_build()
+                if offsets_target and installed != offsets_target:
+                    offset_loader.reset_cache()
+                    if self.flag_manager:
+                        self.flag_manager.load_offsets(force_cdn=True)
+            except Exception:
+                pass
         # Auto-download the latest Roblox build when the installed one is
         # behind. Silent, background. Guardrails:
         #   - Skip when Roblox is running (never yank the process out from
@@ -529,7 +534,7 @@ class Api:
                     pass
                 if not _rbx_running:
                     _latest = deployment.get_latest_production_guid()
-                    if _latest and installed != _latest:
+                    if _latest and (no_install or installed != _latest):
                         log(
                             f"[*] Auto-updating Roblox to latest ({_latest[:16]}…)",
                             (100, 200, 255),
@@ -537,6 +542,15 @@ class Api:
                         # start_roblox_download re-verifies the running/latest
                         # state itself and spawns its own daemon thread.
                         self.start_roblox_download()
+                    elif _latest:
+                        # Already on production, but leftover version folders
+                        # can still be launched. Clear them while Roblox is closed.
+                        try:
+                            if not RobloxManager.is_roblox_running():
+                                from src.core.version_changer import fixer as _fixer
+                                _fixer.prune_stock_non_production(_latest)
+                        except Exception:
+                            pass
         except Exception as _auto_dl_exc:
             log(
                 f"[!] Auto-update skipped ({type(_auto_dl_exc).__name__})",
@@ -547,7 +561,7 @@ class Api:
         # latest production build. Best-effort; never blocks anything.
         try:
             latest = deployment.get_latest_production_guid()
-            if latest:
+            if latest and not no_install:
                 fastpath.write_known_good(installed, latest)
         except Exception:
             pass
@@ -687,6 +701,19 @@ class Api:
             )
         )
 
+        version_card = "offsets_pending"
+        try:
+            from src.core.version_changer import fixer as _fixer_card
+            version_card = _fixer_card.classify_version_card(
+                roblox_version, offsets_version, latest_production)
+        except Exception:
+            if not roblox_version:
+                version_card = "no_roblox"
+            elif version_mismatch:
+                version_card = "needs_roblox_update"
+            else:
+                version_card = "aligned"
+
         return {
             'ready': self.flag_manager.offsets_loaded,
             'loading': self.flag_manager.offsets_loading,
@@ -705,6 +732,7 @@ class Api:
             'roblox_is_latest': roblox_is_latest,
             'offsets_current': offsets_current,
             'source_healthy': source_healthy,
+            'version_card': version_card,
         }
 
     def start_roblox_fix(self):
@@ -788,7 +816,6 @@ class Api:
         Returns the initial decision; the modal then polls
         `get_roblox_fix_progress` for the worker's state transitions.
         """
-        import os as _os
         import threading as _threading
         from src.core.roblox_manager import RobloxManager
         from src.core.version_changer import fixer, deployment
@@ -812,13 +839,16 @@ class Api:
             return {"state": "error",
                     "message": "Could not reach the Roblox version servers. Try again."}
         if installed and installed == latest:
+            try:
+                fixer.prune_stock_non_production(latest)
+            except Exception:
+                pass
             return {"state": "already_matching",
                     "message": "Your Roblox build is already up to date. Nothing to do."}
 
-        version_dir = RobloxManager.get_roblox_version_dir()
-        if not version_dir:
+        versions_root = RobloxManager.resolve_download_versions_root()
+        if not versions_root:
             return {"state": "error", "message": "No Roblox install directory found."}
-        versions_root = _os.path.dirname(version_dir)
         cache_dirs = []
         try:
             cache_dirs = RobloxManager.get_all_roblox_version_dirs() or []
@@ -835,27 +865,45 @@ class Api:
             def _progress(done, total, name):
                 self._fix_progress = int((done / total) * 100) if total else 0
                 self._fix_message = f"{done}/{total} packages"
-            result = fixer.run_upgrade(target_build, versions_root, cache_dirs,
-                                       progress=_progress,
-                                       should_cancel=lambda: self._fix_cancel)
-            if result.get("ok"):
-                try:
-                    if self.flag_manager:
-                        offset_loader.reset_cache()
-                        self.flag_manager.load_offsets(force_cdn=True)
-                except Exception:
-                    pass
-                self._fix_progress = 100
-                self._fix_state = "done"
-                # already_present carries a different message ("That build is
-                # already installed.") than a fresh install ("Roblox build
-                # installed."). Preserve the fixer's message so users see the
-                # right one; fall back to the launch nudge when nothing set.
-                self._fix_message = result.get("message") or "Roblox updated. Launch Roblox to apply flags."
-            else:
+            try:
+                result = fixer.run_upgrade(target_build, versions_root, cache_dirs,
+                                           progress=_progress,
+                                           should_cancel=lambda: self._fix_cancel)
+                if result.get("ok"):
+                    try:
+                        fixer.prune_stock_non_production(target_build)
+                    except Exception:
+                        pass
+                    try:
+                        if self.flag_manager:
+                            offset_loader.reset_cache()
+                            self.flag_manager.load_offsets(force_cdn=True)
+                    except Exception:
+                        pass
+                    self._fix_progress = 100
+                    self._fix_state = "done"
+                    # already_present carries a different message ("That build is
+                    # already installed.") than a fresh install ("Roblox build
+                    # installed."). Preserve the fixer's message so users see the
+                    # right one; fall back to the launch nudge when nothing set.
+                    self._fix_message = result.get("message") or "Roblox updated. Launch Roblox to apply flags."
+                else:
+                    self._fix_progress = -1
+                    self._fix_state = "cancelled" if result.get("state") == "cancelled" else "failed"
+                    self._fix_message = result.get("message", "Download failed.")
+            except Exception as e:
+                log(f"[!] Roblox download worker failed: {type(e).__name__}: {e}",
+                    (255, 120, 120))
                 self._fix_progress = -1
-                self._fix_state = "cancelled" if result.get("state") == "cancelled" else "failed"
-                self._fix_message = result.get("message", "Download failed.")
+                self._fix_state = "failed"
+                self._fix_message = f"Download failed ({type(e).__name__})."
+            finally:
+                # Never leave the UI / 5-min auto-update stuck on "running".
+                if self._fix_state == "running":
+                    self._fix_progress = -1
+                    self._fix_state = "failed"
+                    if not self._fix_message:
+                        self._fix_message = "Download failed."
 
         _threading.Thread(target=_worker, daemon=True).start()
         return {"state": "started",
@@ -1191,7 +1239,6 @@ class Api:
             success = download_update(info['exe_url'], info['version'], progress_callback=on_progress)
             if success:
                 self._update_progress = 100
-                time.sleep(1.0)  # Brief pause so the frontend can render 100% before we die.
                 os._exit(0)
             else:
                 self._update_progress = -1  # Signal failure
@@ -1248,13 +1295,17 @@ class Api:
             self._last_refresh = _time_rot.time()
             return
         search_lower = search_term.lower()
-
-        # If term hasn't changed, don't re-calculate
-        if hasattr(self, '_search_cache_term') and self._search_cache_term == search_lower:
-            return
-            
         combined_list = self.flag_manager.preset_flags_list
-        
+        src_len = len(combined_list) if combined_list is not None else 0
+
+        # Same term AND same source length: reuse. An empty first paint
+        # (offsets still loading) must not pin a zero-length cache once
+        # preset_flags_list is later populated.
+        if (hasattr(self, '_search_cache_term')
+                and self._search_cache_term == search_lower
+                and getattr(self, '_search_cache_src_len', None) == src_len):
+            return
+
         if not search_lower:
             self._search_cache = combined_list
         else:
@@ -1264,8 +1315,9 @@ class Api:
                 name for name in combined_list 
                 if search_lower in name.lower() or search_lower in clean_flag_name(name).lower()
             ]
-            
+
         self._search_cache_term = search_lower
+        self._search_cache_src_len = src_len
 
     def get_fflag_count(self, search='') -> int:
         """Get total number of discovered flags, optionally filtered by search."""
