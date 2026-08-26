@@ -5,7 +5,7 @@ import time
 import threading
 from src.utils.config import Config
 from src.utils.logger import log
-from src.utils.helpers import infer_type, clean_flag_name, is_fps_flag
+from src.utils.helpers import infer_type, clean_flag_name, is_fps_flag, get_flag_prefix, heal_dflag_flag_names
 
 import hashlib as _hashlib_s7
 from src.utils import helpers as _s7_helpers
@@ -48,6 +48,12 @@ def _shard_s7_check():
         _s7_helpers._rot_subtract(437)
 
 TURBO_INTERVAL = 0.05  # 50 ms
+
+# Join Roblox: wait until process memory is readable, then apply immediately.
+# To undo: LAUNCH_INIT_POLL_SEC = 1.0 and restore a 1s sleep after readable.
+LAUNCH_INIT_POLL_SEC = 0.05
+LAUNCH_INIT_TIMEOUT_SEC = 15.0
+LAUNCH_NO_PROCESS_SEC = 4.0
 
 
 def _fps_unlock_on():
@@ -385,8 +391,13 @@ class FlagManager:
                         } 
                         for flag in data if 'name' in flag and 'value' in flag
                     ]
+                    new_flags, healed = heal_dflag_flag_names(new_flags)
                     with self._lock:
                         self.user_flags = new_flags
+                    if healed:
+                        log("[*] Normalized DFlag-prefixed names to dump names",
+                            (180, 200, 180))
+                        self.save_user_flags(skip_sync=True)
                 else:
                     with self._lock:
                         self.user_flags = []
@@ -429,6 +440,52 @@ class FlagManager:
             log(f"Failed to save flags: {e}", (255, 100, 100))
             return False
 
+    def build_clientapp_dict(self):
+        """Enabled flags as a name->value map for ClientAppSettings.json."""
+        with self._lock:
+            flags_snapshot = list(self.user_flags)
+
+        fps_unlock = _fps_unlock_on()
+        flags_dict = {}
+        for flag in flags_snapshot:
+            if not flag.get('enabled', True):
+                continue
+
+            name = flag['name']
+            if _skip_fps(name, fps_unlock):
+                continue  # FPS handled by the file-based FramerateCap unlock
+            val_str = str(flag['value'])
+            ftype = flag.get('type', 'string')
+
+            if ftype == 'bool':
+                val = val_str.lower() in ('true', '1', 'yes')
+            elif ftype == 'int':
+                try: val = int(val_str)
+                except ValueError: val = 0
+            elif ftype == 'float':
+                try: val = float(val_str)
+                except ValueError: val = 0.0
+            else:
+                val = val_str
+
+            prefix = get_flag_prefix(name)
+            if prefix:
+                full_name = name
+            else:
+                clean = clean_flag_name(name)
+                known = self.official_prefixes.get(name) or self.official_prefixes.get(clean)
+                if not known:
+                    for full, pfx in self.official_prefixes.items():
+                        if clean_flag_name(full) == clean:
+                            known = pfx
+                            break
+                if not known and ftype == 'bool':
+                    known = 'FFlag'
+                full_name = (known + clean) if known else name
+
+            flags_dict[full_name] = val
+        return flags_dict
+
     def sync_json_to_roblox(self, roblox_manager=None):
         """Pre-emptively write enabled flags to ClientAppSettings.json.
         
@@ -439,47 +496,11 @@ class FlagManager:
             if not roblox_manager:
                 from src.core.roblox_manager import RobloxManager
                 roblox_manager = RobloxManager
-                
-            with self._lock:
-                flags_snapshot = list(self.user_flags)
-                
-            if not flags_snapshot:
-                return
-                
-            fps_unlock = _fps_unlock_on()
-            flags_dict = {}
-            for flag in flags_snapshot:
-                if not flag.get('enabled', True):
-                    continue
 
-                name = flag['name']
-                if _skip_fps(name, fps_unlock):
-                    continue  # FPS handled by the file-based FramerateCap unlock
-                clean = clean_flag_name(name)
-                # If we know the official prefix and the current name is missing it, prepend it.
-                # If the name ALREADY has a prefix (new architecture), use it as is.
-                prefix = self.official_prefixes.get(name) or self.official_prefixes.get(clean)
-                if prefix and not name.startswith(prefix):
-                    full_name = prefix + clean
-                else:
-                    full_name = name
-                    
-                val_str = str(flag['value'])
-                ftype = flag.get('type', 'string')
-                
-                if ftype == 'bool':
-                    val = val_str.lower() in ('true', '1', 'yes')
-                elif ftype == 'int':
-                    try: val = int(val_str)
-                    except ValueError: val = 0
-                elif ftype == 'float':
-                    try: val = float(val_str)
-                    except ValueError: val = 0.0
-                else:
-                    val = val_str
-                    
-                flags_dict[full_name] = val
-            
+            flags_dict = self.build_clientapp_dict()
+            if not self.user_flags:
+                return True, "No flags"
+
             # This writes to the latest version directory's ClientSettings/ClientAppSettings.json
             return roblox_manager.apply_fflags_json(flags_dict)
         except Exception as e:
@@ -999,31 +1020,11 @@ class FlagManager:
             if not skip_json:
                 log(f"[*] Writing {total} flags to ClientAppSettings.json...", (100, 255, 255))
 
-                flags_dict = {}
+                flags_dict = self.build_clientapp_dict()
                 fps_skipped = 0
                 for flag in flags_snapshot:
-                    if not flag.get('enabled', True):
-                        continue
-
-                    name = flag['name']
-                    if _skip_fps(name, fps_unlock):
+                    if flag.get('enabled', True) and _skip_fps(flag['name'], fps_unlock):
                         fps_skipped += 1
-                        continue  # FPS handled by the file-based FramerateCap unlock
-                    val_str = str(flag['value'])
-                    ftype = flag.get('type', 'string')
-
-                    if ftype == 'bool':
-                        val = val_str.lower() in ('true', '1', 'yes')
-                    elif ftype == 'int':
-                        try: val = int(val_str)
-                        except ValueError: val = 0
-                    elif ftype == 'float':
-                        try: val = float(val_str)
-                        except ValueError: val = 0.0
-                    else:
-                        val = val_str
-
-                    flags_dict[name] = val
 
                 # Explain the count gap users notice (e.g. 261 in the editor but
                 # 260 applied): FPS flags are intentionally not written — the
@@ -1309,28 +1310,7 @@ class FlagManager:
         # === Step 1: Write JSON (only when we have flags to persist) ===
         if has_flags:
             log("[*] Writing active flags to ClientAppSettings.json...", (100, 255, 255))
-            fps_unlock = _fps_unlock_on()
-            flags_dict = {}
-            for flag in self.user_flags:
-                if not flag.get('enabled', True):
-                    continue
-                name = flag['name']
-                if _skip_fps(name, fps_unlock):
-                    continue  # FPS handled by the file-based FramerateCap unlock
-                val_str = str(flag['value'])
-                ftype = flag.get('type', 'string')
-
-                if ftype == 'bool':
-                    val = val_str.lower() in ('true', '1', 'yes')
-                elif ftype == 'int':
-                    try: val = int(val_str)
-                    except ValueError: val = 0
-                elif ftype == 'float':
-                    try: val = float(val_str)
-                    except ValueError: val = 0.0
-                else:
-                    val = val_str
-                flags_dict[name] = val
+            flags_dict = self.build_clientapp_dict()
 
             json_ok, json_msg = roblox_manager.apply_fflags_json(flags_dict)
             if json_ok:
@@ -1355,23 +1335,21 @@ class FlagManager:
                 # never started" apart from "running but we couldn't read it".
                 initialized = False
                 saw_process = False
-                for i in range(15):
-                    time.sleep(1.0)
+                t0 = time.time()
+                while time.time() - t0 < LAUNCH_INIT_TIMEOUT_SEC:
+                    time.sleep(LAUNCH_INIT_POLL_SEC)
                     if roblox_manager.is_roblox_running():
                         saw_process = True
-                    elif not saw_process and i >= 3:
-                        # ~4s in and no Roblox process ever showed up — it didn't start.
+                    elif not saw_process and (time.time() - t0) >= LAUNCH_NO_PROCESS_SEC:
                         break
                     roblox_manager.attach()
                     if roblox_manager.is_attached and roblox_manager.get_roblox_base():
-                        # Check if memory is readable yet
                         if roblox_manager.read_memory_external(roblox_manager.get_roblox_base(), 100):
                             initialized = True
                             break
 
                 if initialized:
                     log(f"[+] Process initialized, applying live memory flags...", (100, 255, 100))
-                    time.sleep(1.0)  # Give it a moment to allocate flag objects
                     self.apply_flags_hybrid(roblox_manager)
                 elif not roblox_manager.is_roblox_running():
                     # CreateProcess succeeded but Roblox closed right after launch.

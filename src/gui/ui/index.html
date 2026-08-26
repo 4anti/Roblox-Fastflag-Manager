@@ -233,6 +233,92 @@
                 --warning: #c89000;
             }
 
+            /* === Black & White (flat #000; Light Mode is full #fff) === */
+            .theme-bw {
+                --bg-base: #000000;
+                --bg-sidebar: #000000;
+                --bg-panel: #000000;
+                --bg-card: #0a0a0a;
+                --bg-elevated: #0a0a0a;
+                --bg-hover: #141414;
+                --bg-input: #000000;
+                --bg-selected: rgba(255, 255, 255, 0.12);
+                --border: #222222;
+                --border-light: #2a2a2a;
+                --text: #ffffff;
+                --text-dim: #aaaaaa;
+                --text-dark: #666666;
+                --accent: #ffffff;
+                --accent-hover: #e0e0e0;
+                --accent-dim: #888888;
+                --accent-glow: rgba(255, 255, 255, 0.16);
+                --purple: #cccccc;
+                --purple-hover: #ffffff;
+                --success: #ffffff;
+                --error: #ffffff;
+                --warning: #cccccc;
+                --btn-ink: #000000;
+            }
+            body.theme-bw {
+                background: #000000 !important;
+            }
+            body.theme-bw.light-theme {
+                --bg-base: #ffffff;
+                --bg-sidebar: #ffffff;
+                --bg-panel: #ffffff;
+                --bg-card: #ffffff;
+                --bg-elevated: #f4f4f4;
+                --bg-hover: #ececec;
+                --bg-input: #ffffff;
+                --bg-selected: rgba(0, 0, 0, 0.08);
+                --border: #e5e5e5;
+                --border-light: #ececec;
+                --text: #000000;
+                --text-dim: #555555;
+                --text-dark: #888888;
+                --accent: #000000;
+                --accent-hover: #222222;
+                --accent-dim: #666666;
+                --accent-glow: rgba(0, 0, 0, 0.12);
+                --purple: #444444;
+                --purple-hover: #000000;
+                --success: #000000;
+                --error: #000000;
+                --warning: #444444;
+                --btn-ink: #ffffff;
+                background: #ffffff !important;
+            }
+            .theme-bw .btn-primary {
+                background: #ffffff !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+            }
+            .theme-bw .btn-primary:hover:not(:disabled) {
+                background: #e0e0e0 !important;
+            }
+            .theme-bw .btn-secondary {
+                background: #222222 !important;
+                color: #ffffff !important;
+            }
+            .theme-bw .btn-secondary:hover {
+                background: #333333 !important;
+                box-shadow: none !important;
+            }
+            body.theme-bw.light-theme .btn-primary {
+                background: #000000 !important;
+                color: #ffffff !important;
+            }
+            body.theme-bw.light-theme .btn-primary:hover:not(:disabled) {
+                background: #222222 !important;
+            }
+            body.theme-bw.light-theme .btn-secondary {
+                background: #ececec !important;
+                color: #000000 !important;
+            }
+            body.theme-bw.light-theme .btn-secondary:hover {
+                background: #dddddd !important;
+            }
+
             /* === Ignite Theme (Orange/Red/Black) === */
             .theme-ignite {
                 --bg-base: #060301;
@@ -1894,6 +1980,11 @@
                 scrollbar-gutter: stable;
                 display: flex;
                 flex-direction: column;
+                /* Keep the scrollbar clear of the fixed 6px window-edge
+                   resizer (which otherwise steals the drag → resize instead
+                   of scroll when the right ad-rail is hidden and this panel
+                   reaches the window edge). */
+                margin-right: 10px;
             }
             .presets-grid {
                 display: grid !important;
@@ -3642,6 +3733,11 @@
                 display: none;
                 padding: 20px;
                 overflow-y: auto;
+                /* Keep the scrollbar clear of the fixed 6px window-edge
+                   resizer (which otherwise steals the drag → resize instead
+                   of scroll when the right ad-rail is hidden and this panel
+                   reaches the window edge). */
+                margin-right: 10px;
             }
             .settings-panel.active {
                 display: block;
@@ -4139,6 +4235,39 @@
             }
             #context-menu.visible {
                 display: flex;
+            }
+
+            #cm-drag-handle .cm-flag-name {
+                word-break: break-all;
+            }
+            .cm-copy-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+                flex-shrink: 0;
+                width: 16px;
+                height: 16px;
+                margin-left: 4px;
+                padding: 0;
+                border: none;
+                background: transparent;
+                color: var(--text-dim);
+                cursor: pointer;
+                border-radius: 3px;
+            }
+            .cm-copy-btn:hover {
+                color: var(--accent);
+                background: var(--bg-hover);
+            }
+            .cm-copy-btn.copied {
+                color: var(--success);
+            }
+            .cm-copy-btn svg {
+                width: 12px;
+                height: 12px;
+                display: block;
+                pointer-events: none;
             }
 
             .cm-card {
@@ -4795,6 +4924,8 @@
                         var t = JSON.parse(raw).currentTheme;
                         if (t) theme = t;
                     }
+                    if (theme === "prism") theme = "neko";
+                    if (theme === "pitch") theme = "bw";
                     if (theme && theme !== "premium") {
                         document.body.classList.add("theme-" + theme);
                     }
@@ -5992,6 +6123,7 @@
                                         max-width: 220px;
                                     "
                                 >
+                                    <option value="legacy">Legacy</option>
                                     <option value="premium">
                                         Premium Glass
                                     </option>
@@ -6022,7 +6154,7 @@
                                     <option value="neko">
                                         Neko (Cats)
                                     </option>
-                                    <option value="legacy">Legacy</option>
+                                    <option value="bw">Black &amp; White</option>
                                 </select>
                             </div>
                             <!-- Cherry Blossom petal controls (shown only when
@@ -7466,6 +7598,7 @@
             function setUITheme(theme, save = true) {
               try {
                 if (theme === "prism") theme = "neko";
+                if (theme === "pitch") theme = "bw";
                 currentTheme = theme;
 
                 // Remove existing theme classes
@@ -7481,6 +7614,8 @@
                     "theme-aurora",
                     "theme-neko",
                     "theme-prism",
+                    "theme-pitch",
+                    "theme-bw",
                 );
 
                 // Apply the newly selected theme class (if it is not premium, which is the default CSS)
@@ -10447,6 +10582,35 @@
                 if (handle) handle.style.cursor = "grab";
             }
 
+            async function copyFlagName(ev) {
+                if (ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                }
+                const btn = ev && ev.currentTarget;
+                const name = btn
+                    ? btn.getAttribute("data-fname") || ""
+                    : "";
+                if (!name) return;
+                try {
+                    await navigator.clipboard.writeText(name);
+                } catch (_) {
+                    const ta = document.createElement("textarea");
+                    ta.value = name;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                }
+                if (!btn) return;
+                btn.classList.add("copied");
+                btn.title = "Copied";
+                setTimeout(() => {
+                    btn.classList.remove("copied");
+                    btn.title = "Copy flag name";
+                }, 1200);
+            }
+
             async function toggleFlagApply(fname) {
                 try {
                     await pywebview.api.toggle_flag_apply(fname);
@@ -10486,8 +10650,8 @@
 
                 let html = `
           <!-- Header Bar -->
-          <div id="cm-drag-handle" style="cursor: grab; font-size: 10px; color: var(--accent); padding: 2px 4px 6px; text-align: center; border-bottom: 1px dashed var(--border-light); font-weight: 600; font-family: var(--font-mono); word-break: break-all; margin-bottom: 2px;" onmousedown="startDragContextMenu(event)">
-            ${escHtml(fname)}
+          <div id="cm-drag-handle" style="cursor: grab; font-size: 10px; color: var(--accent); padding: 2px 4px 6px; text-align: center; border-bottom: 1px dashed var(--border-light); font-weight: 600; font-family: var(--font-mono); margin-bottom: 2px;" onmousedown="startDragContextMenu(event)">
+            <span class="cm-flag-name">${escHtml(fname)}</span><button type="button" class="cm-copy-btn" title="Copy flag name" data-fname="${escHtml(fname)}" onclick="copyFlagName(event)" onmousedown="event.stopPropagation()"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M6 1.5h4a1 1 0 0 1 1 1V4h1.5A1.5 1.5 0 0 1 14 5.5v8A1.5 1.5 0 0 1 12.5 15h-9A1.5 1.5 0 0 1 2 13.5v-8A1.5 1.5 0 0 1 3.5 4H5V2.5a1 1 0 0 1 1-1zm1 1v1.5h2V2.5H7zM3.5 5.5v8h9v-8h-9z"/></svg></button>
           </div>
           <!-- Enable/Disable Card -->
           <div class="cm-card">

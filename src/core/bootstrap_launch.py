@@ -4,32 +4,64 @@ bootstrapper stub (bootstrap.pyw) and FFM's own protocol handoff (main.pyw).
 
 Deliberately GUI-free and import-light so it can run in a headless bootstrapper
 process (Fishstrap / Bloxstrap style) without spinning up the webview app.
-Guiding rule, same as the original handler: NEVER block a join - every step is
-best-effort and falls back to simply launching the installed build.
+
+Start-only flags (ClientAppSettings.json read at RobloxPlayerBeta boot) must
+be on disk in the launched folder before CreateProcess. A failed write is
+retried once; a second miss does not launch.
 """
 
 from src.utils.logger import log
 
 
-def write_startup_flags():
-    """
-    File-based flag apply: write the user's enabled flags to
-    ClientAppSettings.json across STOCK Roblox versions (third-party bootstrapper
-    installs are intentionally skipped so we don't overwrite their settings), so a
-    launch works with the full app CLOSED. Same pre-emptive sync FFM does on save;
-    here it runs standalone. Best-effort - a failure never blocks the launch.
+def write_startup_flags(guid=None):
+    """Write enabled flags to ClientAppSettings.json, flush, and read back
+    the folder we are about to launch. STOCK versions only (third-party
+    bootstrapper installs are skipped so we don't overwrite their settings).
+
+    Returns True only when the launched guid's JSON contains every enabled
+    flag (or there are no enabled flags). Failures do not launch.
     """
     try:
         from src.core.flag_manager import FlagManager
+        from src.core.roblox_manager import RobloxManager
+
+        RobloxManager.mark_startup_write()
         fm = FlagManager()
         fm.load_user_flags()
-        fm.sync_json_to_roblox()
+        flags_dict = fm.build_clientapp_dict()
+        if not flags_dict and not fm.user_flags:
+            log("[*] Bootstrapper: no flags to write", (100, 255, 255))
+            return True
+        ok, msg = RobloxManager.apply_fflags_json(flags_dict, prefer_guid=guid)
+        if not ok:
+            log(f"[!] Bootstrapper flag write skipped: {msg}", (255, 200, 100))
+            return False
+
+        vdir = RobloxManager.version_dir_for_guid(guid)
+        if not vdir:
+            vdir = RobloxManager.get_roblox_version_dir()
+        if flags_dict and not RobloxManager.clientapp_matches(vdir, flags_dict):
+            log(f"[!] Startup flags missing in {vdir}",
+                (255, 200, 100))
+            return False
+
         log("[*] Bootstrapper: wrote startup flags to ClientAppSettings.json",
             (100, 255, 255))
         return True
     except Exception as e:
         log(f"[!] Bootstrapper flag write skipped: {e}", (255, 200, 100))
         return False
+
+
+def _ensure_startup_flags(guid):
+    """Write+verify, retry once. False means the caller must not launch."""
+    if write_startup_flags(guid):
+        return True
+    log("[!] Startup flags missing, retrying write...", (255, 200, 100))
+    if write_startup_flags(guid):
+        return True
+    log(f"[!] Startup flags missing in {guid} - not launching", (255, 120, 120))
+    return False
 
 
 def _restore_third_party_if_transient():
@@ -84,6 +116,10 @@ def launch_join(uri):
     from src.core.version_changer import fixer, deployment, fastpath
 
     try:
+        RobloxManager.mark_startup_write()
+    except Exception:
+        pass
+    try:
         rm = RobloxManager()
         installed = RobloxManager.get_roblox_version_string()
         target = installed
@@ -93,10 +129,10 @@ def launch_join(uri):
             try:
                 log("[*] Fast join: build already up to date, launching...", (100, 255, 255))
                 _prune_stock_if_closed(installed)
-                write_startup_flags()
-                ok, _ = rm.launch_specific_version(installed, args=uri)
-                if ok:
-                    return
+                if _ensure_startup_flags(installed):
+                    ok, _ = rm.launch_specific_version(installed, args=uri)
+                    if ok:
+                        return
             except Exception as e:
                 log(f"[!] Fast join failed, falling back: {e}", (255, 200, 100))
 
@@ -123,13 +159,17 @@ def launch_join(uri):
             log(f"[!] Pre-join update skipped: {e}", (255, 200, 100))
 
         # Flags AFTER any upgrade so a freshly created version folder gets
-        # ClientAppSettings.json. A failure here never blocks the join.
-        write_startup_flags()
+        # ClientAppSettings.json. Missing keys after retry block the join.
+        launch_guid = target or installed
+        if not _ensure_startup_flags(launch_guid):
+            return
         try:
-            ok, _ = rm.launch_specific_version(target or installed, args=uri)
+            ok, _ = rm.launch_specific_version(launch_guid, args=uri)
             if not ok and target != installed:
-                # Target build isn't runnable - never lose the join; use installed.
-                rm.launch_specific_version(installed, args=uri)
+                # Target build isn't runnable - never lose the join; use installed
+                # after confirming that folder also has the flags.
+                if _ensure_startup_flags(installed):
+                    rm.launch_specific_version(installed, args=uri)
         except Exception as e:
             log(f"[!] Pinned launch failed, falling back: {e}", (255, 120, 120))
     finally:

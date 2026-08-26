@@ -458,6 +458,33 @@ class RobloxManager:
         return dirs
 
     @staticmethod
+    def version_dir_for_guid(guid):
+        """Directory for a build guid (bare or 'version-...'), or None.
+
+        Stock Versions is checked first, matching resolve_version_exe. The
+        folder is returned even if the player exe is not there yet so a
+        just-created install can still receive ClientAppSettings.json.
+        """
+        if not guid or str(guid) == "unknown":
+            return None
+        name = guid if str(guid).startswith("version-") else f"version-{guid}"
+        roots = []
+        stock = RobloxManager.get_stock_versions_root()
+        if stock:
+            roots.append(stock)
+        other = RobloxManager.get_versions_root()
+        if other and other not in roots:
+            roots.append(other)
+        for root in roots:
+            path = os.path.join(root, name)
+            if os.path.isdir(path):
+                return path
+        exe = RobloxManager.resolve_version_exe(guid)
+        if exe:
+            return os.path.dirname(exe)
+        return None
+
+    @staticmethod
     def resolve_version_exe(guid):
         """Resolve RobloxPlayerBeta.exe for a specific build guid (bare or
         'version-...'), or None if the versions root or the exe is missing.
@@ -524,6 +551,86 @@ class RobloxManager:
         except Exception:
             return "unknown"
 
+    _STARTUP_WRITE_TTL_SEC = 45.0
+
+    @staticmethod
+    def _startup_write_lock_path():
+        from src.utils.config import Config
+        Config._ensure_dirs()
+        return os.path.join(str(Config.APP_DIR), "startup_apply.lock")
+
+    @staticmethod
+    def mark_startup_write():
+        """Stamp a short-lived marker so idle JSON-clear does not wipe a
+        Play-handler write before the player process has read the file."""
+        try:
+            path = RobloxManager._startup_write_lock_path()
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(str(time.time()))
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception:
+            pass
+
+    @staticmethod
+    def startup_write_in_progress():
+        """True when a Play-handler flag write is in the recent TTL window."""
+        try:
+            path = RobloxManager._startup_write_lock_path()
+            if not os.path.isfile(path):
+                return False
+            with open(path, 'r', encoding='utf-8') as f:
+                ts = float((f.read() or '0').strip() or 0)
+            return (time.time() - ts) <= RobloxManager._STARTUP_WRITE_TTL_SEC
+        except Exception:
+            return False
+
+    @staticmethod
+    def _json_flag_value(value):
+        """ClientAppSettings values as strings (Bloxstrap / export style)."""
+        if isinstance(value, bool):
+            return "True" if value else "False"
+        if value is None:
+            return ""
+        text = str(value)
+        low = text.lower()
+        if low in ("true", "1", "yes"):
+            return "True"
+        if low in ("false", "0", "no"):
+            return "False"
+        return text
+
+    @staticmethod
+    def _stringify_flag_map(flags_dict):
+        out = {}
+        for key, val in (flags_dict or {}).items():
+            out[str(key)] = RobloxManager._json_flag_value(val)
+        return out
+
+    @staticmethod
+    def clientapp_matches(vdir, expected):
+        """True if vdir's ClientAppSettings.json holds every expected key
+        with a matching stringified value. Empty expected always matches."""
+        if not expected:
+            return True
+        if not vdir:
+            return False
+        settings_file = os.path.join(vdir, "ClientSettings", "ClientAppSettings.json")
+        try:
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            return False
+        if not isinstance(data, dict):
+            return False
+        want = RobloxManager._stringify_flag_map(expected)
+        for key, val in want.items():
+            if key not in data:
+                return False
+            if RobloxManager._json_flag_value(data[key]) != val:
+                return False
+        return True
+
     @staticmethod
     def _write_flags_to_dirs(flags_dict, vdirs, merge=False):
         """Write ClientAppSettings.json into every dir. When merge=True and a
@@ -537,7 +644,7 @@ class RobloxManager:
             settings_file = os.path.join(settings_dir, "ClientAppSettings.json")
             try:
                 os.makedirs(settings_dir, exist_ok=True)
-                payload = dict(flags_dict)  # never mutate the caller's map
+                payload = RobloxManager._stringify_flag_map(flags_dict)
                 if merge and os.path.isfile(settings_file):
                     try:
                         with open(settings_file, 'r', encoding='utf-8') as f:
@@ -552,13 +659,15 @@ class RobloxManager:
                         pass
                 with open(settings_file, 'w', encoding='utf-8') as f:
                     json.dump(payload, f, indent=4)
+                    f.flush()
+                    os.fsync(f.fileno())
                 success_count += 1
             except Exception as e:
                 errors.append(f"{os.path.basename(vdir)}: {e}")
         return success_count, errors
 
     @staticmethod
-    def apply_fflags_json(flags_dict):
+    def apply_fflags_json(flags_dict, prefer_guid=None):
         """Write FFlags to ClientAppSettings.json across STOCK Roblox versions.
 
         If no stock install exists (e.g. Fishstrap-only / Bloxstrap-only user),
@@ -573,7 +682,21 @@ class RobloxManager:
         so FFM's flags need re-applying after each update. Same lifecycle
         constraint as stock installs — no worse.
         """
-        stock_dirs = RobloxManager.get_writable_version_dirs()
+        stock_dirs = list(RobloxManager.get_writable_version_dirs() or [])
+        prefer = RobloxManager.version_dir_for_guid(prefer_guid) if prefer_guid else None
+        if prefer:
+            prefer_abs = os.path.normcase(os.path.abspath(prefer))
+            writable_abs = {os.path.normcase(os.path.abspath(d)) for d in stock_dirs}
+            stock_root = RobloxManager.get_stock_versions_root()
+            under_stock = False
+            if stock_root:
+                root_abs = os.path.normcase(os.path.abspath(stock_root))
+                under_stock = prefer_abs == root_abs or prefer_abs.startswith(root_abs + os.sep)
+            if under_stock or prefer_abs in writable_abs:
+                stock_dirs = [prefer] + [
+                    d for d in stock_dirs
+                    if os.path.normcase(os.path.abspath(d)) != prefer_abs
+                ]
         if stock_dirs:
             success, errors = RobloxManager._write_flags_to_dirs(
                 flags_dict, stock_dirs, merge=False,

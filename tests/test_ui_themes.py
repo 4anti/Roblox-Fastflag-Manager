@@ -24,6 +24,7 @@ THEME_CLASSES = (
     "theme-vellum",
     "theme-aurora",
     "theme-neko",
+    "theme-bw",
 )
 REQUIRED_FONTS = (
     "inter-400.woff2",
@@ -95,6 +96,36 @@ def test_aurora_neko_keep_light_toggle_and_canvas():
     assert 'value="neko"' in html
 
 
+def test_bw_theme_keeps_light_toggle():
+    html = _index_text()
+    assert "body.theme-bw {" in html
+    assert 'value="bw"' in html
+    assert '"theme-bw"' in html
+    assert "body.theme-bw.light-theme" in html
+    assert 'value="pitch"' not in html
+    dark = html.find(".theme-bw {")
+    assert dark > 0
+    dark_block = html[dark : dark + 900]
+    assert "--bg-base: #000000" in dark_block
+    assert "--accent: #ffffff" in dark_block
+    light = html.find("body.theme-bw.light-theme")
+    light_block = html[light : light + 900]
+    assert "--bg-base: #ffffff" in light_block
+    assert "--accent: #000000" in light_block
+    start = html.find("const forceDark")
+    assert start > 0
+    end = html.find("toggleTheme(false)", start)
+    assert end > 0
+    chunk = html[start : end + len("toggleTheme(false)")]
+    assert 'theme === "bw"' not in chunk
+    # Legacy first, Black & White last in the UI Theme select.
+    sel = html.find('id="settings-ui-theme"')
+    sel_end = html.find("</select>", sel)
+    opts = html[sel:sel_end]
+    assert opts.find('value="legacy"') < opts.find('value="premium"')
+    assert opts.rfind('value="bw"') > opts.rfind('value="neko"')
+
+
 def test_set_ui_theme_clears_every_skin_class():
     html = _index_text()
     start = html.find("function setUITheme")
@@ -115,7 +146,7 @@ def test_set_ui_theme_persists_new_ids(monkeypatch):
     api = Api.__new__(Api)
     api.settings = {}
     monkeypatch.setattr(Config, "save_settings", lambda *_a, **_k: True)
-    for name in NEW_THEMES:
+    for name in NEW_THEMES + ("bw",):
         api.set_ui_theme(name)
         assert api.settings["ui_theme"] == name
 

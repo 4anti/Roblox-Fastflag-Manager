@@ -3,7 +3,7 @@
 
 #define MyAppName "Roblox FFlag Manager"
 ; Kept in sync with version.json by scripts/update_version.py at release time.
-#define MyAppVersion "4.1.0"
+#define MyAppVersion "4.2.0"
 #define MyAppPublisher "4anti"
 #define MyAppURL "https://github.com/4anti/Roblox-Fastflag-Manager"
 #define MyAppExeName "FFM.exe"

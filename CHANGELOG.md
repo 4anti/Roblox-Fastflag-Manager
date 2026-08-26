@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-08-26
+
+### Added
+
+- **Copy flag name:** right-click a flag in the Editor and the clipboard
+  icon sits next to the orange name (wraps with long names). Copy does
+  not close the menu; drag still works from the name.
+- **Black & White UI theme:** flat black surfaces, or full white with
+  Light Mode. No color accents. Last item in the UI Theme list. Light
+  Mode stays available on this skin.
+
+### Fixed
+
+- **Settings and Presets scrollbars:** inset like the Editor so the
+  window-edge resize strip no longer steals the thumb or wheel.
+- **Pasted `DFlag…` names:** a leading `DFlag` that is not a real prefix
+  (`FFlag` / `DFFlag` / `FInt` / `DFInt` / …) is stripped on import and when
+  `user_flags.json` loads, so `DFlagEnablePerFrameSampling` matches the dump
+  name `EnablePerFrameSampling`. Real `DFFlag` / `DFInt` names are unchanged.
+- **Play / Automatic Launch start-only flags:** writes `ClientAppSettings.json`
+  into the folder about to launch, flushes it, reads it back, and retries
+  once. Roblox is not started if the keys are still missing. Values are
+  stored as `"True"` / `"False"` strings. Unprefixed bool names (for example `DebugDisplayFPS`)
+  are written as `FFlag...`. Idle JSON-clear waits out the Play write so it
+  cannot wipe the file mid-launch.
+
+### Changed
+
+- **Legacy is first in the UI Theme dropdown.** Black & White is last.
+- **App version is 4.2.0.**
+- **Auto Apply leaves ClientAppSettings.json on disk** when Roblox or FFM
+  closes, so the next Play/shortcut already has flags in the version
+  folder. Turning Auto Apply off still clears. Auto Apply skips a second
+  JSON write when the file is already staged. Join Roblox polls until
+  memory is readable instead of sleeping 1s after it is. The monitor
+  checks for a new Roblox PID about every 0.25s until one is attached.
+
 ## [4.1.0] - 2026-08-15
 
 ### Added

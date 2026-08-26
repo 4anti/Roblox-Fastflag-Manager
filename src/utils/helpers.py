@@ -124,6 +124,54 @@ def get_flag_prefix(full_flag_name):
             return prefix
     return ''
 
+
+def strip_bogus_dflag_prefix(name):
+    """Drop a leading ``DFlag`` that is not a real Roblox prefix.
+
+    Some pasted lists prefix every key with ``DFlag`` (including ints). That is
+    not FFlag / DFFlag / FInt / DFInt, so live-address lookup misses the dump
+    name (``EnablePerFrameSampling`` vs ``DFlagEnablePerFrameSampling``).
+    ``DFFlag`` / ``DFInt`` do not start with the five characters ``DFlag`` and
+    are left unchanged.
+    """
+    if not isinstance(name, str) or not name.startswith('DFlag'):
+        return name
+    if get_flag_prefix(name):
+        return name
+    rest = name[5:]  # len('DFlag')
+    return rest if rest else name
+
+
+def heal_dflag_flag_names(flags):
+    """Strip bogus ``DFlag`` prefixes in a flag-dict list. Skip collisions.
+
+    Returns ``(healed_list, changed)``. The first occurrence of a cleaned name
+    wins if both ``DFlagFoo`` and ``Foo`` are present.
+    """
+    if not flags:
+        return list(flags or []), False
+    seen = set()
+    out = []
+    changed = False
+    for flag in flags:
+        if not isinstance(flag, dict):
+            out.append(flag)
+            continue
+        name = flag.get('name', '')
+        new_name = strip_bogus_dflag_prefix(name)
+        item = flag
+        if new_name != name:
+            item = dict(flag)
+            item['name'] = new_name
+            changed = True
+        key = clean_flag_name(item.get('name', ''))
+        if key in seen:
+            changed = True
+            continue
+        seen.add(key)
+        out.append(item)
+    return out, changed
+
 # Known FPS-cap flags (cleaned, prefix-stripped names). Applying these fights the
 # file-based FramerateCap unlock (see core/fps_unlocker.py), so FFM silently skips
 # WRITING them — the UI still shows them as applied.

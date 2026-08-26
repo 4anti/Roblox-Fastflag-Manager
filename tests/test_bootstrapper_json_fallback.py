@@ -52,7 +52,8 @@ def test_falls_back_to_bootstrapper_when_stock_dirs_empty(isolated_dirs, monkeyp
     assert ok is True
     assert "bootstrapper install" in msg
     written = _read_settings(isolated_dirs["boot"])
-    assert written == flags
+    assert written["FFlagTestOne"] == "True"
+    assert written["DFIntChunkSize"] == "42"
 
 
 def test_bootstrapper_fallback_merges_existing_flags(isolated_dirs, monkeypatch):
@@ -106,7 +107,7 @@ def test_stock_dir_still_wins_when_present(isolated_dirs, monkeypatch):
     assert ok is True
     assert "bootstrapper install" not in msg
     # Stock got the flags
-    assert _read_settings(isolated_dirs["stock"]) == flags
+    assert _read_settings(isolated_dirs["stock"]) == {"FFlagTest": "True"}
     # Bootstrapper was left alone
     boot_settings = os.path.join(
         isolated_dirs["boot"], "ClientSettings", "ClientAppSettings.json",
@@ -146,4 +147,4 @@ def test_bootstrapper_merge_tolerates_corrupt_existing_json(isolated_dirs, monke
     ok, _ = RobloxManager.apply_fflags_json({"FFlagRecoveredOnly": "true"})
 
     assert ok is True
-    assert _read_settings(isolated_dirs["boot"]) == {"FFlagRecoveredOnly": "true"}
+    assert _read_settings(isolated_dirs["boot"]) == {"FFlagRecoveredOnly": "True"}

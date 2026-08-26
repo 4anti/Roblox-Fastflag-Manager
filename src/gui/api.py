@@ -8,10 +8,16 @@ import webview
 from src.utils.updater import check_for_updates, perform_silent_update, get_current_version, apply_staged_update, download_update
 from src.utils.logger import log, get_logs, get_logs_since
 from src.utils.config import Config
-from src.utils.helpers import infer_type, infer_type_from_name, clean_flag_name, get_flag_prefix, get_default_value
+from src.utils.helpers import infer_type, infer_type_from_name, clean_flag_name, get_flag_prefix, get_default_value, strip_bogus_dflag_prefix, heal_dflag_flag_names
 from src.core.roblox_manager import RobloxManager
 from src.core.flag_manager import FlagManager
 from src.core.preset_manager import PresetManager
+
+# Apply-speed knobs (website Play / Auto Apply). To undo this pass:
+# KEEP_JSON_WHEN_AUTO_APPLY = False, MONITOR_POLL_FAST = 2.0
+KEEP_JSON_WHEN_AUTO_APPLY = True
+MONITOR_POLL_FAST = 0.25
+MONITOR_POLL_SLOW = 2.0
 
 # ─── HMAC key shard B (paired with config._HMAC_SHARD_A) ───
 from src.utils import config as _cfg_module
@@ -264,9 +270,10 @@ def _parse_preset_payload(raw_string, source_name=None, allow_plain_text=True):
             if not k:
                 raise ValueError(f"line {line_no}: empty key")
             inferred_type = infer_type_from_name(k) or infer_type(v)
-            flags.append({'name': k, 'value': v, 'type': inferred_type})
+            flags.append({'name': strip_bogus_dflag_prefix(k), 'value': v, 'type': inferred_type})
         if not flags:
             raise ValueError("no flags found in payload")
+        flags, _ = heal_dflag_flag_names(flags)
         return default_name, flags
 
     # We have a parsed JSON-like value. Normalize to (name, flags).
@@ -281,6 +288,7 @@ def _parse_preset_payload(raw_string, source_name=None, allow_plain_text=True):
                 flags.append(f)
         if not flags:
             raise ValueError("JSON list contained no usable flag entries")
+        flags, _ = heal_dflag_flag_names(flags)
         return default_name, flags
 
     if isinstance(parsed, dict):
@@ -296,6 +304,7 @@ def _parse_preset_payload(raw_string, source_name=None, allow_plain_text=True):
                 flags.append(nf)
             if not flags:
                 raise ValueError("preset has empty 'flags' list")
+            flags, _ = heal_dflag_flag_names(flags)
             return name, flags
         # {flagName: value, ...} bare map
         flags = []
@@ -303,12 +312,13 @@ def _parse_preset_payload(raw_string, source_name=None, allow_plain_text=True):
             if not isinstance(k, str):
                 continue
             flags.append({
-                'name': k,
+                'name': strip_bogus_dflag_prefix(k),
                 'value': str(v),
                 'type': infer_type_from_name(k) or infer_type(v),
             })
         if not flags:
             raise ValueError("JSON object had no string keys")
+        flags, _ = heal_dflag_flag_names(flags)
         return default_name, flags
 
     raise ValueError(f"unrecognized payload shape: {type(parsed).__name__}")
@@ -1024,7 +1034,7 @@ class Api:
         log(f"[+] Auto Apply: {'ON' if value else 'OFF'}")
         # If user turned auto_apply OFF while Roblox isn't running, wipe any
         # leftover flags from disk so the next launch starts clean.
-        if not value and self.settings.get('auto_clear_json', True):
+        if not value and self._should_wipe_clientapp():
             rm = getattr(self, 'roblox_manager', None)
             if not rm or not rm.is_attached:
                 self.clear_clientapp_json()
@@ -1415,6 +1425,7 @@ class Api:
         
         # We store the name EXACTLY as provided to preserve prefixes required for JSON/Memory.
         # Duplicate checking is done using normalized (cleaned) names.
+        name = strip_bogus_dflag_prefix(name)
         clean_new = clean_flag_name(name)
         with self.flag_manager._lock:
             if any(clean_flag_name(f['name']) == clean_new for f in self.flag_manager.user_flags):
@@ -1505,7 +1516,7 @@ class Api:
             for item in parsed_flags:
                 if not isinstance(item, dict):
                     continue
-                name = item.get('name')
+                name = strip_bogus_dflag_prefix(item.get('name'))
                 val = item.get('value')
                 if not name or val is None:
                     continue
@@ -1530,6 +1541,9 @@ class Api:
                 self.flag_manager.user_flags.append(new_flag)
                 added += 1
 
+        with self.flag_manager._lock:
+            self.flag_manager.user_flags, _ = heal_dflag_flag_names(
+                self.flag_manager.user_flags)
         self.flag_manager.save_user_flags()
         log(f"[+] Imported {added} flags ({skipped} duplicates skipped)")
         if self.settings.get('auto_apply') and added > 0:
@@ -1549,7 +1563,7 @@ class Api:
         
         with self.flag_manager._lock:
             for item in flags_list:
-                name = item.get('name')
+                name = strip_bogus_dflag_prefix(item.get('name'))
                 val = item.get('value')
                 if not name or val is None:
                     continue
@@ -1576,6 +1590,9 @@ class Api:
                 })
                 added += 1
                 
+        with self.flag_manager._lock:
+            self.flag_manager.user_flags, _ = heal_dflag_flag_names(
+                self.flag_manager.user_flags)
         self.flag_manager.save_user_flags()
         log(f"[+] Batch Import: {added} added, {skipped} skipped, {len(errors)} errors")
         if self.settings.get('auto_apply') and added > 0: self.inject()
@@ -2196,7 +2213,7 @@ class Api:
             for item in parsed_flags:
                 if not isinstance(item, dict):
                     continue
-                name = item.get('name')
+                name = strip_bogus_dflag_prefix(item.get('name'))
                 val = item.get('value')
                 if not name or val is None:
                     continue
@@ -2222,6 +2239,9 @@ class Api:
                 self.flag_manager.user_flags.append(new_flag)
                 added += 1
 
+            with self.flag_manager._lock:
+                self.flag_manager.user_flags, _ = heal_dflag_flag_names(
+                    self.flag_manager.user_flags)
             self.flag_manager.save_user_flags()
             log(f"[+] Imported {added} flags ({skipped} duplicates skipped)")
             if self.settings.get('auto_apply') and added > 0:
@@ -3095,7 +3115,7 @@ class Api:
         """Full application exit (from UI or Tray)."""
         log("[*] Closing application...", (255, 100, 100))
         self.save_window_state()
-        if self.settings.get('auto_clear_json', True):
+        if self._should_wipe_clientapp():
             try:
                 self.clear_clientapp_json()
             except Exception:
@@ -3144,6 +3164,39 @@ class Api:
                 pass
         return en
 
+    def _should_wipe_clientapp(self):
+        """True when leftover ClientAppSettings.json should be emptied.
+
+        Auto Apply ON keeps the file so the next Play/shortcut boots with flags
+        already on disk. Set KEEP_JSON_WHEN_AUTO_APPLY to False to restore
+        wipe-on-close / wipe-on-FFM-exit.
+        """
+        if not self.settings.get('auto_clear_json', True):
+            return False
+        if KEEP_JSON_WHEN_AUTO_APPLY and self.settings.get('auto_apply', False):
+            return False
+        if RobloxManager.startup_write_in_progress():
+            return False
+        return True
+
+    def _auto_apply_skip_json(self):
+        """Skip a second JSON write when Play/Join (or a prior Apply) already
+        staged ClientAppSettings.json."""
+        try:
+            if RobloxManager.startup_write_in_progress():
+                return True
+            return bool(RobloxManager.clientapp_json_has_flags())
+        except Exception:
+            return False
+
+    def _monitor_poll_seconds(self, pid, auto_on):
+        """Fast poll while hunting for a new Roblox PID; slow once attached."""
+        if not pid:
+            return MONITOR_POLL_FAST
+        if auto_on and pid not in self.processed_pids:
+            return MONITOR_POLL_FAST
+        return MONITOR_POLL_SLOW
+
     def _reconcile_idle_clear(self):
         """Enforce the rule: auto-apply OFF + Roblox not running ⇒ no flags left
         on disk. Wipes every ClientAppSettings.json (per-version + legacy global)
@@ -3151,19 +3204,17 @@ class Api:
         from a manual Apply, a previous session, or a crash.
 
         Safe by construction: FFM only pre-stages flags to disk while auto-apply
-        is ON, so clearing when it's OFF can't undermine the cold/website-launch
-        path. No-ops (no disk write) when already clean, when auto-apply is ON,
-        when the user disabled auto-clear, or when Roblox is open."""
+        is ON (except a short Play-handler write window), so clearing when it's
+        OFF can't undermine the cold/website-launch path. No-ops (no disk write)
+        when already clean, when auto-apply is ON, when a Play write is in
+        progress, when the user disabled auto-clear, or when Roblox is open."""
         try:
             if not self.roblox_manager or not self.flag_manager:
                 return
-            if self.settings.get('auto_apply', False):
-                return  # auto-apply ON intentionally stages flags for next launch
-            if not self.settings.get('auto_clear_json', True):
-                return  # user opted out of disk clearing
+            if not self._should_wipe_clientapp():
+                return
             if self.roblox_manager.find_roblox_process():
                 return  # Roblox is open — leave its live flags alone
-            from src.core.roblox_manager import RobloxManager
             if RobloxManager.clientapp_json_has_flags():
                 log("[*] Idle (auto-apply off, Roblox closed) — clearing leftover flags", (180, 200, 180))
                 self.clear_clientapp_json()
@@ -3197,7 +3248,9 @@ class Api:
                     if not auto_on and new_pid and self.settings.get('auto_clear_json', True):
                         try:
                             from src.core.roblox_manager import RobloxManager as _RM
-                            if _RM.clientapp_json_has_flags():
+                            if _RM.startup_write_in_progress():
+                                pass  # Play handler write still in TTL; leave JSON
+                            elif _RM.clientapp_json_has_flags():
                                 log(f"[!] Auto-apply is OFF but ClientAppSettings.json wasn't clean when Roblox launched (PID {pid}) — some flags may have applied on this launch. Clearing to keep subsequent launches clean.", (255, 200, 100))
                                 self.clear_clientapp_json()
                         except Exception:
@@ -3223,7 +3276,11 @@ class Api:
                                 else:
                                     log(f"[*] Auto Apply: New Roblox detected (PID {pid}), applying flags...", (100, 255, 255))
                                     # First auto-apply for this launch -> play sound.
-                                    self.inject(play_sound=True)
+                                    # Skip JSON when Play/Join already staged the file.
+                                    self.inject(
+                                        skip_json=self._auto_apply_skip_json(),
+                                        play_sound=True,
+                                    )
                     elif auto_on and new_pid and not self.flag_manager.offsets_loaded:
                         # Roblox is already running but our offsets are still
                         # loading (typical when FFM opens AFTER a Play-through-
@@ -3277,12 +3334,15 @@ class Api:
                     self._scheduled_due.clear()
                     self._last_seen_roblox_pid = None
                     self._awaiting_offsets_pid = None
-                    if just_exited and self.settings.get('auto_clear_json', True):
+                    if just_exited and self._should_wipe_clientapp():
                         log("[*] Roblox closed — clearing ClientAppSettings.json", (180, 200, 180))
                         try:
                             self.clear_clientapp_json()
                         except Exception:
                             pass
+                    elif just_exited and self.settings.get('auto_apply', False):
+                        log("[*] Roblox closed — leaving ClientAppSettings.json (Auto Apply on)",
+                            (180, 200, 180))
                     # Idle enforcement: with auto-apply OFF and Roblox closed,
                     # no flags should ever sit on disk — wipe leftovers from a
                     # manual Apply, a prior session, or a crash (not just the
@@ -3292,4 +3352,5 @@ class Api:
                 log(f"[!] Monitor error: {e}", (255, 100, 100))
                 time.sleep(5)  # Back off on error
                 continue
-            time.sleep(2)
+            time.sleep(self._monitor_poll_seconds(
+                pid, self.settings.get('auto_apply', False)))
