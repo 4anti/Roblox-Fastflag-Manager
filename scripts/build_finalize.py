@@ -188,14 +188,17 @@ def validate(project_root):
         import unittest.mock as mock
         with mock.patch.object(helpers, '_is_frozen', return_value=True):
             helpers._rot_reset()
+            helpers._shard_s1_reset()
+            main_window._shard_s2_reset()
+            preset_manager._shard_s4_reset()
+            api._shard_s5_reset()
+            logger_mod._shard_s6_reset()
+            flag_manager._shard_s7_reset()
             helpers.get_resource_path('src/gui/ui/Sortable.min.js')
             main_window._shard_s2_check()
             preset_manager._shard_s4_check()
             api._shard_s5_check()
             logger_mod._shard_s6_tick()
-            # S7 (main.pyw): fires from FlagManager.__init__ in a live build.
-            # Reset its fired-flag first so validate can invoke it directly.
-            flag_manager._shard_s7_reset()
             flag_manager._shard_s7_check()
             import tempfile
             from pathlib import Path
