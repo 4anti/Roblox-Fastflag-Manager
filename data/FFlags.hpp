@@ -4,9 +4,10 @@
 /*                  https://offsets.imtheo.lol                  
 /* -------------------------------------------------------------
 /*  Dumped With     : RbxDumperV2                               
+/*  Source code     : https://git.imtheo.lol/theo/RbxDumperV2   
 /*  Roblox Version  : version-e7d81637d42c4b23
-/*  Dumper Version  : 2.1.7
-/*  Dumped At       : 17:43 02/09/2026 (GMT)
+/*  Dumper Version  : 2.2.2
+/*  Dumped At       : 23:09 07/09/2026 (GMT)
 /*  Total Offsets   : 14341
 /* -------------------------------------------------------------
 /*  Join the discord!                                           
