@@ -122,13 +122,23 @@ jobs:
               json.dumps(badge, indent=2) + "\n"
           )
           print(f"Wrote badges/fflags.json: {message} (flags {n}, total {total}, struct {struct})")
+
+          # The logo carries the same number as the badge, but patching it only
+          # ever ran on a version bump -- so every mirror refresh moved the
+          # badge and left the logo on the count from the last release. Reuse
+          # the release script's own patcher (same source file, same <500
+          # guard) rather than a third copy of the count.
+          import sys
+          sys.path.insert(0, "scripts")
+          import update_version
+          update_version.patch_svg_flag_count()
           PY
 
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/FFlags.hpp data/FFlags.json badges/fflags.json 2>/dev/null || true
+          git add data/FFlags.hpp data/FFlags.json badges/fflags.json logo.svg 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No change since last run."
           else
